@@ -1,7 +1,12 @@
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getMaterialTypes, getStandortSuggestions } from "@/lib/data";
 import { updateHubPdl } from "./actions";
+import {
+  CatalogManager,
+  type CatalogManagerItem,
+} from "@/components/catalog-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +124,22 @@ export default async function AdminPage() {
     getStandortSuggestions(hubs.map((h) => h.id)),
   ]);
 
+  // Shop-Katalog: material_catalog hat RLS disabled → nur via Service-Role-
+  // Client lesbar. Fällt auf [] zurück, solange Migration 0013 in der Live-DB
+  // fehlt (Query schlägt dann fehl, darf die Seite aber nicht crashen).
+  const admin = createAdminClient();
+  const { data: catalogData } = await admin
+    .from("material_catalog")
+    .select("id, key, name, description, active, sort_order")
+    .order("sort_order", { ascending: true });
+  const catalogItems: CatalogManagerItem[] = (catalogData ?? []).map((c) => ({
+    id: c.id,
+    key: c.key,
+    name: c.name,
+    description: c.description,
+    active: c.active,
+  }));
+
   const stats = new Map<string, HubStats>();
   const bump = (id: string): HubStats => {
     let s = stats.get(id);
@@ -188,6 +209,23 @@ export default async function AdminPage() {
           </div>
         </details>
       )}
+
+      <details className="group rounded-xl border bg-card shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold select-none">
+          <Package className="size-4 text-primary" />
+          Material-Katalog
+          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+            aufklappen
+          </span>
+        </summary>
+        <div className="border-t p-5">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Artikel, die PDLs über den Hub-Link im Shop bestellen können.
+            Inaktive Artikel werden im Shop ausgeblendet.
+          </p>
+          <CatalogManager items={catalogItems} />
+        </div>
+      </details>
 
       <ul className="flex flex-col gap-4">
         {hubs.map((h) => {

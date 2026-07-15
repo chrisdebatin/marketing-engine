@@ -9,6 +9,7 @@ import {
   Plus,
   Trash2,
   Building2,
+  ShoppingCart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,8 @@ export interface PlannerOrder {
   source: string;
   note: string | null;
   created_at: string;
+  /** Warenkorb-Positionen (Shop-Bestellung); leer/undefined bei Legacy-Bestellungen. */
+  items?: { material_key: string; quantity: number; name?: string }[];
 }
 
 interface HubOption {
@@ -325,7 +328,12 @@ function OrderRowItem({
   showHub?: boolean;
   muted?: boolean;
 }) {
-  const Icon = MATERIAL_ICON[o.material ?? ""] ?? Package;
+  const hasItems = (o.items?.length ?? 0) > 0;
+  const Icon = hasItems
+    ? o.items!.length === 1
+      ? (MATERIAL_ICON[o.items![0].material_key] ?? Package)
+      : ShoppingCart
+    : (MATERIAL_ICON[o.material ?? ""] ?? Package);
   return (
     <li
       className={cn(
@@ -338,10 +346,26 @@ function OrderRowItem({
           <Icon className="size-4.5" />
         </span>
         <div className="min-w-0">
-          <p className="font-medium">
-            {o.quantity != null ? `${o.quantity}× ` : ""}
-            {materialLabel(o.material)}
-          </p>
+          {hasItems ? (
+            <>
+              <p className="font-medium">
+                Bestellung ({o.items!.length}{" "}
+                {o.items!.length === 1 ? "Position" : "Positionen"})
+              </p>
+              <ul className="mt-0.5 flex flex-col gap-0.5 text-sm">
+                {o.items!.map((it) => (
+                  <li key={it.material_key} className="truncate">
+                    {it.quantity}× {it.name ?? materialLabel(it.material_key)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="font-medium">
+              {o.quantity != null ? `${o.quantity}× ` : ""}
+              {materialLabel(o.material)}
+            </p>
+          )}
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
             {showHub && (
               <>

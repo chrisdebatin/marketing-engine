@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function updateHubPdl(formData: FormData) {
   const session = await requireSession();
@@ -90,5 +91,78 @@ export async function deleteHub(id: string): Promise<Result> {
   revalidatePath("/admin");
   revalidatePath("/hubs");
   revalidatePath("/");
+  return { ok: true };
+}
+
+/**
+ * Neuen Katalog-Artikel für den PDL-Shop anlegen. `material_catalog` hat RLS
+ * disabled — Zugriff ausschließlich über den Service-Role-Client.
+ */
+export async function createCatalogItem(input: {
+  key: string;
+  name: string;
+  description?: string;
+}): Promise<Result> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, error: "Nur für Admins." };
+
+  const key = (input.key ?? "").trim().toLowerCase();
+  const name = (input.name ?? "").trim();
+  const description = (input.description ?? "").trim();
+
+  if (!key) return { ok: false, error: "Key eingeben." };
+  if (!/^[a-z0-9_-]+$/.test(key)) {
+    return {
+      ok: false,
+      error: "Key darf nur Kleinbuchstaben, Zahlen, - und _ enthalten.",
+    };
+  }
+  if (!name) return { ok: false, error: "Name eingeben." };
+
+  const admin = createAdminClient();
+
+  // Neue Artikel ans Ende sortieren.
+  const { data: last } = await admin
+    .from("material_catalog")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const nextSort = (last?.[0]?.sort_order ?? 0) + 1;
+
+  const { error } = await admin.from("material_catalog").insert({
+    key,
+    name,
+    description: description || null,
+    category: "material",
+    sort_order: nextSort,
+  });
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: `Key „${key}“ existiert bereits.` };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/** Katalog-Artikel aktiv/inaktiv schalten (inaktiv = im Shop ausgeblendet). */
+export async function setCatalogItemActive(
+  id: string,
+  active: boolean,
+): Promise<Result> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, error: "Nur für Admins." };
+  if (!id) return { ok: false, error: "Artikel fehlt." };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("material_catalog")
+    .update({ active })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin");
   return { ok: true };
 }

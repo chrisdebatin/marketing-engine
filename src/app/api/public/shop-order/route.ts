@@ -1,0 +1,120 @@
+import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { shopOrderInputSchema } from "@/lib/schemas-shop";
+
+export const runtime = "nodejs";
+
+// Public, token-gated cart order (PDL-Online-Shop) via the stable hub link.
+// Header row goes to `orders` (material = null), positions to `order_items`.
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as {
+    token?: string;
+    items?: unknown;
+    note?: string;
+  };
+
+  const token = (body.token ?? "").trim();
+  if (!token) {
+    return NextResponse.json({ error: "Token fehlt." }, { status: 400 });
+  }
+
+  const parsed = shopOrderInputSchema.safeParse({
+    items: body.items,
+    note: body.note,
+  });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const { data: hub, error: findErr } = await admin
+    .from("hubs")
+    .select("id, name")
+    .eq("share_token", token)
+    .single();
+
+  if (findErr || !hub) {
+    return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+  }
+
+  // Validate every material_key against the active catalog.
+  const { data: catalog, error: catErr } = await admin
+    .from("material_catalog")
+    .select("key, name")
+    .eq("active", true);
+
+  if (catErr) {
+    return NextResponse.json({ error: catErr.message }, { status: 500 });
+  }
+
+  const nameByKey = new Map((catalog ?? []).map((c) => [c.key, c.name]));
+  const invalid = parsed.data.items.filter(
+    (i) => !nameByKey.has(i.material_key),
+  );
+  if (invalid.length > 0) {
+    return NextResponse.json(
+      {
+        error: `Unbekanntes Material: ${invalid
+          .map((i) => i.material_key)
+          .join(", ")}. Bitte Seite neu laden.`,
+      },
+      { status: 400 },
+    );
+  }
+
+  // Merge duplicate keys defensively (the UI already merges).
+  const merged = new Map<string, number>();
+  for (const i of parsed.data.items) {
+    merged.set(i.material_key, (merged.get(i.material_key) ?? 0) + i.quantity);
+  }
+  const items = [...merged.entries()].map(([material_key, quantity]) => ({
+    material_key,
+    quantity,
+  }));
+
+  const { data: order, error: insErr } = await admin
+    .from("orders")
+    .insert({
+      hub_id: hub.id,
+      hub_input: hub.name,
+      material: null,
+      quantity: null,
+      note: parsed.data.note || null,
+      source: "pdl",
+      status: "neu",
+    })
+    .select("id, material, quantity, status, note, created_at")
+    .single();
+
+  if (insErr || !order) {
+    return NextResponse.json(
+      { error: insErr?.message ?? "Bestellung fehlgeschlagen." },
+      { status: 500 },
+    );
+  }
+
+  const { error: itemsErr } = await admin
+    .from("order_items")
+    .insert(items.map((i) => ({ order_id: order.id, ...i })));
+
+  if (itemsErr) {
+    // Don't leave an empty header behind.
+    await admin.from("orders").delete().eq("id", order.id);
+    return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    order: {
+      ...order,
+      items: items.map((i) => ({
+        material_key: i.material_key,
+        quantity: i.quantity,
+        name: nameByKey.get(i.material_key) ?? i.material_key,
+      })),
+    },
+  });
+}

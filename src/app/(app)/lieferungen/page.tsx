@@ -37,6 +37,35 @@ export default async function LieferungenPage() {
 
   const list = (deliveries ?? []) as Delivery[];
 
+  // Cart positions of shop orders + catalog names (two simple queries, no
+  // embedded-relation selects; both tolerate a DB without migration 0013).
+  const orderIds = (ordersData ?? []).map((o) => o.id);
+  const [{ data: orderItems }, { data: catalogRows }] = await Promise.all([
+    orderIds.length > 0
+      ? admin
+          .from("order_items")
+          .select("order_id, material_key, quantity")
+          .in("order_id", orderIds)
+      : Promise.resolve({ data: [] as never[] }),
+    admin.from("material_catalog").select("key, name"),
+  ]);
+  const catalogName = new Map(
+    (catalogRows ?? []).map((c) => [c.key, c.name]),
+  );
+  const itemsByOrder = new Map<
+    string,
+    { material_key: string; quantity: number; name?: string }[]
+  >();
+  for (const row of orderItems ?? []) {
+    const arr = itemsByOrder.get(row.order_id) ?? [];
+    arr.push({
+      material_key: row.material_key,
+      quantity: row.quantity,
+      name: catalogName.get(row.material_key),
+    });
+    itemsByOrder.set(row.order_id, arr);
+  }
+
   // placement counts per delivery
   const ids = list.map((d) => d.id);
   const counts = new Map<string, number>();
@@ -90,6 +119,7 @@ export default async function LieferungenPage() {
     source: o.source,
     note: o.note,
     created_at: o.created_at,
+    items: itemsByOrder.get(o.id),
   }));
 
   function formatDate(iso: string) {
