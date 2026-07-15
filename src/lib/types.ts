@@ -9,7 +9,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-export type UserRole = "admin" | "employee";
+export type UserRole = "admin" | "md" | "employee";
 export type ActivityType = "flyer" | "box";
 
 export interface Database {

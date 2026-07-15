@@ -35,11 +35,22 @@ export default async function LieferungenPage() {
       .order("created_at", { ascending: false }),
   ]);
 
-  const list = (deliveries ?? []) as Delivery[];
+  // MD-Scoping: Nicht-Admins sehen nur Daten ihrer eigenen Hubs.
+  // Bestellungen ohne hub_id (nur hub_input) werden für MDs ausgeblendet.
+  const sessionHubIds = new Set(session.hubs.map((h) => h.id));
+  const scopedOrders = session.isAdmin
+    ? (ordersData ?? [])
+    : (ordersData ?? []).filter(
+        (o) => o.hub_id !== null && sessionHubIds.has(o.hub_id),
+      );
+
+  const list = ((deliveries ?? []) as Delivery[]).filter(
+    (d) => session.isAdmin || sessionHubIds.has(d.hub_id),
+  );
 
   // Cart positions of shop orders + catalog names (two simple queries, no
   // embedded-relation selects; both tolerate a DB without migration 0013).
-  const orderIds = (ordersData ?? []).map((o) => o.id);
+  const orderIds = scopedOrders.map((o) => o.id);
   const [{ data: orderItems }, { data: catalogRows }] = await Promise.all([
     orderIds.length > 0
       ? admin
@@ -94,7 +105,7 @@ export default async function LieferungenPage() {
     pdl_name: h.pdl_name,
   }));
   const plannerOrders: PlannerOrder[] = (
-    (ordersData ?? []) as Pick<
+    scopedOrders as Pick<
       Order,
       | "id"
       | "hub_id"

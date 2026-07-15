@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Megaphone } from "lucide-react";
+import { LogOut, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OnlineIndicator } from "@/components/online-indicator";
 import { SyncBadge } from "@/components/sync-badge";
@@ -52,12 +52,27 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
         </nav>
         <SyncBadge />
         <OnlineIndicator />
+        {email && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span
+              className="hidden max-w-36 truncate text-xs text-muted-foreground md:inline"
+              title={email}
+            >
+              {email}
+            </span>
+            <form action="/auth/signout" method="post">
+              <button
+                type="submit"
+                title="Abmelden"
+                className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <LogOut className="size-4" />
+                <span className="sr-only">Abmelden</span>
+              </button>
+            </form>
+          </div>
+        )}
       </div>
-      {email && (
-        <div className="sr-only" aria-hidden>
-          {email}
-        </div>
-      )}
     </header>
   );
 }

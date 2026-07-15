@@ -48,7 +48,12 @@ export async function POST(req: Request) {
     .eq("active", true);
 
   if (catErr) {
-    return NextResponse.json({ error: catErr.message }, { status: 500 });
+    // Kein internes DB-Detail an den anonymen Aufrufer leaken.
+    console.error("shop-order: catalog query failed:", catErr.code);
+    return NextResponse.json(
+      { error: "Bestellung fehlgeschlagen. Bitte später erneut versuchen." },
+      { status: 500 },
+    );
   }
 
   const nameByKey = new Map((catalog ?? []).map((c) => [c.key, c.name]));
@@ -66,10 +71,19 @@ export async function POST(req: Request) {
     );
   }
 
-  // Merge duplicate keys defensively (the UI already merges).
+  // Merge duplicate keys defensively (the UI already merges) — and re-check
+  // the merged sum against the per-line cap, otherwise duplicates bypass it.
   const merged = new Map<string, number>();
   for (const i of parsed.data.items) {
     merged.set(i.material_key, (merged.get(i.material_key) ?? 0) + i.quantity);
+  }
+  for (const [key, quantity] of merged) {
+    if (quantity > 9999) {
+      return NextResponse.json(
+        { error: `Menge zu groß für „${nameByKey.get(key) ?? key}“ (max. 9999).` },
+        { status: 400 },
+      );
+    }
   }
   const items = [...merged.entries()].map(([material_key, quantity]) => ({
     material_key,
@@ -91,8 +105,9 @@ export async function POST(req: Request) {
     .single();
 
   if (insErr || !order) {
+    console.error("shop-order: header insert failed:", insErr?.code);
     return NextResponse.json(
-      { error: insErr?.message ?? "Bestellung fehlgeschlagen." },
+      { error: "Bestellung fehlgeschlagen. Bitte später erneut versuchen." },
       { status: 500 },
     );
   }
@@ -102,9 +117,20 @@ export async function POST(req: Request) {
     .insert(items.map((i) => ({ order_id: order.id, ...i })));
 
   if (itemsErr) {
-    // Don't leave an empty header behind.
-    await admin.from("orders").delete().eq("id", order.id);
-    return NextResponse.json({ error: itemsErr.message }, { status: 500 });
+    // Don't leave an empty header behind; log if even the cleanup fails.
+    const { error: cleanupErr } = await admin
+      .from("orders")
+      .delete()
+      .eq("id", order.id);
+    console.error(
+      "shop-order: items insert failed:",
+      itemsErr.code,
+      cleanupErr ? `cleanup failed: ${cleanupErr.code}` : "cleanup ok",
+    );
+    return NextResponse.json(
+      { error: "Bestellung fehlgeschlagen. Bitte später erneut versuchen." },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({

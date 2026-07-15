@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireSession, type SessionContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { patientBatchImportSchema } from "@/lib/schemas-shop";
 
@@ -10,6 +11,13 @@ const PATIENT_STATUSES = ["offen", "bestaetigt", "nicht_da"] as const;
 
 function revalidate() {
   revalidatePath("/patienten");
+}
+
+/** MD-Scoping: darf die Session auf diesen Hub zugreifen? (Admin: immer.) */
+function canAccessHub(session: SessionContext, hubId: string | null): boolean {
+  if (session.isAdmin) return true;
+  if (!hubId) return false;
+  return session.hubs.some((h) => h.id === hubId);
 }
 
 /**
@@ -71,6 +79,11 @@ export async function createPatientBatch(input: {
     };
   }
 
+  const session = await requireSession();
+  if (!canAccessHub(session, parsed.data.hub_id)) {
+    return { ok: false, error: "Kein Zugriff auf diesen Hub." };
+  }
+
   const supabase = createAdminClient();
 
   const { data: batch, error: batchErr } = await supabase
@@ -113,7 +126,19 @@ export async function createPatientBatch(input: {
 
 /** Löscht eine Monatsliste; die Einträge werden per Cascade mitgelöscht. */
 export async function deletePatientBatch(id: string): Promise<Result> {
+  const session = await requireSession();
   const supabase = createAdminClient();
+
+  const { data: batch } = await supabase
+    .from("patient_batches")
+    .select("id, hub_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!batch) return { ok: false, error: "Liste nicht gefunden." };
+  if (!canAccessHub(session, batch.hub_id)) {
+    return { ok: false, error: "Kein Zugriff auf diese Liste." };
+  }
+
   const { error } = await supabase
     .from("patient_batches")
     .delete()
@@ -138,7 +163,18 @@ export async function setPatientStatus(
   if (!(PATIENT_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, error: "Ungültiger Status." };
   }
+  const session = await requireSession();
   const supabase = createAdminClient();
+
+  const { data: record } = await supabase
+    .from("patient_records")
+    .select("id, hub_id")
+    .eq("id", recordId)
+    .maybeSingle();
+  if (!record) return { ok: false, error: "Eintrag nicht gefunden." };
+  if (!canAccessHub(session, record.hub_id)) {
+    return { ok: false, error: "Kein Zugriff auf diesen Eintrag." };
+  }
 
   const update: {
     status: string;

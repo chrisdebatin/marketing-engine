@@ -17,7 +17,8 @@ export const shopOrderInputSchema = z.object({
           .max(9999, { message: "Menge zu groß" }),
       }),
     )
-    .min(1, { message: "Mindestens einen Artikel wählen" }),
+    .min(1, { message: "Mindestens einen Artikel wählen" })
+    .max(50, { message: "Zu viele Positionen (max. 50)" }),
   note: z
     .string()
     .trim()
@@ -59,7 +60,11 @@ export const patientBatchImportSchema = z.object({
   entries: z
     .array(
       z.object({
-        display_name: z.string().trim().min(1, { message: "Name fehlt" }),
+        display_name: z
+          .string()
+          .trim()
+          .min(1, { message: "Name fehlt" })
+          .max(200, { message: "Name zu lang (max. 200 Zeichen)" }),
         reference_id: z
           .string()
           .trim()
@@ -68,7 +73,8 @@ export const patientBatchImportSchema = z.object({
           .or(z.literal("")),
       }),
     )
-    .min(1, { message: "Mindestens einen Eintrag angeben" }),
+    .min(1, { message: "Mindestens einen Eintrag angeben" })
+    .max(500, { message: "Zu viele Einträge (max. 500 pro Liste)" }),
 });
 
 export type PatientBatchImportInput = z.infer<typeof patientBatchImportSchema>;

@@ -121,6 +121,7 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+
 -- ============================================================
 -- 0002_rls.sql
 -- ============================================================
@@ -251,12 +252,14 @@ drop policy if exists activities_delete on public.activities;
 create policy activities_delete on public.activities
   for delete using (user_id = auth.uid() or public.is_admin());
 
+
 -- ============================================================
 -- 0003_hubs_md.sql
 -- ============================================================
 -- Add the responsible MD (person accountable for the hub) to hubs.
 alter table public.hubs
   add column if not exists responsible_md text;
+
 
 -- ============================================================
 -- 0004_deliveries.sql
@@ -320,6 +323,7 @@ drop policy if exists delivery_placements_select on public.delivery_placements;
 create policy delivery_placements_select on public.delivery_placements
   for select using (public.has_hub(hub_id));
 
+
 -- ============================================================
 -- 0005_hub_pdl.sql
 -- ============================================================
@@ -343,12 +347,14 @@ alter table public.hubs
 create unique index if not exists hubs_share_token_uidx
   on public.hubs (share_token);
 
+
 -- ============================================================
 -- 0006_hub_pdl_phone.sql
 -- ============================================================
 -- Phone number for the local PDL (Pflege-Dienstleitung) contact per hub.
 
 alter table public.hubs add column if not exists pdl_phone text;
+
 
 -- ============================================================
 -- 0007_placement_kind.sql
@@ -362,6 +368,7 @@ alter table public.delivery_placements
 alter table public.delivery_placements
   add constraint delivery_placements_kind_chk
   check (kind in ('flyer', 'box'));
+
 
 -- ============================================================
 -- 0008_open_access.sql
@@ -383,6 +390,7 @@ alter table public.delivery_placements disable row level security;
 alter table public.activities
   alter column user_id set default '25fe44d1-42e8-4525-9509-88860e1594fe';
 
+
 -- ============================================================
 -- 0009_delivery_aufsteller.sql
 -- ============================================================
@@ -390,6 +398,7 @@ alter table public.activities
 
 alter table public.deliveries
   add column if not exists aufsteller_count integer not null default 0;
+
 
 -- ============================================================
 -- 0010_email_orders.sql
@@ -429,6 +438,7 @@ create unique index if not exists email_accounts_provider_uidx
   on public.email_accounts (provider);
 alter table public.email_accounts disable row level security;
 
+
 -- ============================================================
 -- 0011_pdl_orders.sql
 -- ============================================================
@@ -457,11 +467,13 @@ create trigger orders_set_updated_at
 create index if not exists orders_source_idx on public.orders (source);
 create index if not exists orders_created_idx on public.orders (created_at desc);
 
+
 -- ============================================================
 -- 0012_hub_address.sql
 -- ============================================================
 -- Optionale Postanschrift je Hub (für Versand von Materialbestellungen).
 alter table public.hubs add column if not exists address text;
+
 
 -- ============================================================
 -- 0013_shop_patients.sql
@@ -558,24 +570,6 @@ create trigger patient_records_set_updated_at
   before update on public.patient_records
   for each row execute function public.set_updated_at();
 
--- ============================================================
--- 0014_md_role.sql
--- ============================================================
--- MD-Rolle: profiles.role darf jetzt auch 'md' sein (Marketing/Vertrieb im
--- Feld, sieht nur die eigenen Hubs aus user_hubs).
---
--- Bewusst KEINE RLS-Aenderungen: Die App laeuft im Open-Access-Modus
--- (RLS ist seit 0008_open_access.sql deaktiviert). Das Hub-Scoping fuer
--- eingeloggte MD-Nutzer passiert serverseitig in requireSession()
--- (src/lib/auth.ts) und in den Server Actions. RLS wieder zu haerten ist
--- ein bewusster spaeterer Schritt, sobald Open-Access abgeschaltet wird.
-
-alter table public.profiles
-  drop constraint if exists profiles_role_check;
-
-alter table public.profiles
-  add constraint profiles_role_check
-  check (role in ('admin', 'md', 'employee'));
 
 -- ============================================================
 -- seed.sql
