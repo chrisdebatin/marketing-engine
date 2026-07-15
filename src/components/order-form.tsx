@@ -16,7 +16,7 @@ import {
 
 interface Order {
   id: string;
-  material: string;
+  material: string | null;
   quantity: number | null;
   status: string;
   note: string | null;

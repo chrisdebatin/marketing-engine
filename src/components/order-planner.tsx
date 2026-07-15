@@ -40,7 +40,7 @@ export interface PlannerOrder {
   id: string;
   hub_id: string | null;
   hub_name: string;
-  material: string;
+  material: string | null;
   quantity: number | null;
   status: string;
   source: string;
@@ -325,7 +325,7 @@ function OrderRowItem({
   showHub?: boolean;
   muted?: boolean;
 }) {
-  const Icon = MATERIAL_ICON[o.material] ?? Package;
+  const Icon = MATERIAL_ICON[o.material ?? ""] ?? Package;
   return (
     <li
       className={cn(

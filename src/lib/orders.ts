@@ -19,7 +19,8 @@ export const ORDER_MATERIAL_KEYS = ORDER_MATERIALS.map((m) => m.key) as [
 ];
 
 /** Anzeige-Label für einen Material-Key; unbekannte (z. B. aus E-Mail) unverändert. */
-export function materialLabel(material: string): string {
+export function materialLabel(material: string | null): string {
+  if (material == null) return "";
   return ORDER_MATERIALS.find((m) => m.key === material)?.label ?? material;
 }
 

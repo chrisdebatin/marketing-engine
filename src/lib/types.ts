@@ -192,7 +192,7 @@ export interface Database {
           id: string;
           hub_id: string | null;
           hub_input: string | null;
-          material: string;
+          material: string | null;
           quantity: number | null;
           status: string;
           source: string;
@@ -207,7 +207,7 @@ export interface Database {
           id?: string;
           hub_id?: string | null;
           hub_input?: string | null;
-          material: string;
+          material?: string | null;
           quantity?: number | null;
           status?: string;
           source?: string;
@@ -219,6 +219,94 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["orders"]["Insert"]>;
+        Relationships: [];
+      };
+      material_catalog: {
+        Row: {
+          id: string;
+          key: string;
+          name: string;
+          description: string | null;
+          category: string | null;
+          active: boolean;
+          sort_order: number;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          name: string;
+          description?: string | null;
+          category?: string | null;
+          active?: boolean;
+          sort_order?: number;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["material_catalog"]["Insert"]>;
+        Relationships: [];
+      };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          material_key: string;
+          quantity: number;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          order_id: string;
+          material_key: string;
+          quantity: number;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["order_items"]["Insert"]>;
+        Relationships: [];
+      };
+      patient_batches: {
+        Row: {
+          id: string;
+          hub_id: string;
+          period: string;
+          note: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          period: string;
+          note?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["patient_batches"]["Insert"]>;
+        Relationships: [];
+      };
+      patient_records: {
+        Row: {
+          id: string;
+          batch_id: string;
+          hub_id: string;
+          display_name: string;
+          reference_id: string | null;
+          status: string;
+          note: string | null;
+          verified_at: string | null;
+          created_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          batch_id: string;
+          hub_id: string;
+          display_name: string;
+          reference_id?: string | null;
+          status?: string;
+          note?: string | null;
+          verified_at?: string | null;
+          created_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["patient_records"]["Insert"]>;
         Relationships: [];
       };
     };
@@ -242,3 +330,8 @@ export type Delivery = Database["public"]["Tables"]["deliveries"]["Row"];
 export type DeliveryPlacement =
   Database["public"]["Tables"]["delivery_placements"]["Row"];
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
+export type MaterialCatalogItem =
+  Database["public"]["Tables"]["material_catalog"]["Row"];
+export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
+export type PatientBatch = Database["public"]["Tables"]["patient_batches"]["Row"];
+export type PatientRecord = Database["public"]["Tables"]["patient_records"]["Row"];
