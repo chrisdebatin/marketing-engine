@@ -16,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { X } from "lucide-react";
 import { copyText } from "@/lib/clipboard";
+import { publicBaseUrl } from "@/lib/base-url";
 
 interface HubOption {
   id: string;
@@ -129,7 +130,7 @@ export function DeliveryComposer({ hubs }: { hubs: HubOption[] }) {
         setError(data.error ?? "Anlegen fehlgeschlagen.");
         return;
       }
-      const origin = window.location.origin;
+      const origin = publicBaseUrl();
       // One stable link per PDL (hub); merge multiple deliveries to the same hub.
       const byToken = new Map<string, CreatedLink>();
       for (const d of data.deliveries as Omit<CreatedLink, "url">[]) {

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/clipboard";
+import { publicBaseUrl } from "@/lib/base-url";
 
 /** Copies a share link ({prefix}/{token}) built from the current origin. */
 export function CopyLink({
@@ -18,9 +19,7 @@ export function CopyLink({
   const [copied, setCopied] = useState(false);
 
   async function copy() {
-    const ok = await copyText(
-      `${window.location.origin}${prefix}/${token}`,
-    );
+    const ok = await copyText(`${publicBaseUrl()}${prefix}/${token}`);
     if (ok) {
       setCopied(true);
       toast.success("Link kopiert");
