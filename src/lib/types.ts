@@ -309,6 +309,40 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["patient_records"]["Insert"]>;
         Relationships: [];
       };
+      hub_tasks: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["hub_tasks"]["Insert"]>;
+        Relationships: [];
+      };
+      hub_task_checks: {
+        Row: {
+          task_id: string;
+          hub_id: string;
+          note: string | null;
+          done_at: string;
+        };
+        Insert: {
+          task_id: string;
+          hub_id: string;
+          note?: string | null;
+          done_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["hub_task_checks"]["Insert"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -335,3 +369,5 @@ export type MaterialCatalogItem =
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
 export type PatientBatch = Database["public"]["Tables"]["patient_batches"]["Row"];
 export type PatientRecord = Database["public"]["Tables"]["patient_records"]["Row"];
+export type HubTask = Database["public"]["Tables"]["hub_tasks"]["Row"];
+export type HubTaskCheck = Database["public"]["Tables"]["hub_task_checks"]["Row"];

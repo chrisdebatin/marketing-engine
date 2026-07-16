@@ -15,8 +15,13 @@ import { CreateHubForm } from "@/components/create-hub-form";
 import { HubTags } from "@/components/md-tag";
 import { ActivityForm } from "@/components/activity-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  HubTaskManager,
+  type TaskWithChecks,
+} from "@/components/hub-task-manager";
+import { HubTaskChips } from "@/components/hub-task-chips";
 import { cn } from "@/lib/utils";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, ListChecks } from "lucide-react";
 import {
   Building2,
   FileText,
@@ -140,6 +145,30 @@ export default async function AdminPage() {
     active: c.active,
   }));
 
+  // Hub-Aufgaben (pro Hub abhakbar); tolerieren eine DB ohne Migration 0015.
+  const [{ data: taskRows }, { data: checkRows }] = await Promise.all([
+    admin
+      .from("hub_tasks")
+      .select("id, title, description")
+      .order("created_at", { ascending: true }),
+    admin.from("hub_task_checks").select("task_id, hub_id"),
+  ]);
+  const doneByTask = new Map<string, string[]>();
+  for (const c of checkRows ?? []) {
+    const arr = doneByTask.get(c.task_id) ?? [];
+    arr.push(c.hub_id);
+    doneByTask.set(c.task_id, arr);
+  }
+  const hubTasks: TaskWithChecks[] = (taskRows ?? []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    doneHubIds: doneByTask.get(t.id) ?? [],
+  }));
+  const doneSet = new Set(
+    (checkRows ?? []).map((c) => `${c.task_id}|${c.hub_id}`),
+  );
+
   const stats = new Map<string, HubStats>();
   const bump = (id: string): HubStats => {
     let s = stats.get(id);
@@ -224,6 +253,27 @@ export default async function AdminPage() {
             Inaktive Artikel werden im Shop ausgeblendet.
           </p>
           <CatalogManager items={catalogItems} />
+        </div>
+      </details>
+
+      <details className="group rounded-xl border bg-card shadow-sm" open>
+        <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold select-none">
+          <ListChecks className="size-4 text-primary" />
+          Hub-Aufgaben
+          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+            aufklappen
+          </span>
+        </summary>
+        <div className="border-t p-5">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Aufgaben, die für alle Hubs erledigt werden müssen (z. B. „E-Mail
+            mit PDL-Link verschickt&rdquo;) — pro Hub abhakbar, mit Fortschritt.
+            Jede Aufgabe erscheint auch als Status-Tag an der Hub-Karte unten.
+          </p>
+          <HubTaskManager
+            tasks={hubTasks}
+            hubs={hubs.map((h) => ({ id: h.id, name: h.name }))}
+          />
         </div>
       </details>
 
@@ -317,6 +367,17 @@ export default async function AdminPage() {
                     muted={s.placements === 0}
                   />
                 </div>
+
+                {hubTasks.length > 0 && (
+                  <HubTaskChips
+                    hubId={h.id}
+                    chips={hubTasks.map((t) => ({
+                      taskId: t.id,
+                      title: t.title,
+                      done: doneSet.has(`${t.id}|${h.id}`),
+                    }))}
+                  />
+                )}
 
                 {s.locations.length > 0 && (
                   <details className="group rounded-lg border bg-muted/40 px-3 py-2">
