@@ -680,7 +680,7 @@ insert into public.hubs (name, responsible_md) values
   ('Kerpen',                  'Marcel Müller'),
   ('Velbert',                 'Melanie Martens'),
   ('Gevelsberg',              'Melanie Martens'),
-  ('Alveo Care',              'Rachid Sabi'),
+  ('Pflegeunion Intensiv',    'Rachid Sabi'),
   ('Duisburg',                'Sebastian Fliegel'),
   ('Iserlohn',                'Sebastian Fliegel'),
   ('Neuenrade',               'Sebastian Fliegel'),

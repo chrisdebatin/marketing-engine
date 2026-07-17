@@ -19,7 +19,7 @@ export const HUB_COORDS: Record<string, [number, number] | null> = {
   Kerpen: [50.871, 6.696],
   Velbert: [51.338, 7.043],
   Gevelsberg: [51.318, 7.338],
-  "Alveo Care": null,
+  "Pflegeunion Intensiv": null,
   Duisburg: [51.435, 6.762],
   Iserlohn: [51.374, 7.697],
   Neuenrade: [51.283, 7.783],
