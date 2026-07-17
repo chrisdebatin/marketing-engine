@@ -9,13 +9,13 @@ import {
   Building2,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { DeleteHubButton } from "@/components/delete-hub-button";
 import { HubTags } from "@/components/md-tag";
-import type { Hub } from "@/lib/types";
+import { HubTaskChips } from "@/components/hub-task-chips";
 
 export const dynamic = "force-dynamic";
 
@@ -25,27 +25,30 @@ export default async function HubDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  // Hub aus der Session (Service-Role-Client, MD-Scoping inklusive) —
+  // gleiches Muster wie die Hub-Übersicht, unabhängig von RLS/Anon-Key.
   const session = await requireSession();
-  const supabase = await createClient();
-
-  const [{ data: hubData }, { data: deliveries }, { data: placements }] =
-    await Promise.all([
-      supabase
-        .from("hubs")
-        .select(
-          "id, name, region, address, responsible_md, pdl_name, pdl_email, pdl_phone, share_token, created_at",
-        )
-        .eq("id", id)
-        .maybeSingle(),
-      supabase
-        .from("deliveries")
-        .select("flyer_count, box_count, aufsteller_count")
-        .eq("hub_id", id),
-      supabase.from("delivery_placements").select("id").eq("hub_id", id),
-    ]);
-
-  const hub = hubData as Hub | null;
+  const hub = session.hubs.find((h) => h.id === id);
   if (!hub) notFound();
+
+  const admin = createAdminClient();
+  const [
+    { data: deliveries },
+    { data: placements },
+    { data: taskRows },
+    { data: checkRows },
+  ] = await Promise.all([
+    admin
+      .from("deliveries")
+      .select("flyer_count, box_count, aufsteller_count")
+      .eq("hub_id", id),
+    admin.from("delivery_placements").select("id").eq("hub_id", id),
+    admin.from("hub_tasks").select("id, title").order("created_at"),
+    admin.from("hub_task_checks").select("task_id").eq("hub_id", id),
+  ]);
+
+  const tasks = taskRows ?? [];
+  const doneTaskIds = new Set((checkRows ?? []).map((c) => c.task_id));
 
   const flyers = (deliveries ?? []).reduce((s, d) => s + (d.flyer_count ?? 0), 0);
   const aufsteller = (deliveries ?? []).reduce(
@@ -118,6 +121,19 @@ export default async function HubDetailPage({
               {placementCount} Orte
             </Badge>
           </div>
+
+          {tasks.length > 0 && (
+            <div className="border-t pt-4">
+              <HubTaskChips
+                hubId={hub.id}
+                chips={tasks.map((t) => ({
+                  taskId: t.id,
+                  title: t.title,
+                  done: doneTaskIds.has(t.id),
+                }))}
+              />
+            </div>
+          )}
 
           <div className="border-t pt-4">
             <CopyLink
