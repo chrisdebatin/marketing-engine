@@ -160,8 +160,9 @@ export default async function HubDetailPage({
             <div>
               <p className="font-medium">Hub löschen</p>
               <p className="text-sm text-muted-foreground">
-                Entfernt den Hub dauerhaft. Nur möglich, wenn keine Lieferungen
-                erfasst sind.
+                Entfernt den Hub dauerhaft — inklusive aller Einträge,
+                Lieferungen, Auslage-Orte und Patienten-Meldungen dieses Hubs.
+                Bestellungen bleiben ohne Hub-Bezug erhalten.
               </p>
             </div>
             <DeleteHubButton hubId={hub.id} hubName={hub.name} />

@@ -62,30 +62,36 @@ export async function createHub(input: {
 }
 
 /**
- * Delete a hub. Deliveries reference hubs with ON DELETE RESTRICT, so a hub that
- * already has recorded deliveries cannot be removed — we surface that clearly
- * instead of a raw FK error. Placements cascade; orders keep their text via
- * ON DELETE SET NULL.
+ * Delete a hub including all seiner Daten. Einträge (activities) und
+ * Lieferungen referenzieren hubs mit ON DELETE RESTRICT — sie werden vorab
+ * explizit gelöscht; alles andere (Placements, Patienten-Listen/-Meldungen,
+ * user_hubs, Task-Häkchen) cascadet, Bestellungen behalten via SET NULL
+ * ihren Text. Admin-only; die UI verlangt eine Bestätigung.
  */
 export async function deleteHub(id: string): Promise<Result> {
   const session = await requireSession();
   if (!session.isAdmin) return { ok: false, error: "Nur für Admins." };
   if (!id) return { ok: false, error: "Hub fehlt." };
 
-  const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { count } = await supabase
-    .from("deliveries")
-    .select("id", { count: "exact", head: true })
+  // Restrict-FKs zuerst: Einträge und Lieferungen des Hubs entfernen.
+  const { error: actErr } = await admin
+    .from("activities")
+    .delete()
     .eq("hub_id", id);
-  if ((count ?? 0) > 0) {
-    return {
-      ok: false,
-      error: `Hub hat ${count} Lieferung(en) und kann nicht gelöscht werden.`,
-    };
+  if (actErr) {
+    return { ok: false, error: "Einträge des Hubs konnten nicht gelöscht werden." };
+  }
+  const { error: delErr } = await admin
+    .from("deliveries")
+    .delete()
+    .eq("hub_id", id);
+  if (delErr) {
+    return { ok: false, error: "Lieferungen des Hubs konnten nicht gelöscht werden." };
   }
 
-  const { error } = await supabase.from("hubs").delete().eq("id", id);
+  const { error } = await admin.from("hubs").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin");
