@@ -196,3 +196,102 @@ export async function setPatientStatus(
   revalidate();
   return { ok: true };
 }
+
+/**
+ * Übernimmt per KI zugeordnete Patienten (aus /api/patients/parse) in die
+ * Monatslisten: gruppiert nach Hub, legt fehlende Batches (hub, period) an
+ * und hängt die Einträge an bestehende Batches an. Status 'offen',
+ * source 'zentral'.
+ */
+export async function importParsedPatients(input: {
+  period: string;
+  entries: { hub_id: string; display_name: string; reference_id?: string }[];
+}): Promise<Result & { created?: number }> {
+  const session = await requireSession();
+
+  const period = (input.period ?? "").trim();
+  if (!/^\d{4}-\d{2}$/.test(period)) {
+    return { ok: false, error: "Zeitraum im Format JJJJ-MM angeben." };
+  }
+  const entries = input.entries ?? [];
+  if (entries.length === 0) {
+    return { ok: false, error: "Keine Einträge zum Übernehmen." };
+  }
+  if (entries.length > 500) {
+    return { ok: false, error: "Zu viele Einträge (max. 500 pro Import)." };
+  }
+
+  // Nach Hub gruppieren; jede Gruppe gegen das bestehende Schema validieren.
+  const byHub = new Map<string, { display_name: string; reference_id?: string }[]>();
+  for (const e of entries) {
+    const hubId = (e.hub_id ?? "").trim();
+    if (!hubId) return { ok: false, error: "Jeder Eintrag braucht einen Hub." };
+    const arr = byHub.get(hubId) ?? [];
+    arr.push({
+      display_name: (e.display_name ?? "").trim(),
+      reference_id: (e.reference_id ?? "").trim() || undefined,
+    });
+    byHub.set(hubId, arr);
+  }
+
+  const supabase = createAdminClient();
+  let created = 0;
+
+  for (const [hubId, hubEntries] of byHub) {
+    if (!canAccessHub(session, hubId)) {
+      return { ok: false, error: "Kein Zugriff auf einen der Hubs." };
+    }
+    const parsed = patientBatchImportSchema.safeParse({
+      hub_id: hubId,
+      period,
+      entries: hubEntries,
+    });
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe.",
+      };
+    }
+
+    // Batch holen oder anlegen (ein Batch je Hub+Monat).
+    const { data: existing } = await supabase
+      .from("patient_batches")
+      .select("id")
+      .eq("hub_id", hubId)
+      .eq("period", period)
+      .maybeSingle();
+
+    let batchId = existing?.id ?? null;
+    if (!batchId) {
+      const { data: inserted, error: batchErr } = await supabase
+        .from("patient_batches")
+        .insert({ hub_id: hubId, period })
+        .select("id")
+        .single();
+      if (batchErr || !inserted) {
+        return { ok: false, error: "Liste konnte nicht angelegt werden." };
+      }
+      batchId = inserted.id;
+    }
+
+    // Bulk-Insert: alle Zeilen mit identischen Keys (PostgREST-Anforderung).
+    const rows = parsed.data.entries.map((e) => ({
+      batch_id: batchId,
+      hub_id: hubId,
+      display_name: e.display_name,
+      reference_id: e.reference_id ? e.reference_id : null,
+      status: "offen",
+      source: "zentral",
+    }));
+    const { error: recErr } = await supabase
+      .from("patient_records")
+      .insert(rows);
+    if (recErr) {
+      return { ok: false, error: "Einträge konnten nicht gespeichert werden." };
+    }
+    created += rows.length;
+  }
+
+  revalidate();
+  return { ok: true, created };
+}

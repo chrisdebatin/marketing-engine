@@ -4,6 +4,7 @@ import {
   PatientBatchManager,
   type ManagerBatch,
 } from "@/components/patient-batch-manager";
+import { PatientAiImport } from "@/components/patient-ai-import";
 import type { PatientBatch, PatientRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,8 @@ export default async function PatientenPage() {
           und optionale Referenz-ID (Datenminimierung).
         </p>
       </div>
+
+      <PatientAiImport hubs={hubOptions} />
 
       <PatientBatchManager hubs={hubOptions} batches={managerBatches} />
     </div>
