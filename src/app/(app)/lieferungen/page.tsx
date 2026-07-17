@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { Truck } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CopyLink } from "@/components/copy-link";
+import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { OrderPlanner, type PlannerOrder } from "@/components/order-planner";
 import type { Delivery, Order } from "@/lib/types";
@@ -14,13 +14,12 @@ export const dynamic = "force-dynamic";
 
 export default async function LieferungenPage() {
   const session = await requireSession();
-  const supabase = await createClient();
-  // `orders` has RLS disabled and no anon grant, so it is only readable via the
-  // service-role client (same pattern as the public PDL routes).
+  // Alle Reads über den Service-Role-Client (RLS disabled / kein anon-Grant);
+  // MD-Scoping passiert unten über session.hubs.
   const admin = createAdminClient();
 
   const [{ data: deliveries }, { data: ordersData }] = await Promise.all([
-    supabase
+    admin
       .from("deliveries")
       .select(
         "id, hub_id, flyer_count, box_count, aufsteller_count, note, share_token, created_at",
@@ -81,7 +80,7 @@ export default async function LieferungenPage() {
   const ids = list.map((d) => d.id);
   const counts = new Map<string, number>();
   if (ids.length > 0) {
-    const { data: pls } = await supabase
+    const { data: pls } = await admin
       .from("delivery_placements")
       .select("delivery_id")
       .in("delivery_id", ids);
@@ -215,7 +214,20 @@ export default async function LieferungenPage() {
                     </p>
                   </div>
                 </div>
-                <CopyLink token={d.share_token} />
+                <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+                  <div className="flex items-center gap-1.5">
+                    <DeliveryEdit
+                      delivery={{
+                        id: d.id,
+                        flyer_count: d.flyer_count,
+                        aufsteller_count: d.aufsteller_count,
+                        box_count: d.box_count,
+                        note: d.note,
+                      }}
+                    />
+                    <CopyLink token={d.share_token} />
+                  </div>
+                </div>
               </li>
             );
           })}
