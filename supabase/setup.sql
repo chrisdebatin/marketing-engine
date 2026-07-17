@@ -121,7 +121,6 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
-
 -- ============================================================
 -- 0002_rls.sql
 -- ============================================================
@@ -252,14 +251,12 @@ drop policy if exists activities_delete on public.activities;
 create policy activities_delete on public.activities
   for delete using (user_id = auth.uid() or public.is_admin());
 
-
 -- ============================================================
 -- 0003_hubs_md.sql
 -- ============================================================
 -- Add the responsible MD (person accountable for the hub) to hubs.
 alter table public.hubs
   add column if not exists responsible_md text;
-
 
 -- ============================================================
 -- 0004_deliveries.sql
@@ -323,7 +320,6 @@ drop policy if exists delivery_placements_select on public.delivery_placements;
 create policy delivery_placements_select on public.delivery_placements
   for select using (public.has_hub(hub_id));
 
-
 -- ============================================================
 -- 0005_hub_pdl.sql
 -- ============================================================
@@ -347,14 +343,12 @@ alter table public.hubs
 create unique index if not exists hubs_share_token_uidx
   on public.hubs (share_token);
 
-
 -- ============================================================
 -- 0006_hub_pdl_phone.sql
 -- ============================================================
 -- Phone number for the local PDL (Pflege-Dienstleitung) contact per hub.
 
 alter table public.hubs add column if not exists pdl_phone text;
-
 
 -- ============================================================
 -- 0007_placement_kind.sql
@@ -368,7 +362,6 @@ alter table public.delivery_placements
 alter table public.delivery_placements
   add constraint delivery_placements_kind_chk
   check (kind in ('flyer', 'box'));
-
 
 -- ============================================================
 -- 0008_open_access.sql
@@ -390,7 +383,6 @@ alter table public.delivery_placements disable row level security;
 alter table public.activities
   alter column user_id set default '25fe44d1-42e8-4525-9509-88860e1594fe';
 
-
 -- ============================================================
 -- 0009_delivery_aufsteller.sql
 -- ============================================================
@@ -398,7 +390,6 @@ alter table public.activities
 
 alter table public.deliveries
   add column if not exists aufsteller_count integer not null default 0;
-
 
 -- ============================================================
 -- 0010_email_orders.sql
@@ -438,7 +429,6 @@ create unique index if not exists email_accounts_provider_uidx
   on public.email_accounts (provider);
 alter table public.email_accounts disable row level security;
 
-
 -- ============================================================
 -- 0011_pdl_orders.sql
 -- ============================================================
@@ -467,13 +457,11 @@ create trigger orders_set_updated_at
 create index if not exists orders_source_idx on public.orders (source);
 create index if not exists orders_created_idx on public.orders (created_at desc);
 
-
 -- ============================================================
 -- 0012_hub_address.sql
 -- ============================================================
 -- Optionale Postanschrift je Hub (für Versand von Materialbestellungen).
 alter table public.hubs add column if not exists address text;
-
 
 -- ============================================================
 -- 0013_shop_patients.sql
@@ -570,7 +558,6 @@ create trigger patient_records_set_updated_at
   before update on public.patient_records
   for each row execute function public.set_updated_at();
 
-
 -- ============================================================
 -- 0014_md_role.sql
 -- ============================================================
@@ -589,7 +576,6 @@ alter table public.profiles
 alter table public.profiles
   add constraint profiles_role_check
   check (role in ('admin', 'md', 'employee'));
-
 
 -- ============================================================
 -- 0015_hub_tasks.sql
@@ -626,7 +612,6 @@ where not exists (
   select 1 from public.hub_tasks where title = 'E-Mail mit PDL-Link verschickt'
 );
 
-
 -- ============================================================
 -- 0016_patient_source.sql
 -- ============================================================
@@ -637,6 +622,29 @@ alter table public.patient_records
   add column if not exists source text not null default 'zentral'
   check (source in ('zentral', 'pdl'));
 
+-- ============================================================
+-- 0017_patient_flows.sql
+-- ============================================================
+-- Patienten-Bewegungen: PDLs erfassen monatlich Neuaufnahmen (Zugang) und
+-- abgegangene Patienten (Abgang) je SGB-Leistungsart über ihren Hub-Link.
+-- DSGVO — Datenminimierung: nur Anzeigename + optionale Referenz-ID.
+-- RLS DISABLED — Zugriff ausschliesslich über den Service-Role-Client
+-- (createAdminClient), wie bei `orders`/`hub_tasks`/`patient_records`.
+
+create table if not exists public.patient_flows (
+  id           uuid primary key default gen_random_uuid(),
+  hub_id       uuid not null references public.hubs (id) on delete cascade,
+  period       text not null check (period ~ '^\d{4}-\d{2}$'),
+  flow         text not null check (flow in ('zugang', 'abgang')),
+  leistung     text not null,
+  display_name text not null,
+  reference_id text,
+  note         text,
+  created_at   timestamptz default now()
+);
+create index if not exists patient_flows_hub_period_idx
+  on public.patient_flows (hub_id, period);
+alter table public.patient_flows disable row level security;
 
 -- ============================================================
 -- seed.sql

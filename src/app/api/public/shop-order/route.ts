@@ -1,21 +1,77 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { shopOrderInputSchema } from "@/lib/schemas-shop";
+import {
+  shopOrderInputSchema,
+  shopCustomOrderSchema,
+} from "@/lib/schemas-shop";
 
 export const runtime = "nodejs";
 
 // Public, token-gated cart order (PDL-Online-Shop) via the stable hub link.
 // Header row goes to `orders` (material = null), positions to `order_items`.
+// Custom orders (`custom` statt `items`) werden als eigene `orders`-Zeile mit
+// Freitext-Material gespeichert — kein Katalog-/order_items-Bezug.
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     token?: string;
     items?: unknown;
+    custom?: unknown;
     note?: string;
   };
 
   const token = (body.token ?? "").trim();
   if (!token) {
     return NextResponse.json({ error: "Token fehlt." }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  // Custom-Bestellung: Freitext + Menge, ohne Warenkorb.
+  if (body.custom != null) {
+    const parsedCustom = shopCustomOrderSchema.safeParse(body.custom);
+    if (!parsedCustom.success) {
+      return NextResponse.json(
+        {
+          error:
+            parsedCustom.error.issues[0]?.message ?? "Ungültige Eingabe.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const { data: hub, error: findErr } = await admin
+      .from("hubs")
+      .select("id, name")
+      .eq("share_token", token)
+      .single();
+
+    if (findErr || !hub) {
+      return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+    }
+
+    const { data: order, error: insErr } = await admin
+      .from("orders")
+      .insert({
+        hub_id: hub.id,
+        hub_input: hub.name,
+        material: parsedCustom.data.text,
+        quantity: parsedCustom.data.quantity,
+        note: parsedCustom.data.note || null,
+        source: "pdl",
+        status: "neu",
+      })
+      .select("id, material, quantity, status, note, created_at")
+      .single();
+
+    if (insErr || !order) {
+      console.error("shop-order: custom insert failed:", insErr?.code);
+      return NextResponse.json(
+        { error: "Bestellung fehlgeschlagen. Bitte später erneut versuchen." },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ order });
   }
 
   const parsed = shopOrderInputSchema.safeParse({
@@ -28,8 +84,6 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-
-  const admin = createAdminClient();
 
   const { data: hub, error: findErr } = await admin
     .from("hubs")

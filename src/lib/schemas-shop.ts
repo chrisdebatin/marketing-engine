@@ -30,6 +30,31 @@ export const shopOrderInputSchema = z.object({
 export type ShopOrderInput = z.infer<typeof shopOrderInputSchema>;
 
 /**
+ * Freie Bestellung der PDL (Material außerhalb des Katalogs).
+ * Wird als eigene `orders`-Zeile mit Freitext-Material gespeichert.
+ */
+export const shopCustomOrderSchema = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1, { message: "Beschreiben, was benötigt wird" })
+    .max(200, { message: "Beschreibung zu lang (max. 200 Zeichen)" }),
+  quantity: z.coerce
+    .number({ message: "Menge eingeben" })
+    .int({ message: "Menge muss eine ganze Zahl sein" })
+    .positive({ message: "Menge muss größer als 0 sein" })
+    .max(9999, { message: "Menge zu groß" }),
+  note: z
+    .string()
+    .trim()
+    .max(500, { message: "Notiz zu lang (max. 500 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type ShopCustomOrderInput = z.infer<typeof shopCustomOrderSchema>;
+
+/**
  * Verifizierung eines einzelnen Patienten-Eintrags durch die PDL
  * (monatliche Bestätigung: noch da / nicht mehr da).
  */
@@ -91,6 +116,37 @@ export const patientClaimSchema = z.object({
 });
 
 export type PatientClaimInput = z.infer<typeof patientClaimSchema>;
+
+/**
+ * PDL erfasst einen monatlichen Patienten-Zugang oder -Abgang je
+ * SGB-Leistungsart. DSGVO: nur Anzeigename + optionale Referenz-ID.
+ */
+export const patientFlowSchema = z.object({
+  period: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, { message: "Zeitraum im Format JJJJ-MM angeben" }),
+  flow: z.enum(["zugang", "abgang"], {
+    message: "Zugang oder Abgang wählen",
+  }),
+  leistung: z
+    .string()
+    .trim()
+    .min(1, { message: "Leistung wählen" })
+    .max(60, { message: "Ungültige Leistung" }),
+  display_name: z
+    .string()
+    .trim()
+    .min(1, { message: "Name eingeben" })
+    .max(200, { message: "Name zu lang (max. 200 Zeichen)" }),
+  reference_id: z
+    .string()
+    .trim()
+    .max(100, { message: "Referenz-ID zu lang (max. 100 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type PatientFlowInput = z.infer<typeof patientFlowSchema>;
 
 /**
  * Import einer monatlichen Patientenliste (ein Batch pro Hub und Monat).

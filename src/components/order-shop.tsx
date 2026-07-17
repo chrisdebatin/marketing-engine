@@ -6,6 +6,7 @@ import {
   Package,
   FileText,
   PanelTop,
+  PackagePlus,
   ShoppingCart,
   Trash2,
 } from "lucide-react";
@@ -72,6 +73,10 @@ export function OrderShop({
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Freie Bestellung (Material außerhalb des Katalogs)
+  const [customText, setCustomText] = useState("");
+  const [customQty, setCustomQty] = useState("");
+  const [customSaving, setCustomSaving] = useState(false);
 
   const nameByKey = new Map(catalog.map((c) => [c.key, c.name]));
   const itemName = (key: string, fallback?: string) =>
@@ -146,6 +151,37 @@ export function OrderShop({
     }
   }
 
+  async function submitCustom() {
+    const text = customText.trim();
+    const qty = Math.floor(Number(customQty));
+    if (!text || customSaving) return;
+    if (!Number.isFinite(qty) || qty < 1) {
+      toast.error("Bitte eine Menge größer als 0 eingeben.");
+      return;
+    }
+    setCustomSaving(true);
+    try {
+      const res = await fetch("/api/public/shop-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, custom: { text, quantity: qty } }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.order) {
+        toast.error(data.error ?? "Bestellung fehlgeschlagen.");
+        return;
+      }
+      setOrders((o) => [data.order as OrderWithItems, ...o]);
+      setCustomText("");
+      setCustomQty("");
+      toast.success("Bestellung abgesendet");
+    } catch {
+      toast.error("Netzwerkfehler.");
+    } finally {
+      setCustomSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       {/* Catalog */}
@@ -209,6 +245,59 @@ export function OrderShop({
             </div>
           );
         })}
+
+        {/* Freie Bestellung: Material, das nicht im Katalog steht */}
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-card p-5 shadow-sm">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <PackagePlus className="size-4.5" />
+            </span>
+            <div className="min-w-0">
+              <h3 className="leading-tight font-semibold">
+                Etwas anderes benötigt?
+              </h3>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Beschreiben Sie frei, welches Material Sie brauchen — das
+                Marketing-Team kümmert sich darum.
+              </p>
+            </div>
+          </div>
+          <Input
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            placeholder="z. B. Visitenkarten, Kugelschreiber, Plakate A2"
+            autoComplete="off"
+            maxLength={200}
+          />
+          <div className="mt-auto flex items-center gap-2">
+            <Input
+              type="number"
+              min={1}
+              max={9999}
+              inputMode="numeric"
+              value={customQty}
+              onChange={(e) => setCustomQty(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void submitCustom();
+                }
+              }}
+              placeholder="Menge"
+              aria-label="Menge für freie Bestellung"
+              className="w-24"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void submitCustom()}
+              disabled={customSaving || !customText.trim() || !customQty.trim()}
+            >
+              <PackagePlus className="size-4" />
+              {customSaving ? "Sende…" : "Direkt bestellen"}
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Cart */}

@@ -7,9 +7,10 @@ import {
   type ShopOrderItemLine,
 } from "@/components/order-shop";
 import {
-  PatientVerification,
-  type VerificationBatch,
-} from "@/components/patient-verification";
+  PatientFlowReport,
+  type FlowEntry,
+  type FlowMonth,
+} from "@/components/patient-flow-report";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +30,24 @@ export default async function HubShareLinkPage({
 
   if (!hub) notFound();
 
-  // material_catalog/order_items may not exist yet on the live DB (migration
-  // 0013 pending) — every query below falls back to [] instead of crashing.
+  // Erfassbare Monate: aktueller Monat + Vormonat (PDLs melden oft rückwirkend).
+  const now = new Date();
+  const toPeriod = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const flowPeriods = [
+    toPeriod(now),
+    toPeriod(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+  ];
+
+  // material_catalog/order_items/patient_flows may not exist yet on the live
+  // DB (migrations pending) — every query below falls back to [] instead of
+  // crashing.
   const [
     { data: deliveries },
     { data: placements },
     { data: orders },
     { data: catalogData },
-    { data: batchRows },
+    { data: flowRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -59,45 +70,19 @@ export default async function HubShareLinkPage({
       .eq("active", true)
       .order("sort_order", { ascending: true }),
     admin
-      .from("patient_batches")
-      .select("id, period")
+      .from("patient_flows")
+      .select("id, period, flow, leistung, display_name, reference_id")
       .eq("hub_id", hub.id)
-      .order("period", { ascending: false }),
+      .in("period", flowPeriods)
+      .order("created_at", { ascending: true }),
   ]);
 
-  // Patient records for this hub's batches (second simple query + JS join —
-  // no embedded-relation selects; tolerates a DB without migration 0013).
-  const batchList = batchRows ?? [];
-  const recordsByBatch = new Map<string, VerificationBatch["records"]>();
-  if (batchList.length > 0) {
-    const { data: recordRows } = await admin
-      .from("patient_records")
-      .select("id, batch_id, display_name, reference_id, status, source, note")
-      .in(
-        "batch_id",
-        batchList.map((b) => b.id),
-      )
-      .order("display_name");
-    for (const r of recordRows ?? []) {
-      const arr = recordsByBatch.get(r.batch_id) ?? [];
-      arr.push({
-        id: r.id,
-        display_name: r.display_name,
-        reference_id: r.reference_id,
-        status: r.status,
-        source: r.source,
-        note: r.note,
-      });
-      recordsByBatch.set(r.batch_id, arr);
-    }
-  }
-  const verificationBatches: VerificationBatch[] = batchList
-    .map((b) => ({
-      id: b.id,
-      period: b.period,
-      records: recordsByBatch.get(b.id) ?? [],
-    }))
-    .filter((b) => b.records.length > 0);
+  const flowMonths: FlowMonth[] = flowPeriods.map((period) => ({
+    period,
+    entries: ((flowRows ?? []) as FlowEntry[]).filter(
+      (e) => e.period === period,
+    ),
+  }));
 
   const catalog = catalogData ?? [];
   const orderList = orders ?? [];
@@ -177,20 +162,18 @@ export default async function HubShareLinkPage({
         )}
       </section>
 
-      {verificationBatches.length > 0 && (
-        <section className="flex flex-col gap-3 border-t pt-6">
-          <div>
-            <h2 className="text-xl font-semibold">
-              Neue Patienten bestätigen
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Bitte prüfe für jeden gelisteten Patienten, ob er tatsächlich
-              betreut wird, und bestätige mit einem Klick.
-            </p>
-          </div>
-          <PatientVerification token={token} batches={verificationBatches} />
-        </section>
-      )}
+      <section className="flex flex-col gap-3 border-t pt-6">
+        <div>
+          <h2 className="text-xl font-semibold">
+            Patienten-Meldung: Zu- &amp; Abgänge
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Bitte trage jeden Monat deine Neuaufnahmen und Abgänge je Leistung
+            ein.
+          </p>
+        </div>
+        <PatientFlowReport token={token} months={flowMonths} />
+      </section>
     </main>
   );
 }
