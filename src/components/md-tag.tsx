@@ -30,7 +30,7 @@ export function MdTag({
 }
 
 /**
- * Small neutral tag showing the local PDL (first name). Rendered next to MdTag
+ * Small neutral tag showing the local PDL (full name). Rendered next to MdTag
  * so a hub name is followed by both responsible MD and PDL. Nothing if unset.
  */
 export function PdlTag({
@@ -41,7 +41,7 @@ export function PdlTag({
   className?: string;
 }) {
   if (!pdl) return null;
-  const short = pdl.trim().split(/\s+/)[0];
+  const short = pdl.trim();
   return (
     <span
       title={`PDL: ${pdl}`}

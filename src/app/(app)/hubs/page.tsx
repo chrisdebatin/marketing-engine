@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { MapPin, User, Phone, Mail, ChevronRight } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { mdColor } from "@/lib/hub-coords";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { HubTags } from "@/components/md-tag";
-import type { Hub } from "@/lib/types";
+import { HubTaskChips } from "@/components/hub-task-chips";
 
 export const dynamic = "force-dynamic";
 
@@ -19,25 +19,35 @@ interface Agg {
 }
 
 export default async function HubsPage() {
-  await requireSession();
-  const supabase = await createClient();
+  // Hubs kommen aus der Session (Service-Role-Client, MD-Scoping inklusive) —
+  // gleiches Muster wie im Rest der App, unabhängig von RLS/Anon-Key.
+  const session = await requireSession();
+  const admin = createAdminClient();
 
-  const [{ data: hubsData }, { data: deliveries }, { data: placements }] =
-    await Promise.all([
-      supabase
-        .from("hubs")
-        .select(
-          "id, name, region, address, responsible_md, pdl_name, pdl_email, pdl_phone, share_token, created_at",
-        )
-        .order("responsible_md")
-        .order("name"),
-      supabase
-        .from("deliveries")
-        .select("hub_id, flyer_count, box_count, aufsteller_count"),
-      supabase.from("delivery_placements").select("hub_id"),
-    ]);
+  const [
+    { data: deliveries },
+    { data: placements },
+    { data: taskRows },
+    { data: checkRows },
+  ] = await Promise.all([
+    admin
+      .from("deliveries")
+      .select("hub_id, flyer_count, box_count, aufsteller_count"),
+    admin.from("delivery_placements").select("hub_id"),
+    admin.from("hub_tasks").select("id, title").order("created_at"),
+    admin.from("hub_task_checks").select("task_id, hub_id"),
+  ]);
 
-  const hubs = (hubsData ?? []) as Hub[];
+  const hubs = [...session.hubs].sort(
+    (a, b) =>
+      (a.responsible_md ?? "").localeCompare(b.responsible_md ?? "") ||
+      a.name.localeCompare(b.name),
+  );
+
+  const tasks = taskRows ?? [];
+  const doneSet = new Set(
+    (checkRows ?? []).map((c) => `${c.task_id}|${c.hub_id}`),
+  );
 
   const agg = new Map<string, Agg>();
   const bump = (id: string): Agg => {
@@ -153,6 +163,17 @@ export default async function HubsPage() {
                     {a.placements} Orte
                   </Badge>
                 </div>
+
+                {tasks.length > 0 && (
+                  <HubTaskChips
+                    hubId={h.id}
+                    chips={tasks.map((t) => ({
+                      taskId: t.id,
+                      title: t.title,
+                      done: doneSet.has(`${t.id}|${h.id}`),
+                    }))}
+                  />
+                )}
 
                 <div className="mt-1">
                   <CopyLink
