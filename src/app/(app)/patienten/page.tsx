@@ -25,7 +25,7 @@ export default async function PatientenPage() {
     admin
       .from("patient_records")
       .select(
-        "id, batch_id, hub_id, display_name, reference_id, status, note, verified_at, created_at, updated_at",
+        "id, batch_id, hub_id, display_name, reference_id, status, source, note, verified_at, created_at, updated_at",
       )
       .order("created_at", { ascending: true }),
   ]);
@@ -59,6 +59,7 @@ export default async function PatientenPage() {
       display_name: r.display_name,
       reference_id: r.reference_id,
       status: r.status,
+      source: r.source,
       note: r.note,
       verified_at: r.verified_at,
     })),

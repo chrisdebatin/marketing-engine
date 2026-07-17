@@ -289,6 +289,7 @@ export interface Database {
           display_name: string;
           reference_id: string | null;
           status: string;
+          source: string;
           note: string | null;
           verified_at: string | null;
           created_at: string | null;
@@ -301,6 +302,7 @@ export interface Database {
           display_name: string;
           reference_id?: string | null;
           status?: string;
+          source?: string;
           note?: string | null;
           verified_at?: string | null;
           created_at?: string | null;

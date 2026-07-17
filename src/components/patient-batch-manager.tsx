@@ -33,6 +33,7 @@ export interface ManagerRecord {
   display_name: string;
   reference_id: string | null;
   status: string;
+  source?: string; // 'zentral' | 'pdl'
   note: string | null;
   verified_at: string | null;
 }
@@ -353,12 +354,23 @@ export function PatientBatchManager({
                               >
                                 <div className="min-w-0">
                                   <p className="flex flex-wrap items-center gap-2 text-sm">
-                                    <span className="font-medium">
+                                    <span
+                                      className={cn(
+                                        "font-medium",
+                                        r.status === "nicht_da" &&
+                                          "line-through opacity-70",
+                                      )}
+                                    >
                                       {r.display_name}
                                     </span>
                                     {r.reference_id && (
                                       <span className="text-muted-foreground">
                                         {r.reference_id}
+                                      </span>
+                                    )}
+                                    {r.source === "pdl" && (
+                                      <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[0.65rem] font-medium text-primary">
+                                        von PDL ergänzt
                                       </span>
                                     )}
                                     <span

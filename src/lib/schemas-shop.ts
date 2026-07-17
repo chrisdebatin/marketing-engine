@@ -35,7 +35,8 @@ export type ShopOrderInput = z.infer<typeof shopOrderInputSchema>;
  */
 export const patientVerifySchema = z.object({
   record_id: z.string().uuid({ message: "Ungültige Datensatz-ID" }),
-  status: z.enum(["bestaetigt", "nicht_da"], {
+  // 'offen' erlaubt der PDL, eine versehentliche Entscheidung zu korrigieren.
+  status: z.enum(["bestaetigt", "nicht_da", "offen"], {
     message: "Status wählen (bestätigt oder nicht da)",
   }),
   note: z
@@ -47,6 +48,27 @@ export const patientVerifySchema = z.object({
 });
 
 export type PatientVerifyInput = z.infer<typeof patientVerifySchema>;
+
+/**
+ * PDL ergänzt einen Patienten, der in der zentralen Liste fehlt.
+ * Der Eintrag wird mit source='pdl' und status='bestaetigt' angelegt.
+ */
+export const patientAddSchema = z.object({
+  batch_id: z.string().uuid({ message: "Ungültige Listen-ID" }),
+  display_name: z
+    .string()
+    .trim()
+    .min(1, { message: "Name eingeben" })
+    .max(200, { message: "Name zu lang (max. 200 Zeichen)" }),
+  reference_id: z
+    .string()
+    .trim()
+    .max(100, { message: "Referenz-ID zu lang (max. 100 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
+});
+
+export type PatientAddInput = z.infer<typeof patientAddSchema>;
 
 /**
  * Import einer monatlichen Patientenliste (ein Batch pro Hub und Monat).

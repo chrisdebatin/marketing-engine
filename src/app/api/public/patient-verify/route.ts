@@ -59,13 +59,16 @@ export async function POST(req: Request) {
   }
 
   const note = (parsed.data.note ?? "").trim();
+  // 'offen' = PDL korrigiert eine versehentliche Entscheidung → Prüfstatus
+  // und Notiz werden zurückgesetzt.
+  const reset = parsed.data.status === "offen";
 
   const { data: updated, error: updErr } = await admin
     .from("patient_records")
     .update({
       status: parsed.data.status,
-      note: note || null,
-      verified_at: new Date().toISOString(),
+      note: reset ? null : note || null,
+      verified_at: reset ? null : new Date().toISOString(),
     })
     .eq("id", record.id)
     .select("id, status, note, verified_at")

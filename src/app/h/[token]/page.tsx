@@ -72,7 +72,7 @@ export default async function HubShareLinkPage({
   if (batchList.length > 0) {
     const { data: recordRows } = await admin
       .from("patient_records")
-      .select("id, batch_id, display_name, reference_id, status, note")
+      .select("id, batch_id, display_name, reference_id, status, source, note")
       .in(
         "batch_id",
         batchList.map((b) => b.id),
@@ -85,6 +85,7 @@ export default async function HubShareLinkPage({
         display_name: r.display_name,
         reference_id: r.reference_id,
         status: r.status,
+        source: r.source,
         note: r.note,
       });
       recordsByBatch.set(r.batch_id, arr);
