@@ -71,6 +71,28 @@ export const patientAddSchema = z.object({
 export type PatientAddInput = z.infer<typeof patientAddSchema>;
 
 /**
+ * PDL fragt alle Namen eines Monats ab (Namens-Pool ohne Hub-Zuordnung),
+ * um Patienten zu finden, die eigentlich zu ihrem Hub gehören.
+ */
+export const patientPoolSchema = z.object({
+  period: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, { message: "Zeitraum im Format JJJJ-MM angeben" }),
+});
+
+export type PatientPoolInput = z.infer<typeof patientPoolSchema>;
+
+/**
+ * PDL ordnet einen Namen aus dem Monats-Pool ihrem Hub zu — der Eintrag
+ * wird in die eigene Monatsliste verschoben (source='pdl', bestätigt).
+ */
+export const patientClaimSchema = z.object({
+  record_id: z.string().uuid({ message: "Ungültige Datensatz-ID" }),
+});
+
+export type PatientClaimInput = z.infer<typeof patientClaimSchema>;
+
+/**
  * Import einer monatlichen Patientenliste (ein Batch pro Hub und Monat).
  * DSGVO — Datenminimierung: nur Anzeigename + optionale Referenz-ID.
  */

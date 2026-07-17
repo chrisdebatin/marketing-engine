@@ -10,6 +10,8 @@ import {
   Plus,
   Undo2,
   ListChecks,
+  Search,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +35,13 @@ export interface VerificationBatch {
   id: string;
   period: string;
   records: VerificationRecord[];
+}
+
+/** Eintrag im Monats-Namens-Pool (bewusst ohne Hub-Zuordnung, DSGVO). */
+interface PoolEntry {
+  id: string;
+  display_name: string;
+  reference_id: string | null;
 }
 
 /**
@@ -61,6 +70,11 @@ export function PatientVerification({
   const [addName, setAddName] = useState("");
   const [addRef, setAddRef] = useState("");
   const [adding, setAdding] = useState(false);
+  // Namens-Pool "Weitere Namen suchen & zuordnen" je Batch
+  const [poolFor, setPoolFor] = useState<string | null>(null);
+  const [pool, setPool] = useState<PoolEntry[] | null>(null);
+  const [poolQuery, setPoolQuery] = useState("");
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   function patchRecord(id: string, patch: Partial<VerificationRecord>) {
     setData((prev) =>
@@ -154,6 +168,69 @@ export function PatientVerification({
     }
   }
 
+  async function openPool(batch: VerificationBatch) {
+    setPoolFor(batch.id);
+    setPool(null);
+    setPoolQuery("");
+    try {
+      const res = await fetch("/api/public/patient-pool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, period: batch.period }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        names?: PoolEntry[];
+      };
+      if (!res.ok || !body.names) {
+        toast.error(body.error ?? "Laden fehlgeschlagen.");
+        setPoolFor(null);
+        return;
+      }
+      setPool(body.names);
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+      setPoolFor(null);
+    }
+  }
+
+  async function claim(batch: VerificationBatch, entry: PoolEntry) {
+    if (claimingId) return;
+    setClaimingId(entry.id);
+    try {
+      const res = await fetch("/api/public/patient-claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, record_id: entry.id }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        record?: VerificationRecord;
+      };
+      if (!res.ok || !body.record) {
+        toast.error(body.error ?? "Zuordnen fehlgeschlagen.");
+        // 404/409: Eintrag ist nicht mehr verfügbar — aus dem Pool nehmen.
+        if (res.status === 404 || res.status === 409) {
+          setPool((prev) => prev?.filter((p) => p.id !== entry.id) ?? prev);
+        }
+        return;
+      }
+      setPool((prev) => prev?.filter((p) => p.id !== entry.id) ?? prev);
+      setData((prev) =>
+        prev.map((b) =>
+          b.id === batch.id
+            ? { ...b, records: [...b.records, body.record!] }
+            : b,
+        ),
+      );
+      toast.success("Patient Ihrem Standort zugeordnet — danke!");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setClaimingId(null);
+    }
+  }
+
   function formatPeriod(period: string): string {
     const d = new Date(`${period}-01T00:00:00`);
     if (Number.isNaN(d.getTime())) return period;
@@ -190,7 +267,13 @@ export function PatientVerification({
           </li>
           <li>
             <strong className="text-foreground">Fehlt ein Patient?</strong>{" "}
-            Über „Patient ergänzen&rdquo; können Sie ihn selbst hinzufügen.
+            Über „Patient ergänzen&rdquo; können Sie ihn selbst hinzufügen —
+            oder über{" "}
+            <strong className="text-foreground">
+              „Weitere Namen suchen &amp; zuordnen&rdquo;
+            </strong>{" "}
+            prüfen, ob er versehentlich einem anderen Standort zugeordnet
+            wurde, und ihn zu Ihrem Standort holen.
           </li>
         </ol>
         <p className="text-xs text-muted-foreground">
@@ -207,6 +290,10 @@ export function PatientVerification({
         const allDone = total > 0 && checked >= total;
         const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
         const addOpen = addFor === batch.id;
+        const poolOpen = poolFor === batch.id;
+        const q = poolQuery.trim().toLowerCase();
+        const poolFiltered =
+          pool?.filter((e) => e.display_name.toLowerCase().includes(q)) ?? [];
 
         return (
           <section
@@ -435,6 +522,90 @@ export function PatientVerification({
               >
                 <Plus className="size-4" />
                 Patient ergänzen (fehlt in der Liste)
+              </Button>
+            )}
+
+            {/* Namens-Pool des Monats: Patienten anderer Standorte zuordnen */}
+            {poolOpen ? (
+              <div className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+                <p className="text-sm font-medium">
+                  Weitere neue Patienten aus {formatPeriod(batch.period)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Diese Namen sind aktuell anderen Standorten zugeordnet
+                  (welchen, wird aus Datenschutzgründen nicht angezeigt). Wird
+                  ein Patient tatsächlich von Ihnen versorgt, ordnen Sie ihn
+                  per Klick zu — er wandert dann in Ihre Liste und wird beim
+                  bisherigen Standort entfernt.
+                </p>
+                <Input
+                  value={poolQuery}
+                  onChange={(e) => setPoolQuery(e.target.value)}
+                  placeholder="Name suchen…"
+                  autoComplete="off"
+                />
+                {pool === null ? (
+                  <p className="py-1 text-sm text-muted-foreground">
+                    Lade Namen…
+                  </p>
+                ) : poolFiltered.length === 0 ? (
+                  <p className="py-1 text-sm text-muted-foreground">
+                    {pool.length === 0
+                      ? "Für diesen Monat gibt es keine weiteren Namen."
+                      : "Kein Name passt zur Suche."}
+                  </p>
+                ) : (
+                  <ul className="flex max-h-72 flex-col gap-1.5 overflow-y-auto">
+                    {poolFiltered.map((e) => (
+                      <li
+                        key={e.id}
+                        className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {e.display_name}
+                          </p>
+                          {e.reference_id && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {e.reference_id}
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={claimingId != null}
+                          onClick={() => claim(batch, e)}
+                        >
+                          <UserPlus className="size-4" />
+                          {claimingId === e.id ? "Ordne zu…" : "Zu meinem Standort"}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="self-start"
+                  onClick={() => setPoolFor(null)}
+                >
+                  Schließen
+                </Button>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={() => void openPool(batch)}
+              >
+                <Search className="size-4" />
+                Weitere Namen suchen &amp; zuordnen
               </Button>
             )}
           </section>
