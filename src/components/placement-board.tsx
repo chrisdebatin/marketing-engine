@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Package } from "lucide-react";
+import { FileText, Package, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,11 @@ export function PlacementBoard({
   const [menge, setMenge] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Inline-Bearbeitung eines eingetragenen Ortes
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editMenge, setEditMenge] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
 
   const isBox = kind === "box";
 
@@ -63,6 +68,46 @@ export function PlacementBoard({
       setError("Netzwerkfehler.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEdit(p: Placement) {
+    setEditId(p.id);
+    setEditName(p.standort_name);
+    setEditMenge(p.menge != null ? String(p.menge) : "");
+  }
+
+  async function saveEdit() {
+    const name = editName.trim();
+    if (!name || !editId || editSaving) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          id: editId,
+          standort_name: name,
+          menge: editMenge,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Speichern fehlgeschlagen.");
+        return;
+      }
+      setPlacements((prev) =>
+        prev.map((p) =>
+          p.id === editId ? { ...p, ...(data.placement as Placement) } : p,
+        ),
+      );
+      setEditId(null);
+      toast.success("Eintrag aktualisiert");
+    } catch {
+      toast.error("Netzwerkfehler.");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -150,32 +195,88 @@ export function PlacementBoard({
           <ul className="flex flex-col gap-2">
             {placements.map((p) => {
               const box = p.kind === "box";
+              const editing = editId === p.id;
               return (
                 <li
                   key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5 text-sm"
+                  className="flex flex-col gap-2.5 rounded-lg border bg-card px-3 py-2.5 text-sm"
                 >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <span
-                      className={cn(
-                        "flex size-7 shrink-0 items-center justify-center rounded-md",
-                        box
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                          : "bg-primary/10 text-primary",
-                      )}
-                    >
-                      {box ? (
-                        <Package className="size-4" />
-                      ) : (
-                        <FileText className="size-4" />
-                      )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-md",
+                          box
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                            : "bg-primary/10 text-primary",
+                        )}
+                      >
+                        {box ? (
+                          <Package className="size-4" />
+                        ) : (
+                          <FileText className="size-4" />
+                        )}
+                      </span>
+                      <span className="truncate">{p.standort_name}</span>
                     </span>
-                    <span className="truncate">{p.standort_name}</span>
-                  </span>
-                  {p.menge != null && (
-                    <span className="shrink-0 text-muted-foreground">
-                      {p.menge} Stück
+                    <span className="flex shrink-0 items-center gap-2">
+                      {p.menge != null && (
+                        <span className="text-muted-foreground">
+                          {p.menge} Stück
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => (editing ? setEditId(null) : startEdit(p))}
+                        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                        title="Eintrag bearbeiten"
+                        aria-label={`${p.standort_name} bearbeiten`}
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
                     </span>
+                  </div>
+
+                  {editing && (
+                    <div className="flex flex-col gap-2 border-t pt-2.5">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          placeholder="Ort"
+                          autoComplete="off"
+                          className="sm:flex-1"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          value={editMenge}
+                          onChange={(e) => setEditMenge(e.target.value)}
+                          placeholder="Anzahl (optional)"
+                          className="sm:w-40"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={editSaving || !editName.trim()}
+                          onClick={() => void saveEdit()}
+                        >
+                          {editSaving ? "Speichere…" : "Speichern"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={editSaving}
+                          onClick={() => setEditId(null)}
+                        >
+                          Abbrechen
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </li>
               );

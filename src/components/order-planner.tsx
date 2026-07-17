@@ -135,7 +135,12 @@ export function OrderPlanner({
     });
   }
 
-  const open = orders.filter((o) => o.status !== "erledigt");
+  // Offene zuerst, darunter "in Bearbeitung"; innerhalb bleibt die
+  // Eingangsreihenfolge (created_at desc) durch stabile Sortierung erhalten.
+  const statusRank = (s: string) => (s === "neu" ? 0 : 1);
+  const open = orders
+    .filter((o) => o.status !== "erledigt")
+    .sort((a, b) => statusRank(a.status) - statusRank(b.status));
   const done = orders.filter((o) => o.status === "erledigt");
 
   // Group open orders by hub (Standort): what still needs to go to each location.
@@ -158,7 +163,13 @@ export function OrderPlanner({
         items,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    // Hubs mit offenen (neuen) Bestellungen zuerst, dann alphabetisch.
+    .sort(
+      (a, b) =>
+        Math.min(...a.items.map((o) => statusRank(o.status))) -
+          Math.min(...b.items.map((o) => statusRank(o.status))) ||
+        a.name.localeCompare(b.name, "de"),
+    );
 
   return (
     <div className="flex flex-col gap-4">

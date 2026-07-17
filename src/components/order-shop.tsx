@@ -298,7 +298,15 @@ export function OrderShop({
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {orders.map((o) => {
+            {/* Offene zuerst, dann in Bearbeitung, erledigte unten; innerhalb
+                bleibt created_at desc durch stabile Sortierung erhalten. */}
+            {[...orders]
+              .sort(
+                (a, b) =>
+                  (a.status === "neu" ? 0 : a.status === "in_bearbeitung" ? 1 : 2) -
+                  (b.status === "neu" ? 0 : b.status === "in_bearbeitung" ? 1 : 2),
+              )
+              .map((o) => {
               const hasItems = (o.items?.length ?? 0) > 0;
               const Icon = hasItems
                 ? o.items!.length === 1
