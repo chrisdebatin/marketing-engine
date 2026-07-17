@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { leistungenForHub } from "@/lib/leistungen";
 import { PlacementBoard } from "@/components/placement-board";
 import {
   OrderShop,
@@ -30,14 +31,14 @@ export default async function HubShareLinkPage({
 
   if (!hub) notFound();
 
-  // Erfassbare Monate: aktueller Monat + Vormonat (PDLs melden oft rückwirkend).
+  // Erfassbare Monate: aktueller Monat + zwei Vormonate (es wird oft
+  // rückwirkend gemeldet, z. B. Mai bei Meldung im Juli).
   const now = new Date();
   const toPeriod = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  const flowPeriods = [
-    toPeriod(now),
-    toPeriod(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-  ];
+  const flowPeriods = [0, 1, 2].map((back) =>
+    toPeriod(new Date(now.getFullYear(), now.getMonth() - back, 1)),
+  );
 
   // material_catalog/order_items/patient_flows may not exist yet on the live
   // DB (migrations pending) — every query below falls back to [] instead of
@@ -172,7 +173,11 @@ export default async function HubShareLinkPage({
             ein.
           </p>
         </div>
-        <PatientFlowReport token={token} months={flowMonths} />
+        <PatientFlowReport
+          token={token}
+          months={flowMonths}
+          leistungen={leistungenForHub(hub.name)}
+        />
       </section>
     </main>
   );

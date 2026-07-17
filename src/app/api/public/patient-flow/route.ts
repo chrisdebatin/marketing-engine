@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { patientFlowSchema } from "@/lib/schemas-shop";
-import { LEISTUNG_KEYS } from "@/lib/leistungen";
+import { leistungenForHub } from "@/lib/leistungen";
 
 export const runtime = "nodejs";
 
@@ -36,20 +36,21 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  if (!(LEISTUNG_KEYS as readonly string[]).includes(parsed.data.leistung)) {
-    return NextResponse.json({ error: "Leistung wählen." }, { status: 400 });
-  }
-
   const admin = createAdminClient();
 
   const { data: hub, error: findErr } = await admin
     .from("hubs")
-    .select("id")
+    .select("id, name")
     .eq("share_token", token)
     .single();
 
   if (findErr || !hub) {
     return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+  }
+
+  // Leistung muss zur Hub-Art passen (Pflege vs. Alltagshilfe).
+  if (!leistungenForHub(hub.name).some((l) => l.key === parsed.data.leistung)) {
+    return NextResponse.json({ error: "Leistung wählen." }, { status: 400 });
   }
 
   const { data: inserted, error: insErr } = await admin

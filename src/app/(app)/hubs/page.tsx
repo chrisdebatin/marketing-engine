@@ -3,6 +3,7 @@ import { MapPin, User, Phone, Mail, ChevronRight } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mdColor } from "@/lib/hub-coords";
+import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
@@ -108,6 +109,7 @@ export default async function HubsPage() {
                     <HubTags
                       md={h.responsible_md}
                       pdl={h.pdl_name}
+                      pdlRole={pdlRoleShort(h.name)}
                       className="ml-auto"
                     />
                   </div>
@@ -132,7 +134,7 @@ export default async function HubsPage() {
                   </span>
                   {h.pdl_name && (
                     <span className="text-muted-foreground">
-                      PDL: {h.pdl_name}
+                      {pdlRoleLabel(h.name)}: {h.pdl_name}
                     </span>
                   )}
                   {h.pdl_phone && (
@@ -179,7 +181,7 @@ export default async function HubsPage() {
                   <CopyLink
                     token={h.share_token}
                     prefix="/h"
-                    label="PDL-Link kopieren"
+                    label={`${pdlRoleShort(h.name)}-Link kopieren`}
                   />
                 </div>
               </CardContent>

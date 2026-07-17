@@ -8,6 +8,7 @@ import { CopyLink } from "@/components/copy-link";
 import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { OrderPlanner, type PlannerOrder } from "@/components/order-planner";
+import { pdlRoleShort } from "@/lib/leistungen";
 import type { Delivery, Order } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -192,7 +193,11 @@ export default async function LieferungenPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{hubName(d.hub_id)}</span>
-                      <HubTags md={hubMd(d.hub_id)} pdl={hubPdl(d.hub_id)} />
+                      <HubTags
+                        md={hubMd(d.hub_id)}
+                        pdl={hubPdl(d.hub_id)}
+                        pdlRole={pdlRoleShort(hubName(d.hub_id))}
+                      />
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <Badge variant="outline">{d.flyer_count} Flyer</Badge>

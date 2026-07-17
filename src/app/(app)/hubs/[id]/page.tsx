@@ -16,6 +16,7 @@ import { CopyLink } from "@/components/copy-link";
 import { DeleteHubButton } from "@/components/delete-hub-button";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
+import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,11 @@ export default async function HubDetailPage({
             <h1 className="text-2xl font-semibold tracking-tight">
               {hub.name}
             </h1>
-            <HubTags md={hub.responsible_md} pdl={hub.pdl_name} />
+            <HubTags
+              md={hub.responsible_md}
+              pdl={hub.pdl_name}
+              pdlRole={pdlRoleShort(hub.name)}
+            />
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
@@ -98,15 +103,19 @@ export default async function HubDetailPage({
         <CardContent className="flex flex-col gap-4 p-5">
           <div className="grid gap-3 sm:grid-cols-2">
             <Detail label="Adresse" icon={MapPin} value={hub.address} />
-            <Detail label="Lokale PDL" icon={User} value={hub.pdl_name} />
             <Detail
-              label="PDL Telefon"
+              label={`Lokale ${pdlRoleLabel(hub.name)}`}
+              icon={User}
+              value={hub.pdl_name}
+            />
+            <Detail
+              label={`${pdlRoleShort(hub.name)} Telefon`}
               icon={Phone}
               value={hub.pdl_phone}
               href={hub.pdl_phone ? `tel:${hub.pdl_phone}` : undefined}
             />
             <Detail
-              label="PDL E-Mail"
+              label={`${pdlRoleShort(hub.name)} E-Mail`}
               icon={Mail}
               value={hub.pdl_email}
               href={hub.pdl_email ? `mailto:${hub.pdl_email}` : undefined}
@@ -139,7 +148,7 @@ export default async function HubDetailPage({
             <CopyLink
               token={hub.share_token}
               prefix="/h"
-              label="PDL-Link kopieren"
+              label={`${pdlRoleShort(hub.name)}-Link kopieren`}
             />
           </div>
         </CardContent>

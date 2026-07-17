@@ -30,27 +30,31 @@ export function MdTag({
 }
 
 /**
- * Small neutral tag showing the local PDL (full name). Rendered next to MdTag
- * so a hub name is followed by both responsible MD and PDL. Nothing if unset.
+ * Small neutral tag showing the local PDL/Standortleitung (full name).
+ * Rendered next to MdTag so a hub name is followed by both responsible MD and
+ * PDL. Nothing if unset. `role` = chip prefix ("PDL", bei Alltagshilfe "SL").
  */
 export function PdlTag({
   pdl,
+  role = "PDL",
   className,
 }: {
   pdl: string | null;
+  role?: string;
   className?: string;
 }) {
   if (!pdl) return null;
   const short = pdl.trim();
+  const roleTitle = role === "SL" ? "Standortleitung" : role;
   return (
     <span
-      title={`PDL: ${pdl}`}
+      title={`${roleTitle}: ${pdl}`}
       className={cn(
         "inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground",
         className,
       )}
     >
-      <span className="text-[0.625rem] uppercase opacity-70">PDL</span>
+      <span className="text-[0.625rem] uppercase opacity-70">{role}</span>
       {short}
     </span>
   );
@@ -60,17 +64,19 @@ export function PdlTag({
 export function HubTags({
   md,
   pdl,
+  pdlRole,
   className,
 }: {
   md: string | null;
   pdl: string | null;
+  pdlRole?: string;
   className?: string;
 }) {
   if (!md && !pdl) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5", className)}>
       <MdTag md={md} />
-      <PdlTag pdl={pdl} />
+      <PdlTag pdl={pdl} role={pdlRole} />
     </span>
   );
 }

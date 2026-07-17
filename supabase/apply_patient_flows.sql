@@ -15,3 +15,9 @@ create table if not exists public.patient_flows (
 create index if not exists patient_flows_hub_period_idx
   on public.patient_flows (hub_id, period);
 alter table public.patient_flows disable row level security;
+
+-- PostgREST-Schema-Cache neu laden, damit die API die Tabelle sofort kennt.
+notify pgrst, 'reload schema';
+
+-- Kontrolle: muss 0 (oder mehr) liefern, nicht mit einem Fehler abbrechen.
+select count(*) as patient_flows_rows from public.patient_flows;

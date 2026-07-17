@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { LEISTUNGEN, leistungLabel } from "@/lib/leistungen";
+import { leistungLabel, type Leistung } from "@/lib/leistungen";
 
 /** Ein erfasster Zu- oder Abgang (DSGVO-minimiert: Name + Referenz-ID). */
 export interface FlowEntry {
@@ -47,25 +47,26 @@ export interface FlowMonth {
 export function PatientFlowReport({
   token,
   months,
+  leistungen,
 }: {
   token: string;
   months: FlowMonth[];
+  leistungen: Leistung[];
 }) {
   const [data, setData] = useState<FlowMonth[]>(months);
-  // Formular-Zustand je Monat (nur ein Formular aktiv nutzbar, aber Zustand
-  // getrennt, damit Wechsel zwischen Monaten nichts verwirft).
+  // Ein gemeinsamer Formular-Zustand; das Formular ist je Monat immer
+  // sichtbar, damit das Eintragen mit möglichst wenigen Klicks geht.
   const [flow, setFlow] = useState<"zugang" | "abgang">("zugang");
   const [leistung, setLeistung] = useState<string>("");
   const [name, setName] = useState("");
   const [ref, setRef] = useState("");
-  const [formFor, setFormFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  function openForm(period: string, f: "zugang" | "abgang") {
-    setFormFor(period);
-    setFlow(f);
-  }
+  // base-ui Select zeigt über `items` das Label statt des Rohwerts an.
+  const leistungItems = Object.fromEntries(
+    leistungen.map((l) => [l.key, l.label]),
+  );
 
   async function add(period: string) {
     const n = name.trim();
@@ -162,8 +163,12 @@ export function PatientFlowReport({
           </li>
           <li>
             Wählen Sie dabei die passende{" "}
-            <strong className="text-foreground">Leistung</strong> (z. B.
-            Pflegesachleistung, Behandlungspflege, Tagespflege).
+            <strong className="text-foreground">Leistung</strong> (z. B.{" "}
+            {leistungen
+              .slice(0, 3)
+              .map((l) => l.label.split(" (")[0])
+              .join(", ")}
+            ).
           </li>
           <li>
             Falsch eingetragen? Über das{" "}
@@ -180,7 +185,6 @@ export function PatientFlowReport({
       {data.map((month) => {
         const zugaenge = month.entries.filter((e) => e.flow === "zugang");
         const abgaenge = month.entries.filter((e) => e.flow === "abgang");
-        const formOpen = formFor === month.period;
 
         return (
           <section
@@ -249,123 +253,91 @@ export function PatientFlowReport({
               );
             })}
 
-            {month.entries.length === 0 && !formOpen && (
-              <p className="text-sm text-muted-foreground">
-                Für diesen Monat wurde noch nichts gemeldet.
-              </p>
-            )}
-
-            {/* Formular */}
-            {formOpen ? (
-              <div className="flex flex-col gap-3 rounded-lg border bg-background p-3">
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-                  {(
-                    [
-                      { k: "zugang", label: "Neuaufnahme", Icon: UserPlus },
-                      { k: "abgang", label: "Abgang", Icon: UserMinus },
-                    ] as const
-                  ).map(({ k, label, Icon }) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setFlow(k)}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                        flow === k
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      <Icon className="size-4" />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <Label>Leistung</Label>
-                  <Select
-                    value={leistung}
-                    onValueChange={(v) => setLeistung(v ?? "")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Leistung wählen…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LEISTUNGEN.map((l) => (
-                        <SelectItem key={l.key} value={l.key}>
-                          {l.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Name, z. B. Müller, Anna"
-                    autoComplete="off"
-                    className="sm:flex-1"
-                    maxLength={200}
-                  />
-                  <Input
-                    value={ref}
-                    onChange={(e) => setRef(e.target.value)}
-                    placeholder="Referenz-Nr. (optional)"
-                    autoComplete="off"
-                    className="sm:w-44"
-                    maxLength={100}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
+            {/* Formular — immer sichtbar, damit das Eintragen schnell geht */}
+            <div className="flex flex-col gap-3 rounded-lg border bg-background p-3">
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                {(
+                  [
+                    { k: "zugang", label: "Neuaufnahme", Icon: UserPlus },
+                    { k: "abgang", label: "Abgang", Icon: UserMinus },
+                  ] as const
+                ).map(({ k, label, Icon }) => (
+                  <button
+                    key={k}
                     type="button"
-                    size="sm"
-                    disabled={saving || !name.trim() || !leistung}
-                    onClick={() => void add(month.period)}
+                    onClick={() => setFlow(k)}
+                    className={cn(
+                      "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                      flow === k
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                   >
-                    {saving
-                      ? "Speichere…"
-                      : flow === "zugang"
-                        ? "Neuaufnahme eintragen"
-                        : "Abgang eintragen"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={saving}
-                    onClick={() => setFormFor(null)}
-                  >
-                    Schließen
-                  </Button>
-                </div>
+                    <Icon className="size-4" />
+                    {label}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openForm(month.period, "zugang")}
+
+              <div className="flex flex-col gap-2">
+                <Label>Leistung</Label>
+                <Select
+                  items={leistungItems}
+                  value={leistung}
+                  onValueChange={(v) => setLeistung(v ?? "")}
                 >
-                  <UserPlus className="size-4" />
-                  Neuaufnahme eintragen
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openForm(month.period, "abgang")}
-                >
-                  <UserMinus className="size-4" />
-                  Abgang eintragen
-                </Button>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Leistung wählen…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {leistungen.map((l) => (
+                      <SelectItem key={l.key} value={l.key}>
+                        {l.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void add(month.period);
+                    }
+                  }}
+                  placeholder="Name, z. B. Müller, Anna"
+                  autoComplete="off"
+                  className="sm:flex-1"
+                  maxLength={200}
+                />
+                <Input
+                  value={ref}
+                  onChange={(e) => setRef(e.target.value)}
+                  placeholder="Referenz-Nr. (optional)"
+                  autoComplete="off"
+                  className="sm:w-44"
+                  maxLength={100}
+                />
+              </div>
+
+              <Button
+                type="button"
+                size="sm"
+                className="self-start"
+                disabled={saving || !name.trim() || !leistung}
+                onClick={() => void add(month.period)}
+              >
+                {saving
+                  ? "Speichere…"
+                  : flow === "zugang"
+                    ? "Neuaufnahme eintragen"
+                    : "Abgang eintragen"}
+              </Button>
+            </div>
           </section>
         );
       })}

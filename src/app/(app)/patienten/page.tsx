@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HubTags } from "@/components/md-tag";
-import { leistungLabel } from "@/lib/leistungen";
+import { leistungLabel, pdlRoleShort } from "@/lib/leistungen";
 import type { PatientFlow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -125,6 +125,7 @@ export default async function PatientenPage() {
                           <HubTags
                             md={hub?.responsible_md ?? null}
                             pdl={hub?.pdl_name ?? null}
+                            pdlRole={pdlRoleShort(hub?.name ?? null)}
                             className="ml-auto"
                           />
                         </div>
