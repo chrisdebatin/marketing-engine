@@ -225,6 +225,25 @@ export default async function HubShareLinkPage({
               „Deine Bestellungen&rdquo;.
             </>,
           ]}
+          footer={
+            <>
+              <strong className="text-foreground">
+                Bitte nur bei tatsächlichem Bedarf bestellen.
+              </strong>{" "}
+              Bei Rückfragen gern anrufen:{" "}
+              <a href="tel:+491772988173" className="text-primary underline">
+                0177&nbsp;2988&nbsp;173
+              </a>{" "}
+              — oder per E-Mail an{" "}
+              <a
+                href="mailto:marketing@igs-holding.de"
+                className="text-primary underline"
+              >
+                marketing@igs-holding.de
+              </a>
+              .
+            </>
+          }
         />
         {catalog.length === 0 ? (
           <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
@@ -256,9 +275,11 @@ export default async function HubShareLinkPage({
 function StepBox({
   title,
   steps,
+  footer,
 }: {
   title: string;
   steps: React.ReactNode[];
+  footer?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">
@@ -271,6 +292,7 @@ function StepBox({
           <li key={i}>{s}</li>
         ))}
       </ol>
+      {footer && <p className="text-xs text-muted-foreground">{footer}</p>}
     </div>
   );
 }
