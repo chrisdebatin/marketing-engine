@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { leistungenForHub } from "@/lib/leistungen";
 import { PlacementBoard } from "@/components/placement-board";
@@ -133,26 +134,98 @@ export default async function HubShareLinkPage({
               {boxes > 0 && <> · {boxes} Boxen</>}.{" "}
             </>
           ) : null}
-          Trage ein, wo Flyer ausgelegt und wo Case-Management-Boxen geliefert
-          wurden.
+          Dies ist Ihre persönliche Seite für den Standort — kein Login nötig,
+          Link einfach speichern.
         </p>
       </div>
 
-      <PlacementBoard
-        token={token}
-        initial={placements ?? []}
-        endpoint="/api/public/hub-placement"
-        allowBoxes
+      {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
+      <StepBox
+        title="So nutzen Sie diese Seite — 3 Aufgaben:"
+        steps={[
+          <>
+            <strong className="text-foreground">Orte eintragen:</strong> Wo
+            haben Sie Flyer ausgelegt oder Boxen abgegeben?
+          </>,
+          <>
+            <strong className="text-foreground">Material bestellen:</strong>{" "}
+            Nachschub an Flyern, Boxen &amp; Co. anfordern.
+          </>,
+          <>
+            <strong className="text-foreground">Patienten melden:</strong>{" "}
+            Jeden Monat alle Neuaufnahmen und Abgänge eintragen.
+          </>,
+        ]}
       />
+
+      <section className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">
+            1. Auslage-Orte eintragen
+          </h2>
+        </div>
+        <StepBox
+          title="So geht's:"
+          steps={[
+            <>
+              Oben wählen:{" "}
+              <strong className="text-foreground">„Flyer ausgelegt&rdquo;</strong>{" "}
+              oder{" "}
+              <strong className="text-foreground">„Box geliefert&rdquo;</strong>.
+            </>,
+            <>
+              Ort eintragen (z.&nbsp;B. „Apotheke am Markt&rdquo;), Anzahl
+              angeben und auf{" "}
+              <strong className="text-foreground">„Hinzufügen&rdquo;</strong>{" "}
+              klicken.
+            </>,
+            <>
+              Vertippt? Über das{" "}
+              <strong className="text-foreground">Stift-Symbol</strong> am
+              Eintrag können Sie Ort und Anzahl jederzeit korrigieren.
+            </>,
+          ]}
+        />
+        <PlacementBoard
+          token={token}
+          initial={placements ?? []}
+          endpoint="/api/public/hub-placement"
+          allowBoxes
+        />
+      </section>
 
       <section className="flex flex-col gap-3 border-t pt-6">
         <div>
-          <h2 className="text-xl font-semibold">Material bestellen</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Materialien in den Warenkorb legen und bestellen. Das
-            Marketing-Team kümmert sich um den Versand.
-          </p>
+          <h2 className="text-xl font-semibold">2. Material bestellen</h2>
         </div>
+        <StepBox
+          title="So geht's:"
+          steps={[
+            <>
+              Beim gewünschten Material die{" "}
+              <strong className="text-foreground">Menge</strong> eintragen und{" "}
+              <strong className="text-foreground">
+                „In den Warenkorb&rdquo;
+              </strong>{" "}
+              klicken — gern mehrere Materialien sammeln.
+            </>,
+            <>
+              Unten im Warenkorb auf{" "}
+              <strong className="text-foreground">
+                „Bestellung absenden&rdquo;
+              </strong>{" "}
+              klicken. Das Marketing-Team kümmert sich um den Versand.
+            </>,
+            <>
+              Etwas nicht dabei? Über{" "}
+              <strong className="text-foreground">
+                „Etwas anderes benötigt?&rdquo;
+              </strong>{" "}
+              frei beschreiben und direkt bestellen. Den Status sehen Sie unter
+              „Deine Bestellungen&rdquo;.
+            </>,
+          ]}
+        />
         {catalog.length === 0 ? (
           <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
             Der Material-Katalog ist derzeit nicht verfügbar. Bitte später
@@ -166,12 +239,8 @@ export default async function HubShareLinkPage({
       <section className="flex flex-col gap-3 border-t pt-6">
         <div>
           <h2 className="text-xl font-semibold">
-            Patienten-Meldung: Zu- &amp; Abgänge
+            3. Patienten-Meldung: Zu- &amp; Abgänge
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Bitte trage jeden Monat deine Neuaufnahmen und Abgänge je Leistung
-            ein.
-          </p>
         </div>
         <PatientFlowReport
           token={token}
@@ -180,5 +249,28 @@ export default async function HubShareLinkPage({
         />
       </section>
     </main>
+  );
+}
+
+/** Einheitliche, einfache Schritt-für-Schritt-Erklärung je Bereich. */
+function StepBox({
+  title,
+  steps,
+}: {
+  title: string;
+  steps: React.ReactNode[];
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">
+      <p className="flex items-center gap-2 font-semibold">
+        <ListChecks className="size-4 text-primary" />
+        {title}
+      </p>
+      <ol className="ml-5 flex list-decimal flex-col gap-1 text-muted-foreground">
+        {steps.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ol>
+    </div>
   );
 }
