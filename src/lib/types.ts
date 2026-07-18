@@ -320,6 +320,7 @@ export interface Database {
           leistung: string;
           display_name: string;
           reference_id: string | null;
+          abgang_grund: string | null;
           note: string | null;
           created_at: string | null;
         };
@@ -331,6 +332,7 @@ export interface Database {
           leistung: string;
           display_name: string;
           reference_id?: string | null;
+          abgang_grund?: string | null;
           note?: string | null;
           created_at?: string | null;
         };

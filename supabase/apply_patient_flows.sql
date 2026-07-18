@@ -9,9 +9,13 @@ create table if not exists public.patient_flows (
   leistung     text not null,
   display_name text not null,
   reference_id text,
+  -- Pflicht bei flow='abgang': Grund-Schlüssel (z. B. verstorben, umzug).
+  abgang_grund text,
   note         text,
   created_at   timestamptz default now()
 );
+-- Falls die Tabelle schon ohne die Spalte existiert: nachziehen.
+alter table public.patient_flows add column if not exists abgang_grund text;
 create index if not exists patient_flows_hub_period_idx
   on public.patient_flows (hub_id, period);
 alter table public.patient_flows disable row level security;

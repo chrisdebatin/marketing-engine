@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { patientFlowSchema } from "@/lib/schemas-shop";
-import { leistungenForHub } from "@/lib/leistungen";
+import { ABGANG_GRUENDE, leistungenForHub } from "@/lib/leistungen";
 
 export const runtime = "nodejs";
 
@@ -16,6 +16,8 @@ export async function POST(req: Request) {
     leistung?: string;
     display_name?: string;
     reference_id?: string;
+    abgang_grund?: string;
+    note?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -29,6 +31,8 @@ export async function POST(req: Request) {
     leistung: body.leistung,
     display_name: body.display_name,
     reference_id: body.reference_id,
+    abgang_grund: body.abgang_grund,
+    note: body.note,
   });
   if (!parsed.success) {
     return NextResponse.json(
@@ -52,6 +56,14 @@ export async function POST(req: Request) {
   if (!leistungenForHub(hub.name).some((l) => l.key === parsed.data.leistung)) {
     return NextResponse.json({ error: "Leistung wählen." }, { status: 400 });
   }
+  // Abgangs-Grund muss aus der bekannten Liste stammen.
+  const grund = parsed.data.flow === "abgang" ? parsed.data.abgang_grund : "";
+  if (grund && !ABGANG_GRUENDE.some((g) => g.key === grund)) {
+    return NextResponse.json(
+      { error: "Grund für den Abgang wählen." },
+      { status: 400 },
+    );
+  }
 
   const { data: inserted, error: insErr } = await admin
     .from("patient_flows")
@@ -62,8 +74,10 @@ export async function POST(req: Request) {
       leistung: parsed.data.leistung,
       display_name: parsed.data.display_name,
       reference_id: parsed.data.reference_id || null,
+      abgang_grund: grund || null,
+      note: parsed.data.note || null,
     })
-    .select("id, period, flow, leistung, display_name, reference_id")
+    .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, note")
     .single();
 
   if (insErr || !inserted) {

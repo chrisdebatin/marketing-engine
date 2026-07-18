@@ -121,30 +121,54 @@ export type PatientClaimInput = z.infer<typeof patientClaimSchema>;
  * PDL erfasst einen monatlichen Patienten-Zugang oder -Abgang je
  * SGB-Leistungsart. DSGVO: nur Anzeigename + optionale Referenz-ID.
  */
-export const patientFlowSchema = z.object({
-  period: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/, { message: "Zeitraum im Format JJJJ-MM angeben" }),
-  flow: z.enum(["zugang", "abgang"], {
-    message: "Zugang oder Abgang wählen",
-  }),
-  leistung: z
-    .string()
-    .trim()
-    .min(1, { message: "Leistung wählen" })
-    .max(60, { message: "Ungültige Leistung" }),
-  display_name: z
-    .string()
-    .trim()
-    .min(1, { message: "Name eingeben" })
-    .max(200, { message: "Name zu lang (max. 200 Zeichen)" }),
-  reference_id: z
-    .string()
-    .trim()
-    .max(100, { message: "Referenz-ID zu lang (max. 100 Zeichen)" })
-    .optional()
-    .or(z.literal("")),
-});
+export const patientFlowSchema = z
+  .object({
+    period: z
+      .string()
+      .regex(/^\d{4}-\d{2}$/, { message: "Zeitraum im Format JJJJ-MM angeben" }),
+    flow: z.enum(["zugang", "abgang"], {
+      message: "Zugang oder Abgang wählen",
+    }),
+    leistung: z
+      .string()
+      .trim()
+      .min(1, { message: "Leistung wählen" })
+      .max(60, { message: "Ungültige Leistung" }),
+    display_name: z
+      .string()
+      .trim()
+      .min(1, { message: "Name eingeben" })
+      .max(200, { message: "Name zu lang (max. 200 Zeichen)" }),
+    reference_id: z
+      .string()
+      .trim()
+      .max(100, { message: "Referenz-ID zu lang (max. 100 Zeichen)" })
+      .optional()
+      .or(z.literal("")),
+    abgang_grund: z
+      .string()
+      .trim()
+      .max(60, { message: "Ungültiger Grund" })
+      .optional()
+      .or(z.literal("")),
+    note: z
+      .string()
+      .trim()
+      .max(500, { message: "Erläuterung zu lang (max. 500 Zeichen)" })
+      .optional()
+      .or(z.literal("")),
+  })
+  // Pflicht: Jeder Abgang braucht einen Grund; bei "sonstiges" mit Erläuterung.
+  .refine((v) => v.flow !== "abgang" || (v.abgang_grund ?? "") !== "", {
+    message: "Bitte einen Grund für den Abgang wählen",
+  })
+  .refine(
+    (v) =>
+      v.flow !== "abgang" ||
+      v.abgang_grund !== "sonstiges" ||
+      (v.note ?? "") !== "",
+    { message: "Bitte den Grund kurz erläutern" },
+  );
 
 export type PatientFlowInput = z.infer<typeof patientFlowSchema>;
 

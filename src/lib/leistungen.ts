@@ -69,3 +69,23 @@ export function leistungLabel(key: string | null): string {
   if (key == null) return "";
   return LEISTUNGEN.find((l) => l.key === key)?.label ?? key;
 }
+
+/**
+ * Gründe für einen Patienten-Abgang — Pflichtangabe bei flow='abgang'.
+ * Bei "sonstiges" gehört eine Freitext-Erläuterung dazu.
+ */
+export const ABGANG_GRUENDE = [
+  { key: "verstorben", label: "Verstorben" },
+  { key: "krankenhaus", label: "Krankenhaus" },
+  { key: "pflegeheim", label: "Wechsel ins Pflegeheim" },
+  { key: "umzug", label: "Umzug" },
+  { key: "kuendigung_kunde", label: "Kündigung durch Kunde" },
+  { key: "kuendigung_dienst", label: "Kündigung durch uns" },
+  { key: "sonstiges", label: "Sonstiges" },
+] as const;
+
+/** Anzeige-Label für einen Abgangs-Grund; unbekannte unverändert anzeigen. */
+export function abgangGrundLabel(key: string | null): string {
+  if (key == null) return "";
+  return ABGANG_GRUENDE.find((g) => g.key === key)?.label ?? key;
+}

@@ -72,7 +72,7 @@ export default async function HubShareLinkPage({
       .order("sort_order", { ascending: true }),
     admin
       .from("patient_flows")
-      .select("id, period, flow, leistung, display_name, reference_id")
+      .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, note")
       .eq("hub_id", hub.id)
       .in("period", flowPeriods)
       .order("created_at", { ascending: true }),

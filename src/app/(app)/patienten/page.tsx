@@ -4,7 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HubTags } from "@/components/md-tag";
-import { leistungLabel, pdlRoleShort } from "@/lib/leistungen";
+import {
+  abgangGrundLabel,
+  leistungLabel,
+  pdlRoleShort,
+} from "@/lib/leistungen";
 import type { PatientFlow } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +29,7 @@ export default async function PatientenPage() {
   const { data: flowsData } = await admin
     .from("patient_flows")
     .select(
-      "id, hub_id, period, flow, leistung, display_name, reference_id, created_at",
+      "id, hub_id, period, flow, leistung, display_name, reference_id, abgang_grund, note, created_at",
     )
     .order("period", { ascending: false })
     .order("created_at", { ascending: true });
@@ -160,8 +164,15 @@ export default async function PatientenPage() {
                                         </span>
                                       )}
                                     </span>
-                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                    <span className="shrink-0 text-right text-xs text-muted-foreground">
                                       {leistungLabel(e.leistung)}
+                                      {e.flow === "abgang" &&
+                                        e.abgang_grund && (
+                                          <span className="block">
+                                            {abgangGrundLabel(e.abgang_grund)}
+                                            {e.note ? ` („${e.note}“)` : ""}
+                                          </span>
+                                        )}
                                     </span>
                                   </li>
                                 ))}

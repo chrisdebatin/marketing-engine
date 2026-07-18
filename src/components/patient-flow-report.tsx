@@ -20,7 +20,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { leistungLabel, type Leistung } from "@/lib/leistungen";
+import {
+  ABGANG_GRUENDE,
+  abgangGrundLabel,
+  leistungLabel,
+  type Leistung,
+} from "@/lib/leistungen";
 
 /** Ein erfasster Zu- oder Abgang (DSGVO-minimiert: Name + Referenz-ID). */
 export interface FlowEntry {
@@ -30,6 +35,8 @@ export interface FlowEntry {
   leistung: string;
   display_name: string;
   reference_id: string | null;
+  abgang_grund?: string | null;
+  note?: string | null;
 }
 
 /** Ein Monat, für den die PDL erfassen kann. */
@@ -60,6 +67,8 @@ export function PatientFlowReport({
   const [leistung, setLeistung] = useState<string>("");
   const [name, setName] = useState("");
   const [ref, setRef] = useState("");
+  const [grund, setGrund] = useState<string>("");
+  const [grundNote, setGrundNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -67,10 +76,18 @@ export function PatientFlowReport({
   const leistungItems = Object.fromEntries(
     leistungen.map((l) => [l.key, l.label]),
   );
+  const grundItems = Object.fromEntries(
+    ABGANG_GRUENDE.map((g) => [g.key, g.label]),
+  );
+
+  // Pflichtfelder: Abgang nur mit Grund; "Sonstiges" nur mit Erläuterung.
+  const grundMissing =
+    flow === "abgang" &&
+    (!grund || (grund === "sonstiges" && !grundNote.trim()));
 
   async function add(period: string) {
     const n = name.trim();
-    if (!n || !leistung || saving) return;
+    if (!n || !leistung || saving || grundMissing) return;
     setSaving(true);
     try {
       const res = await fetch("/api/public/patient-flow", {
@@ -83,6 +100,8 @@ export function PatientFlowReport({
           leistung,
           display_name: n,
           reference_id: ref,
+          abgang_grund: flow === "abgang" ? grund : "",
+          note: flow === "abgang" ? grundNote : "",
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -102,6 +121,7 @@ export function PatientFlowReport({
       );
       setName("");
       setRef("");
+      setGrundNote("");
       toast.success(
         flow === "zugang" ? "Neuaufnahme gespeichert" : "Abgang gespeichert",
       );
@@ -157,9 +177,15 @@ export function PatientFlowReport({
         </p>
         <ol className="ml-5 flex list-decimal flex-col gap-1 text-muted-foreground">
           <li>
-            Tragen Sie jeden Monat Ihre{" "}
-            <strong className="text-foreground">Neuaufnahmen</strong> und{" "}
-            <strong className="text-foreground">Abgänge</strong> ein.
+            Tragen Sie jeden Monat{" "}
+            <strong className="text-foreground">
+              jeden neuen Kunden (Neuaufnahme)
+            </strong>{" "}
+            und{" "}
+            <strong className="text-foreground">
+              jeden abgegangenen Kunden — mit Grund für den Abgang
+            </strong>{" "}
+            ein.
           </li>
           <li>
             Wählen Sie dabei die passende{" "}
@@ -234,6 +260,13 @@ export function PatientFlowReport({
                           </span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {leistungLabel(e.leistung)}
+                            {e.flow === "abgang" && e.abgang_grund && (
+                              <>
+                                {" · "}
+                                {abgangGrundLabel(e.abgang_grund)}
+                                {e.note ? ` („${e.note}“)` : ""}
+                              </>
+                            )}
                           </span>
                         </span>
                         <button
@@ -299,6 +332,37 @@ export function PatientFlowReport({
                 </Select>
               </div>
 
+              {flow === "abgang" && (
+                <div className="flex flex-col gap-2">
+                  <Label>Grund für den Abgang (Pflicht)</Label>
+                  <Select
+                    items={grundItems}
+                    value={grund}
+                    onValueChange={(v) => setGrund(v ?? "")}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Grund wählen…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ABGANG_GRUENDE.map((g) => (
+                        <SelectItem key={g.key} value={g.key}>
+                          {g.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {grund === "sonstiges" && (
+                    <Input
+                      value={grundNote}
+                      onChange={(e) => setGrundNote(e.target.value)}
+                      placeholder="Bitte kurz erläutern (Pflicht)"
+                      autoComplete="off"
+                      maxLength={500}
+                    />
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   value={name}
@@ -328,7 +392,7 @@ export function PatientFlowReport({
                 type="button"
                 size="sm"
                 className="self-start"
-                disabled={saving || !name.trim() || !leistung}
+                disabled={saving || !name.trim() || !leistung || grundMissing}
                 onClick={() => void add(month.period)}
               >
                 {saving

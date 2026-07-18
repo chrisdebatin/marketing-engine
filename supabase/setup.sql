@@ -639,6 +639,8 @@ create table if not exists public.patient_flows (
   leistung     text not null,
   display_name text not null,
   reference_id text,
+  -- Pflicht bei flow='abgang': Grund-Schlüssel (z. B. verstorben, umzug).
+  abgang_grund text,
   note         text,
   created_at   timestamptz default now()
 );
