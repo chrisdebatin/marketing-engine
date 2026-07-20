@@ -17,6 +17,7 @@ import { DeleteHubButton } from "@/components/delete-hub-button";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
 import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
+import { splitPdlEmails, splitPdlNames, splitPdlPhones } from "@/lib/pdl";
 
 export const dynamic = "force-dynamic";
 
@@ -106,19 +107,23 @@ export default async function HubDetailPage({
             <Detail
               label={`Lokale ${pdlRoleLabel(hub.name)}`}
               icon={User}
-              value={hub.pdl_name}
+              value={splitPdlNames(hub.pdl_name).join(" & ") || null}
             />
             <Detail
               label={`${pdlRoleShort(hub.name)} Telefon`}
               icon={Phone}
-              value={hub.pdl_phone}
-              href={hub.pdl_phone ? `tel:${hub.pdl_phone}` : undefined}
+              values={splitPdlPhones(hub.pdl_phone).map((phone) => ({
+                text: phone,
+                href: `tel:${phone}`,
+              }))}
             />
             <Detail
               label={`${pdlRoleShort(hub.name)} E-Mail`}
               icon={Mail}
-              value={hub.pdl_email}
-              href={hub.pdl_email ? `mailto:${hub.pdl_email}` : undefined}
+              values={splitPdlEmails(hub.pdl_email).map((email) => ({
+                text: email,
+                href: `mailto:${email}`,
+              }))}
             />
           </div>
 
@@ -178,32 +183,40 @@ function Detail({
   icon: Icon,
   value,
   href,
+  values,
 }: {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  value: string | null;
+  value?: string | null;
   href?: string;
+  /** Mehrere Werte (z. B. zwei PDL-E-Mails) — je Eintrag ein eigener Link. */
+  values?: { text: string; href?: string }[];
 }) {
+  const list =
+    values ?? (value ? [{ text: value, href }] : []);
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-muted-foreground">{label}</span>
-      {value ? (
-        href ? (
-          <a
-            href={href}
-            className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-          >
-            <Icon className="size-3.5 shrink-0" />
-            {value}
-          </a>
-        ) : (
-          <span className="flex items-center gap-1.5 text-sm">
-            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-            {value}
-          </span>
-        )
-      ) : (
+      {list.length === 0 ? (
         <span className="text-sm text-muted-foreground">—</span>
+      ) : (
+        list.map((v) =>
+          v.href ? (
+            <a
+              key={v.text}
+              href={v.href}
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <Icon className="size-3.5 shrink-0" />
+              {v.text}
+            </a>
+          ) : (
+            <span key={v.text} className="flex items-center gap-1.5 text-sm">
+              <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+              {v.text}
+            </span>
+          ),
+        )
       )}
     </div>
   );

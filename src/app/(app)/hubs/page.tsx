@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mdColor } from "@/lib/hub-coords";
 import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
+import { splitPdlEmails, splitPdlNames, splitPdlPhones } from "@/lib/pdl";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
@@ -134,27 +135,30 @@ export default async function HubsPage() {
                   </span>
                   {h.pdl_name && (
                     <span className="text-muted-foreground">
-                      {pdlRoleLabel(h.name)}: {h.pdl_name}
+                      {pdlRoleLabel(h.name)}:{" "}
+                      {splitPdlNames(h.pdl_name).join(" & ")}
                     </span>
                   )}
-                  {h.pdl_phone && (
+                  {splitPdlPhones(h.pdl_phone).map((phone) => (
                     <a
-                      href={`tel:${h.pdl_phone}`}
+                      key={phone}
+                      href={`tel:${phone}`}
                       className="flex items-center gap-1.5 text-primary hover:underline"
                     >
                       <Phone className="size-3.5" />
-                      {h.pdl_phone}
+                      {phone}
                     </a>
-                  )}
-                  {h.pdl_email && (
+                  ))}
+                  {splitPdlEmails(h.pdl_email).map((email) => (
                     <a
-                      href={`mailto:${h.pdl_email}`}
+                      key={email}
+                      href={`mailto:${email}`}
                       className="flex items-center gap-1.5 text-primary hover:underline"
                     >
                       <Mail className="size-3.5" />
-                      {h.pdl_email}
+                      {email}
                     </a>
-                  )}
+                  ))}
                 </div>
 
                 <div className="flex flex-wrap gap-1.5">

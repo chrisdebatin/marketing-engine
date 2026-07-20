@@ -437,34 +437,35 @@ export default async function AdminPage() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                     <div className="flex-1">
                       <label className="mb-1 block text-xs text-muted-foreground">
-                        Lokale PDL (Name)
+                        Lokale PDL (mehrere mit Komma trennen)
                       </label>
                       <Input
                         name="pdl_name"
                         defaultValue={h.pdl_name ?? ""}
-                        placeholder="Name der Pflege-Dienstleitung"
+                        placeholder="z. B. Anna Müller, Petra Schmidt"
                       />
                     </div>
                     <div className="flex-1">
                       <label className="mb-1 block text-xs text-muted-foreground">
-                        PDL E-Mail (optional)
+                        PDL E-Mail(s) (Komma-getrennt)
                       </label>
                       <Input
                         name="pdl_email"
                         type="email"
+                        multiple
                         defaultValue={h.pdl_email ?? ""}
-                        placeholder="pdl@…"
+                        placeholder="pdl1@…, pdl2@…"
                       />
                     </div>
                     <div className="flex-1">
                       <label className="mb-1 block text-xs text-muted-foreground">
-                        PDL Telefon (optional)
+                        PDL Telefon(e) (Komma-getrennt)
                       </label>
                       <Input
                         name="pdl_phone"
                         type="tel"
                         defaultValue={h.pdl_phone ?? ""}
-                        placeholder="z. B. 030 1234567"
+                        placeholder="z. B. 030 1234567, 0171 2345678"
                       />
                     </div>
                     <Button type="submit" variant="outline">

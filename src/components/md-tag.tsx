@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { mdColor, mdShort } from "@/lib/hub-coords";
+import { splitPdlNames } from "@/lib/pdl";
 
 /**
  * Small colored tag showing the responsible MD (first name), colored
@@ -43,20 +44,26 @@ export function PdlTag({
   role?: string;
   className?: string;
 }) {
-  if (!pdl) return null;
-  const short = pdl.trim();
+  // Mehrere PDLs (Komma/„&"-getrennt) → ein Chip pro Person.
+  const names = splitPdlNames(pdl);
+  if (names.length === 0) return null;
   const roleTitle = role === "SL" ? "Standortleitung" : role;
   return (
-    <span
-      title={`${roleTitle}: ${pdl}`}
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground",
-        className,
-      )}
-    >
-      <span className="text-[0.625rem] uppercase opacity-70">{role}</span>
-      {short}
-    </span>
+    <>
+      {names.map((name) => (
+        <span
+          key={name}
+          title={`${roleTitle}: ${name}`}
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground",
+            className,
+          )}
+        >
+          <span className="text-[0.625rem] uppercase opacity-70">{role}</span>
+          {name}
+        </span>
+      ))}
+    </>
   );
 }
 
