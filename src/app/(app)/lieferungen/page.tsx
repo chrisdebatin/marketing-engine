@@ -9,6 +9,7 @@ import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { OrderPlanner, type PlannerOrder } from "@/components/order-planner";
 import { pdlRoleShort } from "@/lib/leistungen";
+import { mdColor } from "@/lib/hub-coords";
 import type { Delivery, Order } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +91,30 @@ export default async function LieferungenPage() {
       counts.set(p.delivery_id, (counts.get(p.delivery_id) ?? 0) + 1);
     }
   }
+
+  // Nach verantwortlichem MD gruppieren (alphabetisch; innerhalb bleibt
+  // created_at desc) + Gesamtsummen für den Zähler unten.
+  const hubMdOf = (id: string) =>
+    session.hubs.find((h) => h.id === id)?.responsible_md ?? null;
+  const groupMap = new Map<string, { md: string | null; deliveries: typeof list }>();
+  for (const d of list) {
+    const md = hubMdOf(d.hub_id);
+    const key = md ?? "—";
+    const g = groupMap.get(key) ?? { md, deliveries: [] };
+    g.deliveries.push(d);
+    groupMap.set(key, g);
+  }
+  const mdGroups = [...groupMap.values()].sort((a, b) =>
+    (a.md ?? "ZZZ").localeCompare(b.md ?? "ZZZ", "de"),
+  );
+  const totals = list.reduce(
+    (t, d) => ({
+      flyer: t.flyer + (d.flyer_count ?? 0),
+      aufsteller: t.aufsteller + (d.aufsteller_count ?? 0),
+      boxes: t.boxes + (d.box_count ?? 0),
+    }),
+    { flyer: 0, aufsteller: 0, boxes: 0 },
+  );
 
   const hubName = (id: string) =>
     session.hubs.find((h) => h.id === id)?.name ?? id;
@@ -180,8 +205,23 @@ export default async function LieferungenPage() {
           .
         </p>
       ) : (
-        <ul className="flex flex-col gap-2.5">
-          {list.map((d) => {
+        <div className="flex flex-col gap-6">
+          {mdGroups.map(({ md, deliveries }) => (
+            <section key={md ?? "—"} className="flex flex-col gap-2.5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <span
+                  aria-hidden
+                  className="size-2.5 rounded-full"
+                  style={{ backgroundColor: mdColor(md) }}
+                />
+                MD {md ?? "Ohne MD"}
+                <span className="font-normal text-muted-foreground">
+                  ({deliveries.length}{" "}
+                  {deliveries.length === 1 ? "Lieferung" : "Lieferungen"})
+                </span>
+              </h3>
+              <ul className="flex flex-col gap-2.5">
+                {deliveries.map((d) => {
             const placed = counts.get(d.id) ?? 0;
             return (
               <li
@@ -237,8 +277,28 @@ export default async function LieferungenPage() {
                 </div>
               </li>
             );
-          })}
-        </ul>
+                })}
+              </ul>
+            </section>
+          ))}
+
+          {/* Gesamt-Zähler über alle erledigten Lieferungen */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-5 shadow-sm">
+            <span className="font-semibold">
+              Gesamt geliefert ({list.length}{" "}
+              {list.length === 1 ? "Lieferung" : "Lieferungen"}):
+            </span>
+            <Badge variant="secondary" className="tabular-nums">
+              {totals.flyer.toLocaleString("de-DE")} Flyer
+            </Badge>
+            <Badge variant="secondary" className="tabular-nums">
+              {totals.aufsteller.toLocaleString("de-DE")} Aufsteller
+            </Badge>
+            <Badge variant="secondary" className="tabular-nums">
+              {totals.boxes.toLocaleString("de-DE")} Boxen
+            </Badge>
+          </div>
+        </div>
       )}
     </div>
   );
