@@ -123,6 +123,21 @@ export default async function LieferungenPage() {
   const hubPdl = (id: string) =>
     session.hubs.find((h) => h.id === id)?.pdl_name ?? null;
 
+  // Innerhalb einer MD-Gruppe: Lieferungen desselben Hubs zusammenfassen.
+  const groupByHub = (deliveries: typeof list) => {
+    const m = new Map<string, typeof list>();
+    for (const d of deliveries) {
+      const arr = m.get(d.hub_id) ?? [];
+      arr.push(d);
+      m.set(d.hub_id, arr);
+    }
+    return [...m.entries()]
+      .map(([hubId, ds]) => ({ hubId, deliveries: ds }))
+      .sort((a, b) =>
+        hubName(a.hubId).localeCompare(hubName(b.hubId), "de"),
+      );
+  };
+
   const hubOptions = session.hubs.map((h) => ({
     id: h.id,
     name: h.name,
@@ -220,65 +235,104 @@ export default async function LieferungenPage() {
                   {deliveries.length === 1 ? "Lieferung" : "Lieferungen"})
                 </span>
               </h3>
-              <ul className="flex flex-col gap-2.5">
-                {deliveries.map((d) => {
-            const placed = counts.get(d.id) ?? 0;
-            return (
-              <li
-                key={d.id}
-                className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Truck className="size-4.5" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{hubName(d.hub_id)}</span>
-                      <HubTags
-                        md={hubMd(d.hub_id)}
-                        pdl={hubPdl(d.hub_id)}
-                        pdlRole={pdlRoleShort(hubName(d.hub_id))}
-                      />
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <Badge variant="outline">{d.flyer_count} Flyer</Badge>
-                      {d.aufsteller_count > 0 && (
-                        <Badge variant="outline">
-                          {d.aufsteller_count} Aufsteller
-                        </Badge>
-                      )}
-                      {d.box_count > 0 && (
-                        <Badge variant="outline">{d.box_count} Boxen</Badge>
-                      )}
-                      <Badge variant={placed > 0 ? "secondary" : "outline"}>
-                        {placed} Orte eingetragen
-                      </Badge>
-                    </div>
-                    <p className="mt-1.5 text-xs text-muted-foreground">
-                      {formatDate(d.created_at)}
-                      {d.note ? ` · ${d.note}` : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-                  <div className="flex items-center gap-1.5">
-                    <DeliveryEdit
-                      delivery={{
-                        id: d.id,
-                        flyer_count: d.flyer_count,
-                        aufsteller_count: d.aufsteller_count,
-                        box_count: d.box_count,
-                        note: d.note,
-                      }}
-                    />
-                    <CopyLink token={d.share_token} />
-                  </div>
-                </div>
-              </li>
-            );
+              <div className="flex flex-col gap-3">
+                {groupByHub(deliveries).map(({ hubId, deliveries: hubDeliveries }) => {
+                  const sums = hubDeliveries.reduce(
+                    (t, d) => ({
+                      flyer: t.flyer + (d.flyer_count ?? 0),
+                      aufsteller: t.aufsteller + (d.aufsteller_count ?? 0),
+                      boxes: t.boxes + (d.box_count ?? 0),
+                      placed: t.placed + (counts.get(d.id) ?? 0),
+                    }),
+                    { flyer: 0, aufsteller: 0, boxes: 0, placed: 0 },
+                  );
+                  return (
+                    <section
+                      key={hubId}
+                      className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm"
+                    >
+                      {/* Hub-Kopf mit Summen über alle Lieferungen des Hubs */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <Truck className="size-4.5" />
+                        </span>
+                        <span className="font-medium">{hubName(hubId)}</span>
+                        <HubTags
+                          md={hubMd(hubId)}
+                          pdl={hubPdl(hubId)}
+                          pdlRole={pdlRoleShort(hubName(hubId))}
+                        />
+                        <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                          {sums.flyer > 0 && (
+                            <Badge variant="secondary">{sums.flyer} Flyer</Badge>
+                          )}
+                          {sums.aufsteller > 0 && (
+                            <Badge variant="secondary">
+                              {sums.aufsteller} Aufsteller
+                            </Badge>
+                          )}
+                          {sums.boxes > 0 && (
+                            <Badge variant="secondary">{sums.boxes} Boxen</Badge>
+                          )}
+                          <Badge variant={sums.placed > 0 ? "secondary" : "outline"}>
+                            {sums.placed} Orte
+                          </Badge>
+                        </span>
+                      </div>
+
+                      {/* Einzelne Lieferungen des Hubs */}
+                      <ul className="flex flex-col gap-2">
+                        {hubDeliveries.map((d) => {
+                          const placed = counts.get(d.id) ?? 0;
+                          return (
+                            <li
+                              key={d.id}
+                              className="flex flex-col gap-2 rounded-lg border bg-background px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge variant="outline">
+                                    {d.flyer_count} Flyer
+                                  </Badge>
+                                  {d.aufsteller_count > 0 && (
+                                    <Badge variant="outline">
+                                      {d.aufsteller_count} Aufsteller
+                                    </Badge>
+                                  )}
+                                  {d.box_count > 0 && (
+                                    <Badge variant="outline">
+                                      {d.box_count} Boxen
+                                    </Badge>
+                                  )}
+                                  <Badge variant={placed > 0 ? "secondary" : "outline"}>
+                                    {placed} Orte
+                                  </Badge>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {formatDate(d.created_at)}
+                                  {d.note ? ` · ${d.note}` : ""}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                <DeliveryEdit
+                                  delivery={{
+                                    id: d.id,
+                                    flyer_count: d.flyer_count,
+                                    aufsteller_count: d.aufsteller_count,
+                                    box_count: d.box_count,
+                                    note: d.note,
+                                  }}
+                                />
+                                <CopyLink token={d.share_token} />
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </section>
+                  );
                 })}
-              </ul>
+              </div>
             </section>
           ))}
 
