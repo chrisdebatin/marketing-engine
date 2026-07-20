@@ -6,6 +6,7 @@ import {
   Package,
   FileText,
   PanelTop,
+  Pencil,
   Plus,
   Trash2,
   Building2,
@@ -35,6 +36,7 @@ import {
   createPlannedOrder,
   setOrderStatus,
   deleteOrder,
+  updateOrder,
 } from "@/app/(app)/lieferungen/order-actions";
 
 export interface PlannerOrder {
@@ -345,13 +347,66 @@ function OrderRowItem({
       ? (MATERIAL_ICON[o.items![0].material_key] ?? Package)
       : ShoppingCart
     : (MATERIAL_ICON[o.material ?? ""] ?? Package);
+
+  // Inline-Bearbeitung: Mengen/Material/Notiz korrigieren.
+  const [editing, setEditing] = useState(false);
+  const [editSaving, startEditTransition] = useTransition();
+  const [editMaterial, setEditMaterial] = useState(o.material ?? "");
+  const [editQty, setEditQty] = useState(
+    o.quantity != null ? String(o.quantity) : "",
+  );
+  const [editNote, setEditNote] = useState(o.note ?? "");
+  const [editItems, setEditItems] = useState<Record<string, string>>({});
+  const materialIsKey = ORDER_MATERIALS.some((m) => m.key === o.material);
+
+  function openEdit() {
+    setEditMaterial(o.material ?? "");
+    setEditQty(o.quantity != null ? String(o.quantity) : "");
+    setEditNote(o.note ?? "");
+    setEditItems(
+      Object.fromEntries(
+        (o.items ?? []).map((it) => [it.material_key, String(it.quantity)]),
+      ),
+    );
+    setEditing(true);
+  }
+
+  function saveEdit() {
+    startEditTransition(async () => {
+      const res = await updateOrder(
+        hasItems
+          ? {
+              id: o.id,
+              note: editNote,
+              items: (o.items ?? []).map((it) => ({
+                material_key: it.material_key,
+                quantity: editItems[it.material_key] ?? String(it.quantity),
+              })),
+            }
+          : {
+              id: o.id,
+              material: editMaterial,
+              quantity: editQty,
+              note: editNote,
+            },
+      );
+      if (res.ok) {
+        toast.success("Bestellung aktualisiert");
+        setEditing(false);
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
   return (
     <li
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between",
+        "flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm",
         muted && "opacity-70",
       )}
     >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Icon className="size-4.5" />
@@ -425,6 +480,18 @@ function OrderRowItem({
           type="button"
           variant="ghost"
           size="icon"
+          className="size-8 text-muted-foreground"
+          disabled={pending || editSaving}
+          onClick={() => (editing ? setEditing(false) : openEdit())}
+          aria-label="Bestellung bearbeiten"
+          title="Bestellung bearbeiten"
+        >
+          <Pencil className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           className="size-8 text-muted-foreground hover:text-destructive"
           disabled={pending}
           onClick={() => onRemove(o.id)}
@@ -433,6 +500,109 @@ function OrderRowItem({
           <Trash2 className="size-4" />
         </Button>
       </div>
+      </div>
+
+      {editing && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-background p-3">
+          {hasItems ? (
+            <div className="flex flex-col gap-2">
+              {(o.items ?? []).map((it) => (
+                <div
+                  key={it.material_key}
+                  className="flex items-center gap-2"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {it.name ?? materialLabel(it.material_key)}
+                  </span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={9999}
+                    inputMode="numeric"
+                    value={editItems[it.material_key] ?? ""}
+                    onChange={(e) =>
+                      setEditItems((prev) => ({
+                        ...prev,
+                        [it.material_key]: e.target.value,
+                      }))
+                    }
+                    className="w-24"
+                    aria-label={`Menge für ${it.name ?? it.material_key}`}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {materialIsKey ? (
+                <Select
+                  items={Object.fromEntries(
+                    ORDER_MATERIALS.map((m) => [m.key, m.label]),
+                  )}
+                  value={editMaterial}
+                  onValueChange={(v) => setEditMaterial(v ?? "")}
+                >
+                  <SelectTrigger className="sm:flex-1">
+                    <SelectValue placeholder="Material wählen…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ORDER_MATERIALS.map((m) => (
+                      <SelectItem key={m.key} value={m.key}>
+                        {m.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={editMaterial}
+                  onChange={(e) => setEditMaterial(e.target.value)}
+                  placeholder="Material"
+                  autoComplete="off"
+                  className="sm:flex-1"
+                  maxLength={200}
+                />
+              )}
+              <Input
+                type="number"
+                min={1}
+                max={9999}
+                inputMode="numeric"
+                value={editQty}
+                onChange={(e) => setEditQty(e.target.value)}
+                placeholder="Menge"
+                className="sm:w-28"
+              />
+            </div>
+          )}
+          <Input
+            value={editNote}
+            onChange={(e) => setEditNote(e.target.value)}
+            placeholder="Notiz (optional)"
+            autoComplete="off"
+            maxLength={500}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={editSaving}
+              onClick={saveEdit}
+            >
+              {editSaving ? "Speichere…" : "Speichern"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={editSaving}
+              onClick={() => setEditing(false)}
+            >
+              Abbrechen
+            </Button>
+          </div>
+        </div>
+      )}
     </li>
   );
 }

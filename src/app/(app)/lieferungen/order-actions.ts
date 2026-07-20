@@ -37,6 +37,83 @@ async function checkOrderAccess(
   return { ok: true };
 }
 
+/**
+ * Bestellung nachträglich korrigieren: Menge/Material/Notiz bei
+ * Einzel-Bestellungen, Positions-Mengen bei Warenkorb-Bestellungen.
+ */
+export async function updateOrder(input: {
+  id: string;
+  material?: string;
+  quantity?: number | string;
+  note?: string;
+  items?: { material_key: string; quantity: number | string }[];
+}): Promise<Result> {
+  const id = (input.id ?? "").trim();
+  if (!id) return { ok: false, error: "Bestellung fehlt." };
+
+  const session = await requireSession();
+  const access = await checkOrderAccess(session, id);
+  if (!access.ok) return access;
+
+  const toQty = (v: number | string): number | null => {
+    const n = Math.trunc(Number(v));
+    return Number.isFinite(n) && n >= 1 && n <= 9999 ? n : null;
+  };
+
+  const admin = createAdminClient();
+
+  // Warenkorb-Positionen: Mengen je material_key aktualisieren.
+  if (input.items && input.items.length > 0) {
+    for (const it of input.items) {
+      if (toQty(it.quantity) == null) {
+        return { ok: false, error: "Mengen müssen zwischen 1 und 9999 liegen." };
+      }
+    }
+    for (const it of input.items) {
+      const { error } = await admin
+        .from("order_items")
+        .update({ quantity: toQty(it.quantity)! })
+        .eq("order_id", id)
+        .eq("material_key", it.material_key);
+      if (error) {
+        return { ok: false, error: "Speichern fehlgeschlagen." };
+      }
+    }
+  }
+
+  // Kopfzeile: Menge/Material/Notiz.
+  const patch: { quantity?: number; material?: string; note?: string | null } =
+    {};
+  if (input.quantity !== undefined) {
+    const q = toQty(input.quantity);
+    if (q == null) {
+      return { ok: false, error: "Menge muss zwischen 1 und 9999 liegen." };
+    }
+    patch.quantity = q;
+  }
+  if (input.material !== undefined) {
+    const m = (input.material ?? "").trim();
+    if (!m || m.length > 200) {
+      return { ok: false, error: "Material angeben (max. 200 Zeichen)." };
+    }
+    patch.material = m;
+  }
+  if (input.note !== undefined) {
+    const n = (input.note ?? "").trim();
+    if (n.length > 500) {
+      return { ok: false, error: "Notiz zu lang (max. 500 Zeichen)." };
+    }
+    patch.note = n || null;
+  }
+  if (Object.keys(patch).length > 0) {
+    const { error } = await admin.from("orders").update(patch).eq("id", id);
+    if (error) return { ok: false, error: "Speichern fehlgeschlagen." };
+  }
+
+  revalidate();
+  return { ok: true };
+}
+
 /** Plan an outgoing delivery (open order) for a hub. source = 'plan'. */
 export async function createPlannedOrder(input: {
   hub_id: string;
