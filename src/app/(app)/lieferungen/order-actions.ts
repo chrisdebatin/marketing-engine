@@ -176,11 +176,76 @@ export async function setOrderStatus(
   if (!access.ok) return access;
 
   const supabase = createAdminClient();
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, hub_id, material, quantity, status, note")
+    .eq("id", id)
+    .maybeSingle();
+  if (!order) return { ok: false, error: "Bestellung nicht gefunden." };
+
   const { error } = await supabase
     .from("orders")
     .update({ status })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
+
+  // "Erledigt" = ausgeliefert: die Bestellung wird automatisch als erfasste
+  // Lieferung übernommen (kein doppeltes Pflegen). Beim Zurücksetzen wird
+  // die automatisch erzeugte Lieferung wieder entfernt. Dedupe/Verknüpfung
+  // über einen Marker in der Notiz, da deliveries keine order_id-Spalte hat.
+  const marker = `[Bestellung #${order.id.slice(0, 8)}]`;
+  if (status === "erledigt" && order.status !== "erledigt" && order.hub_id) {
+    const { data: existing } = await supabase
+      .from("deliveries")
+      .select("id")
+      .like("note", `%${marker}%`)
+      .maybeSingle();
+    if (!existing) {
+      // Mengen aus Kopfzeile bzw. Warenkorb-Positionen ableiten.
+      const counts = { flyer: 0, aufsteller: 0, box: 0 };
+      const rest: string[] = [];
+      const bump = (key: string | null, qty: number | null) => {
+        const q = qty ?? 0;
+        if (key === "flyer") counts.flyer += q;
+        else if (key === "aufsteller") counts.aufsteller += q;
+        else if (key === "box") counts.box += q;
+        else if (key) rest.push(`${q > 0 ? `${q}× ` : ""}${key}`);
+      };
+      const { data: items } = await supabase
+        .from("order_items")
+        .select("material_key, quantity")
+        .eq("order_id", order.id);
+      if (items && items.length > 0) {
+        for (const it of items) bump(it.material_key, it.quantity);
+      } else {
+        bump(order.material, order.quantity);
+      }
+
+      const noteParts = [
+        rest.length > 0 ? `inkl. ${rest.join(", ")}` : null,
+        order.note,
+        marker,
+      ].filter(Boolean);
+      const { error: delErr } = await supabase.from("deliveries").insert({
+        hub_id: order.hub_id,
+        flyer_count: counts.flyer,
+        aufsteller_count: counts.aufsteller,
+        box_count: counts.box,
+        note: noteParts.join(" · "),
+        share_token: crypto.randomUUID(),
+      });
+      if (delErr) {
+        return {
+          ok: false,
+          error: "Status gesetzt, aber Lieferung konnte nicht erfasst werden.",
+        };
+      }
+    }
+  } else if (status !== "erledigt" && order.status === "erledigt") {
+    // Auto-erzeugte Lieferung zurücknehmen (nur die mit passendem Marker).
+    await supabase.from("deliveries").delete().like("note", `%${marker}%`);
+  }
+
   revalidate();
   return { ok: true };
 }
