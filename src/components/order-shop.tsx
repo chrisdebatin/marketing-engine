@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { materialLabel, statusLabel } from "@/lib/orders";
@@ -75,6 +76,9 @@ export function OrderShop({
   const [error, setError] = useState<string | null>(null);
   // Freie Bestellung (Material außerhalb des Katalogs)
   const [customText, setCustomText] = useState("");
+  const [customBeschreibung, setCustomBeschreibung] = useState("");
+  const [customFormat, setCustomFormat] = useState("");
+  const [customKontakt, setCustomKontakt] = useState("");
   const [customQty, setCustomQty] = useState("");
   const [customSaving, setCustomSaving] = useState(false);
 
@@ -164,7 +168,16 @@ export function OrderShop({
       const res = await fetch("/api/public/shop-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, custom: { text, quantity: qty } }),
+        body: JSON.stringify({
+          token,
+          custom: {
+            text,
+            quantity: qty,
+            beschreibung: customBeschreibung,
+            format: customFormat,
+            kontakt: customKontakt,
+          },
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.order) {
@@ -173,6 +186,9 @@ export function OrderShop({
       }
       setOrders((o) => [data.order as OrderWithItems, ...o]);
       setCustomText("");
+      setCustomBeschreibung("");
+      setCustomFormat("");
+      setCustomKontakt("");
       setCustomQty("");
       toast.success("Bestellung abgesendet");
     } catch {
@@ -247,7 +263,7 @@ export function OrderShop({
         })}
 
         {/* Freie Bestellung: Material, das nicht im Katalog steht */}
-        <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-card p-5 shadow-sm">
+        <div className="flex flex-col gap-3 rounded-xl border border-dashed bg-card p-5 shadow-sm sm:col-span-2">
           <div className="flex items-start gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <PackagePlus className="size-4.5" />
@@ -262,13 +278,48 @@ export function OrderShop({
               </p>
             </div>
           </div>
-          <Input
-            value={customText}
-            onChange={(e) => setCustomText(e.target.value)}
-            placeholder="z. B. Visitenkarten, Kugelschreiber, Plakate A2"
-            autoComplete="off"
-            maxLength={200}
-          />
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Was wird benötigt?</Label>
+            <Input
+              value={customText}
+              onChange={(e) => setCustomText(e.target.value)}
+              placeholder="z. B. Visitenkarten, Kugelschreiber, Plakate"
+              autoComplete="off"
+              maxLength={200}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Beschreibung (optional)</Label>
+            <Textarea
+              value={customBeschreibung}
+              onChange={(e) => setCustomBeschreibung(e.target.value)}
+              placeholder="Beschreiben Sie möglichst genau, was Sie brauchen — z. B. Text/Motiv, Anlass, gewünschter Liefertermin…"
+              rows={4}
+              maxLength={2000}
+            />
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label className="text-xs">Format (optional)</Label>
+              <Input
+                value={customFormat}
+                onChange={(e) => setCustomFormat(e.target.value)}
+                placeholder="z. B. DIN A4, A2, 85×55 mm"
+                autoComplete="off"
+                maxLength={100}
+              />
+            </div>
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label className="text-xs">Kontakt für Rückfragen</Label>
+              <Input
+                value={customKontakt}
+                onChange={(e) => setCustomKontakt(e.target.value)}
+                placeholder="Name + Telefon oder E-Mail"
+                autoComplete="off"
+                maxLength={200}
+              />
+            </div>
+          </div>
           <div className="mt-auto flex items-center gap-2">
             <Input
               type="number"

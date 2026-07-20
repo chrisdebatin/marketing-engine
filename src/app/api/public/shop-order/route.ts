@@ -49,6 +49,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
     }
 
+    // Beschreibung/Format/Kontakt landen strukturiert in der Notiz.
+    const noteParts = [
+      parsedCustom.data.beschreibung || null,
+      parsedCustom.data.format ? `Format: ${parsedCustom.data.format}` : null,
+      parsedCustom.data.kontakt ? `Kontakt: ${parsedCustom.data.kontakt}` : null,
+    ].filter(Boolean);
+
     const { data: order, error: insErr } = await admin
       .from("orders")
       .insert({
@@ -56,7 +63,7 @@ export async function POST(req: Request) {
         hub_input: hub.name,
         material: parsedCustom.data.text,
         quantity: parsedCustom.data.quantity,
-        note: parsedCustom.data.note || null,
+        note: noteParts.length > 0 ? noteParts.join(" · ") : null,
         source: "pdl",
         status: "neu",
       })

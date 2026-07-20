@@ -37,19 +37,31 @@ export const shopCustomOrderSchema = z.object({
   text: z
     .string()
     .trim()
-    .min(1, { message: "Beschreiben, was benötigt wird" })
-    .max(200, { message: "Beschreibung zu lang (max. 200 Zeichen)" }),
+    .min(1, { message: "Bezeichnung angeben, was benötigt wird" })
+    .max(200, { message: "Bezeichnung zu lang (max. 200 Zeichen)" }),
+  beschreibung: z
+    .string()
+    .trim()
+    .max(2000, { message: "Beschreibung zu lang (max. 2000 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
+  format: z
+    .string()
+    .trim()
+    .max(100, { message: "Format zu lang (max. 100 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
+  kontakt: z
+    .string()
+    .trim()
+    .max(200, { message: "Kontakt zu lang (max. 200 Zeichen)" })
+    .optional()
+    .or(z.literal("")),
   quantity: z.coerce
     .number({ message: "Menge eingeben" })
     .int({ message: "Menge muss eine ganze Zahl sein" })
     .positive({ message: "Menge muss größer als 0 sein" })
     .max(9999, { message: "Menge zu groß" }),
-  note: z
-    .string()
-    .trim()
-    .max(500, { message: "Notiz zu lang (max. 500 Zeichen)" })
-    .optional()
-    .or(z.literal("")),
 });
 
 export type ShopCustomOrderInput = z.infer<typeof shopCustomOrderSchema>;
