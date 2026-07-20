@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPlaceKind } from "@/lib/places";
 
 export const runtime = "nodejs";
+
+// place_kind existiert erst nach Migration 0018 — bis dahin schlagen Writes
+// mit dieser Spalte fehl (PGRST204/42703); dann ohne Kategorie wiederholen.
+function isMissingPlaceKind(err: { code?: string } | null): boolean {
+  return err?.code === "PGRST204" || err?.code === "42703";
+}
 
 // Public, token-gated. The share_token IS the access capability — no login.
 export async function POST(req: Request) {
@@ -9,6 +16,7 @@ export async function POST(req: Request) {
     token?: string;
     standort_name?: string;
     menge?: number | string | null;
+    place_kind?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -37,16 +45,28 @@ export async function POST(req: Request) {
       ? null
       : Math.max(0, Math.trunc(Number(body.menge) || 0)) || null;
 
-  const { data: inserted, error: insErr } = await admin
+  const placeKind =
+    body.place_kind && isPlaceKind(body.place_kind)
+      ? body.place_kind
+      : "sonstiges";
+  const row = {
+    hub_id: delivery.hub_id,
+    delivery_id: delivery.id,
+    standort_name: standort,
+    menge: mengeNum,
+  };
+  let { data: inserted, error: insErr } = await admin
     .from("delivery_placements")
-    .insert({
-      hub_id: delivery.hub_id,
-      delivery_id: delivery.id,
-      standort_name: standort,
-      menge: mengeNum,
-    })
-    .select("id, standort_name, menge, created_at")
+    .insert({ ...row, place_kind: placeKind })
+    .select("id, standort_name, menge, place_kind, created_at")
     .single();
+  if (insErr && isMissingPlaceKind(insErr)) {
+    ({ data: inserted, error: insErr } = await admin
+      .from("delivery_placements")
+      .insert(row)
+      .select("id, standort_name, menge, created_at")
+      .single());
+  }
 
   if (insErr) {
     return NextResponse.json({ error: insErr.message }, { status: 500 });
@@ -63,6 +83,7 @@ export async function PUT(req: Request) {
     id?: string;
     standort_name?: string;
     menge?: number | string | null;
+    place_kind?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -105,12 +126,28 @@ export async function PUT(req: Request) {
       ? null
       : Math.max(0, Math.trunc(Number(body.menge) || 0)) || null;
 
-  const { data: updated, error: updErr } = await admin
+  const patch: {
+    standort_name: string;
+    menge: number | null;
+    place_kind?: string;
+  } = { standort_name: standort, menge: mengeNum };
+  if (body.place_kind && isPlaceKind(body.place_kind)) {
+    patch.place_kind = body.place_kind;
+  }
+  let { data: updated, error: updErr } = await admin
     .from("delivery_placements")
-    .update({ standort_name: standort, menge: mengeNum })
+    .update(patch)
     .eq("id", id)
-    .select("id, standort_name, menge, created_at")
+    .select("id, standort_name, menge, place_kind, created_at")
     .single();
+  if (updErr && isMissingPlaceKind(updErr)) {
+    ({ data: updated, error: updErr } = await admin
+      .from("delivery_placements")
+      .update({ standort_name: standort, menge: mengeNum })
+      .eq("id", id)
+      .select("id, standort_name, menge, created_at")
+      .single());
+  }
 
   if (updErr || !updated) {
     return NextResponse.json(

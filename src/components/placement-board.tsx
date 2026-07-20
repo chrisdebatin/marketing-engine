@@ -6,7 +6,15 @@ import { FileText, Package, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { PLACE_KINDS, placeKindLabel } from "@/lib/places";
 
 type Kind = "flyer" | "box";
 
@@ -15,7 +23,11 @@ interface Placement {
   standort_name: string;
   menge: number | null;
   kind?: string;
+  place_kind?: string | null;
 }
+
+// base-ui Select zeigt über `items` das Label statt des Rohwerts an.
+const PLACE_ITEMS = Object.fromEntries(PLACE_KINDS.map((p) => [p.key, p.label]));
 
 export function PlacementBoard({
   token,
@@ -32,6 +44,7 @@ export function PlacementBoard({
   const [placements, setPlacements] = useState<Placement[]>(initial);
   const [kind, setKind] = useState<Kind>("flyer");
   const [standort, setStandort] = useState("");
+  const [placeKind, setPlaceKind] = useState<string>("");
   const [menge, setMenge] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +52,7 @@ export function PlacementBoard({
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editMenge, setEditMenge] = useState("");
+  const [editPlaceKind, setEditPlaceKind] = useState<string>("");
   const [editSaving, setEditSaving] = useState(false);
 
   const isBox = kind === "box";
@@ -53,7 +67,13 @@ export function PlacementBoard({
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, standort_name: name, menge, kind }),
+        body: JSON.stringify({
+          token,
+          standort_name: name,
+          menge,
+          kind,
+          place_kind: placeKind,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -75,6 +95,7 @@ export function PlacementBoard({
     setEditId(p.id);
     setEditName(p.standort_name);
     setEditMenge(p.menge != null ? String(p.menge) : "");
+    setEditPlaceKind(p.place_kind ?? "sonstiges");
   }
 
   async function removeEntry(p: Placement) {
@@ -114,6 +135,7 @@ export function PlacementBoard({
           id: editId,
           standort_name: name,
           menge: editMenge,
+          place_kind: editPlaceKind,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -186,6 +208,25 @@ export function PlacementBoard({
           />
         </div>
         <div className="flex flex-col gap-2">
+          <Label>Art des Ortes</Label>
+          <Select
+            items={PLACE_ITEMS}
+            value={placeKind}
+            onValueChange={(v) => setPlaceKind(v ?? "")}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="z. B. Krankenhaus, Apotheke…" />
+            </SelectTrigger>
+            <SelectContent>
+              {PLACE_KINDS.map((p) => (
+                <SelectItem key={p.key} value={p.key}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
           <Label htmlFor="menge">Anzahl (optional)</Label>
           <Input
             id="menge"
@@ -198,7 +239,10 @@ export function PlacementBoard({
           />
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" disabled={saving || !standort.trim()}>
+        <Button
+          type="submit"
+          disabled={saving || !standort.trim() || !placeKind}
+        >
           {saving
             ? "Speichere…"
             : isBox
@@ -241,7 +285,14 @@ export function PlacementBoard({
                           <FileText className="size-4" />
                         )}
                       </span>
-                      <span className="truncate">{p.standort_name}</span>
+                      <span className="min-w-0">
+                        <span className="block truncate">
+                          {p.standort_name}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {placeKindLabel(p.place_kind)}
+                        </span>
+                      </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       {p.menge != null && (
@@ -281,6 +332,22 @@ export function PlacementBoard({
                           className="sm:w-40"
                         />
                       </div>
+                      <Select
+                        items={PLACE_ITEMS}
+                        value={editPlaceKind}
+                        onValueChange={(v) => setEditPlaceKind(v ?? "")}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Art des Ortes" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PLACE_KINDS.map((pk) => (
+                            <SelectItem key={pk.key} value={pk.key}>
+                              {pk.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"

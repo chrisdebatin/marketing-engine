@@ -171,6 +171,7 @@ export interface Database {
           standort_name: string;
           menge: number | null;
           kind: string;
+          place_kind: string | null;
           created_at: string;
         };
         Insert: {
@@ -180,6 +181,7 @@ export interface Database {
           standort_name: string;
           menge?: number | null;
           kind?: string;
+          place_kind?: string | null;
           created_at?: string;
         };
         Update: Partial<

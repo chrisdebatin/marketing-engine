@@ -1,94 +1,101 @@
 import { requireSession } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { hubCoords, mdColor } from "@/lib/hub-coords";
-import { HubMap, type HubMarker } from "@/components/hub-map";
-import type { Hub } from "@/lib/types";
+import { pdlRoleShort } from "@/lib/leistungen";
+import {
+  PlacementMapBoard,
+  type MapHub,
+  type MapPlace,
+} from "@/components/placement-map-board";
 
 export const dynamic = "force-dynamic";
 
+function formatDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("de-DE");
+}
+
 export default async function KartePage() {
-  await requireSession();
-  const supabase = await createClient();
+  // Hubs aus der Session (Service-Client, MD-Scoping); Orte über den
+  // Service-Client — gleiches Muster wie der Rest der App.
+  const session = await requireSession();
+  const admin = createAdminClient();
 
-  const [{ data: hubsData }, { data: deliveries }, { data: placements }] =
-    await Promise.all([
-      supabase
-        .from("hubs")
-        .select("id, name, responsible_md, pdl_name")
-        .order("name"),
-      supabase
-        .from("deliveries")
-        .select("hub_id, flyer_count, box_count, aufsteller_count"),
-      supabase.from("delivery_placements").select("hub_id"),
-    ]);
+  // select("*") statt fester Spaltenliste: `place_kind` existiert erst nach
+  // Migration 0018 — so rendert die Seite auch ohne die Spalte.
+  const { data: placementsData } = await admin
+    .from("delivery_placements")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-  const hubs = (hubsData ?? []) as Pick<
-    Hub,
-    "id" | "name" | "responsible_md" | "pdl_name"
-  >[];
+  const placements = (placementsData ?? []) as {
+    hub_id: string;
+    standort_name: string;
+    menge: number | null;
+    kind: string;
+    place_kind?: string | null;
+    created_at: string | null;
+  }[];
 
-  const flyers = new Map<string, number>();
-  const aufsteller = new Map<string, number>();
-  const boxes = new Map<string, number>();
-  const placed = new Map<string, number>();
-  for (const d of deliveries ?? []) {
-    flyers.set(d.hub_id, (flyers.get(d.hub_id) ?? 0) + (d.flyer_count ?? 0));
-    aufsteller.set(
-      d.hub_id,
-      (aufsteller.get(d.hub_id) ?? 0) + (d.aufsteller_count ?? 0),
-    );
-    boxes.set(d.hub_id, (boxes.get(d.hub_id) ?? 0) + (d.box_count ?? 0));
+  // Nach Hub gruppieren, getrennt nach Flyer/Box.
+  const byHub = new Map<string, { flyer: MapPlace[]; box: MapPlace[] }>();
+  for (const p of placements) {
+    const entry = byHub.get(p.hub_id) ?? { flyer: [], box: [] };
+    const place: MapPlace = {
+      name: p.standort_name,
+      menge: p.menge,
+      placeKind: p.place_kind ?? null,
+      date: formatDate(p.created_at),
+    };
+    if (p.kind === "box") entry.box.push(place);
+    else entry.flyer.push(place);
+    byHub.set(p.hub_id, entry);
   }
-  for (const p of placements ?? [])
-    placed.set(p.hub_id, (placed.get(p.hub_id) ?? 0) + 1);
 
-  // build markers, jittering hubs that share the same coordinates
+  // Marker bauen; Hubs mit identischen Koordinaten leicht versetzen.
   const usedAt = new Map<string, number>();
-  const markers: HubMarker[] = [];
-  const withoutCoords: string[] = [];
-
-  for (const h of hubs) {
+  const mapHubs: MapHub[] = session.hubs.map((h) => {
     const coords = hubCoords(h.name);
-    if (!coords) {
-      withoutCoords.push(h.name);
-      continue;
+    let lat: number | null = null;
+    let lng: number | null = null;
+    if (coords) {
+      const key = `${coords[0]},${coords[1]}`;
+      const n = usedAt.get(key) ?? 0;
+      usedAt.set(key, n + 1);
+      const angle = n * (Math.PI / 3);
+      const r = n === 0 ? 0 : 0.02;
+      lat = coords[0] + r * Math.cos(angle);
+      lng = coords[1] + r * Math.sin(angle);
     }
-    const key = `${coords[0]},${coords[1]}`;
-    const n = usedAt.get(key) ?? 0;
-    usedAt.set(key, n + 1);
-    const angle = n * (Math.PI / 3);
-    const r = n === 0 ? 0 : 0.02;
-    markers.push({
+    const entry = byHub.get(h.id) ?? { flyer: [], box: [] };
+    return {
+      id: h.id,
       name: h.name,
       md: h.responsible_md,
       pdl: h.pdl_name,
+      pdlRole: pdlRoleShort(h.name),
       color: mdColor(h.responsible_md),
-      lat: coords[0] + r * Math.cos(angle),
-      lng: coords[1] + r * Math.sin(angle),
-      flyers: flyers.get(h.id) ?? 0,
-      aufsteller: aufsteller.get(h.id) ?? 0,
-      boxes: boxes.get(h.id) ?? 0,
-      placements: placed.get(h.id) ?? 0,
-    });
-  }
+      lat,
+      lng,
+      flyer: entry.flyer,
+      box: entry.box,
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">Karte</h1>
+        <h1 className="text-2xl font-semibold">Karte der Auslage-Orte</h1>
         <p className="text-sm text-muted-foreground">
-          Deine Hubs auf der Karte. Farbe = verantwortlicher MD. Klick auf einen
-          Pin für Details.
+          Alle Orte, die die PDLs über ihre Links eingetragen haben —
+          Krankenhäuser, Praxen, Apotheken &amp; Co., gruppiert nach Hub.
+          Farbe = verantwortlicher MD.
         </p>
       </div>
 
-      <HubMap markers={markers} />
-
-      {withoutCoords.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          Ohne Standort (nicht auf der Karte): {withoutCoords.join(", ")}
-        </p>
-      )}
+      <PlacementMapBoard hubs={mapHubs} />
     </div>
   );
 }

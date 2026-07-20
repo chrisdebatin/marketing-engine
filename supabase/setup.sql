@@ -651,6 +651,15 @@ create index if not exists patient_flows_hub_period_idx
 alter table public.patient_flows disable row level security;
 
 -- ============================================================
+-- 0018_place_kind.sql
+-- ============================================================
+-- Orts-Kategorie für Auslage-/Liefer-Orte: Die PDL gibt beim Eintragen an,
+-- WAS der Ort ist (Krankenhaus, Arztpraxis, Apotheke, Pflegeeinrichtung,
+-- Sanitätshaus, Sonstiges). Altbestand bleibt null (= Sonstiges).
+alter table public.delivery_placements
+  add column if not exists place_kind text;
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data
