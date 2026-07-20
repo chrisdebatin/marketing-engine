@@ -159,7 +159,9 @@ export default async function LieferungenPage() {
           </h2>
           <p className="text-sm text-muted-foreground">
             Plane, was an die Hubs geliefert werden soll. Enthält auch
-            Material-Anfragen der PDLs. Status setzen, wenn erledigt.
+            Material-Anfragen der PDLs. Auf „Erledigt&rdquo; gesetzte
+            Bestellungen wandern automatisch zu den erfassten Lieferungen
+            unten.
           </p>
         </div>
         <OrderPlanner orders={plannerOrders} hubs={hubOptions} />

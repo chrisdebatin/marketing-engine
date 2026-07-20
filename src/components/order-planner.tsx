@@ -140,10 +140,11 @@ export function OrderPlanner({
   // Offene zuerst, darunter "in Bearbeitung"; innerhalb bleibt die
   // Eingangsreihenfolge (created_at desc) durch stabile Sortierung erhalten.
   const statusRank = (s: string) => (s === "neu" ? 0 : 1);
+  // Erledigte Bestellungen erscheinen als erfasste Lieferung weiter unten —
+  // hier nur die offenen und in Bearbeitung befindlichen.
   const open = orders
     .filter((o) => o.status !== "erledigt")
     .sort((a, b) => statusRank(a.status) - statusRank(b.status));
-  const done = orders.filter((o) => o.status === "erledigt");
 
   // Group open orders by hub (Standort): what still needs to go to each location.
   const metaById = new Map(hubs.map((h) => [h.id, h]));
@@ -302,26 +303,6 @@ export function OrderPlanner({
         )}
       </section>
 
-      {done.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-muted-foreground">
-            Erledigt ({done.length})
-          </h2>
-          <ul className="flex flex-col gap-2.5">
-            {done.map((o) => (
-              <OrderRowItem
-                key={o.id}
-                o={o}
-                onStatus={changeStatus}
-                onRemove={remove}
-                pending={pending}
-                showHub
-                muted
-              />
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }
