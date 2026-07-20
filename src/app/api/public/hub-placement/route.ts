@@ -121,3 +121,59 @@ export async function PUT(req: Request) {
 
   return NextResponse.json({ placement: updated });
 }
+
+// Eingetragenen Ort löschen. Der Eintrag muss zum Hub des Tokens gehören.
+export async function DELETE(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as {
+    token?: string;
+    id?: string;
+  };
+
+  const token = (body.token ?? "").trim();
+  const id = (body.id ?? "").trim();
+  if (!token || !id) {
+    return NextResponse.json(
+      { error: "Token oder Eintrag fehlt." },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const { data: hub, error: findErr } = await admin
+    .from("hubs")
+    .select("id")
+    .eq("share_token", token)
+    .single();
+
+  if (findErr || !hub) {
+    return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+  }
+
+  const { data: existing } = await admin
+    .from("delivery_placements")
+    .select("id, hub_id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!existing || existing.hub_id !== hub.id) {
+    return NextResponse.json(
+      { error: "Eintrag nicht gefunden." },
+      { status: 404 },
+    );
+  }
+
+  const { error: delErr } = await admin
+    .from("delivery_placements")
+    .delete()
+    .eq("id", id);
+
+  if (delErr) {
+    return NextResponse.json(
+      { error: "Löschen fehlgeschlagen." },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}

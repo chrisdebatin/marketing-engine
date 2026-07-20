@@ -14,6 +14,8 @@ create table if not exists public.patient_flows (
   reference_id text,
   -- Pflicht bei flow='abgang': Grund-Schlüssel (z. B. verstorben, umzug).
   abgang_grund text,
+  -- Datum des Ereignisses (bei Neuaufnahmen: Aufnahmedatum).
+  event_date   date,
   note         text,
   created_at   timestamptz default now()
 );

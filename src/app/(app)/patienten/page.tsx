@@ -19,6 +19,12 @@ function formatPeriod(period: string): string {
   return d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
 }
 
+function formatEventDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("de-DE");
+}
+
 export default async function PatientenPage() {
   const session = await requireSession();
   // `patient_flows` hat RLS disabled und keinen anon-Grant → nur über den
@@ -29,7 +35,7 @@ export default async function PatientenPage() {
   const { data: flowsData } = await admin
     .from("patient_flows")
     .select(
-      "id, hub_id, period, flow, leistung, display_name, reference_id, abgang_grund, note, created_at",
+      "id, hub_id, period, flow, leistung, display_name, reference_id, abgang_grund, event_date, note, created_at",
     )
     .order("period", { ascending: false })
     .order("created_at", { ascending: true });
@@ -166,6 +172,12 @@ export default async function PatientenPage() {
                                     </span>
                                     <span className="shrink-0 text-right text-xs text-muted-foreground">
                                       {leistungLabel(e.leistung)}
+                                      {e.flow === "zugang" && e.event_date && (
+                                        <span className="block">
+                                          aufgenommen{" "}
+                                          {formatEventDate(e.event_date)}
+                                        </span>
+                                      )}
                                       {e.flow === "abgang" &&
                                         e.abgang_grund && (
                                           <span className="block">

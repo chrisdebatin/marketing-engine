@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FileText, Package, Pencil } from "lucide-react";
+import { FileText, Package, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +75,30 @@ export function PlacementBoard({
     setEditId(p.id);
     setEditName(p.standort_name);
     setEditMenge(p.menge != null ? String(p.menge) : "");
+  }
+
+  async function removeEntry(p: Placement) {
+    if (editSaving) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, id: p.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Löschen fehlgeschlagen.");
+        return;
+      }
+      setPlacements((prev) => prev.filter((x) => x.id !== p.id));
+      setEditId(null);
+      toast.success("Eintrag gelöscht");
+    } catch {
+      toast.error("Netzwerkfehler.");
+    } finally {
+      setEditSaving(false);
+    }
   }
 
   async function saveEdit() {
@@ -257,7 +281,7 @@ export function PlacementBoard({
                           className="sm:w-40"
                         />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           type="button"
                           size="sm"
@@ -274,6 +298,17 @@ export function PlacementBoard({
                           onClick={() => setEditId(null)}
                         >
                           Abbrechen
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          disabled={editSaving}
+                          onClick={() => void removeEntry(p)}
+                        >
+                          <Trash2 className="size-3.5" />
+                          Eintrag löschen
                         </Button>
                       </div>
                     </div>

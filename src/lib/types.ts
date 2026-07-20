@@ -321,6 +321,7 @@ export interface Database {
           display_name: string;
           reference_id: string | null;
           abgang_grund: string | null;
+          event_date: string | null;
           note: string | null;
           created_at: string | null;
         };
@@ -333,6 +334,7 @@ export interface Database {
           display_name: string;
           reference_id?: string | null;
           abgang_grund?: string | null;
+          event_date?: string | null;
           note?: string | null;
           created_at?: string | null;
         };

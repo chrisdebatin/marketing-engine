@@ -151,6 +151,13 @@ export const patientFlowSchema = z
       .max(60, { message: "Ungültiger Grund" })
       .optional()
       .or(z.literal("")),
+    event_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, {
+        message: "Datum im Format JJJJ-MM-TT angeben",
+      })
+      .optional()
+      .or(z.literal("")),
     note: z
       .string()
       .trim()
@@ -161,6 +168,10 @@ export const patientFlowSchema = z
   // Pflicht: Jeder Abgang braucht einen Grund; bei "sonstiges" mit Erläuterung.
   .refine((v) => v.flow !== "abgang" || (v.abgang_grund ?? "") !== "", {
     message: "Bitte einen Grund für den Abgang wählen",
+  })
+  // Pflicht: Jede Neuaufnahme braucht ein Aufnahmedatum.
+  .refine((v) => v.flow !== "zugang" || (v.event_date ?? "") !== "", {
+    message: "Bitte das Aufnahmedatum angeben",
   })
   .refine(
     (v) =>

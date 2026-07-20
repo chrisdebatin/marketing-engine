@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     display_name?: string;
     reference_id?: string;
     abgang_grund?: string;
+    event_date?: string;
     note?: string;
   };
 
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
     display_name: body.display_name,
     reference_id: body.reference_id,
     abgang_grund: body.abgang_grund,
+    event_date: body.event_date,
     note: body.note,
   });
   if (!parsed.success) {
@@ -75,9 +77,10 @@ export async function POST(req: Request) {
       display_name: parsed.data.display_name,
       reference_id: parsed.data.reference_id || null,
       abgang_grund: grund || null,
+      event_date: parsed.data.event_date || null,
       note: parsed.data.note || null,
     })
-    .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, note")
+    .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, event_date, note")
     .single();
 
   if (insErr || !inserted) {

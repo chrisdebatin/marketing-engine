@@ -36,6 +36,7 @@ export interface FlowEntry {
   display_name: string;
   reference_id: string | null;
   abgang_grund?: string | null;
+  event_date?: string | null;
   note?: string | null;
 }
 
@@ -69,6 +70,10 @@ export function PatientFlowReport({
   const [ref, setRef] = useState("");
   const [grund, setGrund] = useState<string>("");
   const [grundNote, setGrundNote] = useState("");
+  // Aufnahmedatum (Pflicht bei Neuaufnahme), vorbelegt mit heute.
+  const [eventDate, setEventDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -80,14 +85,16 @@ export function PatientFlowReport({
     ABGANG_GRUENDE.map((g) => [g.key, g.label]),
   );
 
-  // Pflichtfelder: Abgang nur mit Grund; "Sonstiges" nur mit Erläuterung.
+  // Pflichtfelder: Abgang nur mit Grund; "Sonstiges" nur mit Erläuterung;
+  // Neuaufnahme nur mit Aufnahmedatum.
   const grundMissing =
     flow === "abgang" &&
     (!grund || (grund === "sonstiges" && !grundNote.trim()));
+  const dateMissing = flow === "zugang" && !eventDate;
 
   async function add(period: string) {
     const n = name.trim();
-    if (!n || !leistung || saving || grundMissing) return;
+    if (!n || !leistung || saving || grundMissing || dateMissing) return;
     setSaving(true);
     try {
       const res = await fetch("/api/public/patient-flow", {
@@ -101,6 +108,7 @@ export function PatientFlowReport({
           display_name: n,
           reference_id: ref,
           abgang_grund: flow === "abgang" ? grund : "",
+          event_date: flow === "zugang" ? eventDate : "",
           note: flow === "abgang" ? grundNote : "",
         }),
       });
@@ -165,6 +173,12 @@ export function PatientFlowReport({
     const d = new Date(`${period}-01T00:00:00`);
     if (Number.isNaN(d.getTime())) return period;
     return d.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  }
+
+  function formatDate(iso: string): string {
+    const d = new Date(`${iso}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("de-DE");
   }
 
   return (
@@ -260,6 +274,12 @@ export function PatientFlowReport({
                           </span>
                           <span className="block truncate text-xs text-muted-foreground">
                             {leistungLabel(e.leistung)}
+                            {e.flow === "zugang" && e.event_date && (
+                              <>
+                                {" · aufgenommen am "}
+                                {formatDate(e.event_date)}
+                              </>
+                            )}
                             {e.flow === "abgang" && e.abgang_grund && (
                               <>
                                 {" · "}
@@ -332,6 +352,18 @@ export function PatientFlowReport({
                 </Select>
               </div>
 
+              {flow === "zugang" && (
+                <div className="flex flex-col gap-2">
+                  <Label>Aufnahmedatum (Pflicht)</Label>
+                  <Input
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-fit"
+                  />
+                </div>
+              )}
+
               {flow === "abgang" && (
                 <div className="flex flex-col gap-2">
                   <Label>Grund für den Abgang (Pflicht)</Label>
@@ -392,7 +424,13 @@ export function PatientFlowReport({
                 type="button"
                 size="sm"
                 className="self-start"
-                disabled={saving || !name.trim() || !leistung || grundMissing}
+                disabled={
+                  saving ||
+                  !name.trim() ||
+                  !leistung ||
+                  grundMissing ||
+                  dateMissing
+                }
                 onClick={() => void add(month.period)}
               >
                 {saving

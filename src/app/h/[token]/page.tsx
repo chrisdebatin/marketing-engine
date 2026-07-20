@@ -73,7 +73,7 @@ export default async function HubShareLinkPage({
       .order("sort_order", { ascending: true }),
     admin
       .from("patient_flows")
-      .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, note")
+      .select("id, period, flow, leistung, display_name, reference_id, abgang_grund, event_date, note")
       .eq("hub_id", hub.id)
       .in("period", flowPeriods)
       .order("created_at", { ascending: true }),
@@ -182,7 +182,8 @@ export default async function HubShareLinkPage({
             <>
               Vertippt? Über das{" "}
               <strong className="text-foreground">Stift-Symbol</strong> am
-              Eintrag können Sie Ort und Anzahl jederzeit korrigieren.
+              Eintrag können Sie Ort und Anzahl korrigieren oder den Eintrag
+              löschen.
             </>,
           ]}
         />
