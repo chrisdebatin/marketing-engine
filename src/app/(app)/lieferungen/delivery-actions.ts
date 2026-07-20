@@ -7,6 +7,57 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type Result = { ok: true } | { ok: false; error: string };
 
 /**
+ * Erfasste Lieferung löschen (Falscheingabe). Zugehörige Auslage-Orte werden
+ * per Cascade mitgelöscht. Stammt die Lieferung aus einer erledigten
+ * Bestellung ("[Bestellung #…]"-Marker), wird diese wieder auf "offen"
+ * gesetzt und taucht im Planer auf.
+ */
+export async function deleteDelivery(id: string): Promise<Result> {
+  const cleanId = (id ?? "").trim();
+  if (!cleanId) return { ok: false, error: "Lieferung fehlt." };
+
+  const session = await requireSession();
+  const admin = createAdminClient();
+
+  const { data: delivery } = await admin
+    .from("deliveries")
+    .select("id, hub_id, note")
+    .eq("id", cleanId)
+    .maybeSingle();
+  if (!delivery) return { ok: false, error: "Lieferung nicht gefunden." };
+
+  const canAccess =
+    session.isAdmin || session.hubs.some((h) => h.id === delivery.hub_id);
+  if (!canAccess) {
+    return { ok: false, error: "Kein Zugriff auf diese Lieferung." };
+  }
+
+  const { error } = await admin
+    .from("deliveries")
+    .delete()
+    .eq("id", cleanId);
+  if (error) return { ok: false, error: "Löschen fehlgeschlagen." };
+
+  // Verknüpfte Bestellung (falls vorhanden) zurück auf "offen".
+  const prefix = /\[Bestellung #([0-9a-f]{8})\]/.exec(delivery.note ?? "")?.[1];
+  if (prefix) {
+    const { data: orders } = await admin
+      .from("orders")
+      .select("id")
+      .eq("status", "erledigt")
+      .eq("hub_id", delivery.hub_id);
+    const order = (orders ?? []).find((o) => o.id.startsWith(prefix));
+    if (order) {
+      await admin.from("orders").update({ status: "neu" }).eq("id", order.id);
+    }
+  }
+
+  revalidatePath("/lieferungen");
+  revalidatePath("/hubs");
+  return { ok: true };
+}
+
+/**
  * Erfasste Lieferung korrigieren (Mengen + Notiz). MD-Scoping: nur Admins
  * oder Nutzer mit Zugriff auf den Hub der Lieferung.
  */

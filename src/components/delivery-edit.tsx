@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { updateDelivery } from "@/app/(app)/lieferungen/delivery-actions";
+import {
+  deleteDelivery,
+  updateDelivery,
+} from "@/app/(app)/lieferungen/delivery-actions";
 
 export interface EditableDelivery {
   id: string;
@@ -30,6 +33,8 @@ export function DeliveryEdit({ delivery }: { delivery: EditableDelivery }) {
   const [note, setNote] = useState(delivery.note ?? "");
   const [pending, startTransition] = useTransition();
 
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   function save() {
     startTransition(async () => {
       const res = await updateDelivery({
@@ -44,6 +49,19 @@ export function DeliveryEdit({ delivery }: { delivery: EditableDelivery }) {
         setOpen(false);
       } else {
         toast.error(res.error);
+      }
+    });
+  }
+
+  function remove() {
+    startTransition(async () => {
+      const res = await deleteDelivery(delivery.id);
+      if (res.ok) {
+        toast.success("Lieferung gelöscht");
+        setOpen(false);
+      } else {
+        toast.error(res.error);
+        setConfirmingDelete(false);
       }
     });
   }
@@ -96,7 +114,7 @@ export function DeliveryEdit({ delivery }: { delivery: EditableDelivery }) {
           autoComplete="off"
         />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" disabled={pending} onClick={save}>
           {pending ? "Speichere…" : "Speichern"}
         </Button>
@@ -109,7 +127,40 @@ export function DeliveryEdit({ delivery }: { delivery: EditableDelivery }) {
         >
           Abbrechen
         </Button>
+        {confirmingDelete ? (
+          <span className="ml-auto flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Wirklich löschen?
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={pending}
+              onClick={remove}
+            >
+              {pending ? "Lösche…" : "Ja, löschen"}
+            </Button>
+          </span>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+            disabled={pending}
+            onClick={() => setConfirmingDelete(true)}
+          >
+            <Trash2 className="size-3.5" />
+            Löschen
+          </Button>
+        )}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Löschen entfernt auch die eingetragenen Auslage-Orte dieser Lieferung.
+        Stammt sie aus einer erledigten Bestellung, wird diese wieder als
+        offen im Planer angezeigt.
+      </p>
     </div>
   );
 }
