@@ -160,22 +160,22 @@ export default async function LieferungenPage() {
           <p className="text-sm text-muted-foreground">
             Plane, was an die Hubs geliefert werden soll. Enthält auch
             Material-Anfragen der PDLs. Auf „Erledigt&rdquo; gesetzte
-            Bestellungen wandern automatisch zu den erfassten Lieferungen
-            unten.
+            Bestellungen erscheinen unten bei den erledigten Lieferungen.
           </p>
         </div>
         <OrderPlanner orders={plannerOrders} hubs={hubOptions} />
       </section>
 
       <div className="border-t pt-6">
-        <h2 className="mb-3 text-lg font-semibold">Erfasste Lieferungen</h2>
+        <h2 className="mb-3 text-lg font-semibold">Erledigte Lieferungen</h2>
       </div>
 
       {list.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Noch keine Lieferungen erfasst.{" "}
+          Noch keine erledigten Lieferungen — Bestellungen oben auf
+          „Erledigt&rdquo; setzen oder{" "}
           <Link href="/lieferungen/neu" className="underline">
-            Jetzt erfassen
+            direkt eine Lieferung eintragen
           </Link>
           .
         </p>
