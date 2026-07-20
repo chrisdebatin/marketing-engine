@@ -124,7 +124,7 @@ export default async function HubShareLinkPage({
       <div>
         <p className="text-sm text-muted-foreground">Marketing-Engine</p>
         <h1 className="text-2xl font-semibold">
-          Flyer &amp; Boxen · {hub.name}
+          Marketing Dashboard · {hub.name}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {flyers > 0 ? (
