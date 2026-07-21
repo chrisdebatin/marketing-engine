@@ -682,6 +682,14 @@ create index if not exists flyer_actions_date_idx
 alter table public.flyer_actions disable row level security;
 
 -- ============================================================
+-- 0020_placement_ort.sql
+-- ============================================================
+-- Ortschaft (Stadt) für Auslage-/Liefer-Orte: Die PDL gibt zusätzlich zum
+-- Einrichtungs-Namen an, in welchem Ort verteilt wurde. Altbestand: null.
+alter table public.delivery_placements
+  add column if not exists ort text;
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

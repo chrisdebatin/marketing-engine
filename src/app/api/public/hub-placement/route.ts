@@ -4,9 +4,9 @@ import { isPlaceKind } from "@/lib/places";
 
 export const runtime = "nodejs";
 
-// place_kind existiert erst nach Migration 0018 — bis dahin schlagen Writes
-// mit dieser Spalte fehl (PGRST204/42703); dann ohne Kategorie wiederholen.
-function isMissingPlaceKind(err: { code?: string } | null): boolean {
+// place_kind/ort existieren erst nach Migration 0018/0020 — bis dahin schlagen
+// Writes mit diesen Spalten fehl (PGRST204/42703); dann ohne sie wiederholen.
+function isMissingColumn(err: { code?: string } | null): boolean {
   return err?.code === "PGRST204" || err?.code === "42703";
 }
 
@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     menge?: number | string | null;
     kind?: string;
     place_kind?: string;
+    ort?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -27,6 +28,7 @@ export async function POST(req: Request) {
     body.place_kind && isPlaceKind(body.place_kind)
       ? body.place_kind
       : "sonstiges";
+  const ort = (body.ort ?? "").trim().slice(0, 120);
   if (!token || !standort) {
     return NextResponse.json({ error: "Token oder Ort fehlt." }, { status: 400 });
   }
@@ -57,10 +59,10 @@ export async function POST(req: Request) {
   };
   let { data: inserted, error: insErr } = await admin
     .from("delivery_placements")
-    .insert({ ...row, place_kind: placeKind })
-    .select("id, standort_name, menge, kind, place_kind, created_at")
+    .insert({ ...row, place_kind: placeKind, ort: ort || null })
+    .select("id, standort_name, menge, kind, place_kind, ort, created_at")
     .single();
-  if (insErr && isMissingPlaceKind(insErr)) {
+  if (insErr && isMissingColumn(insErr)) {
     ({ data: inserted, error: insErr } = await admin
       .from("delivery_placements")
       .insert(row)
@@ -84,6 +86,7 @@ export async function PUT(req: Request) {
     standort_name?: string;
     menge?: number | string | null;
     place_kind?: string;
+    ort?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -130,17 +133,21 @@ export async function PUT(req: Request) {
     standort_name: string;
     menge: number | null;
     place_kind?: string;
+    ort?: string | null;
   } = { standort_name: standort, menge: mengeNum };
   if (body.place_kind && isPlaceKind(body.place_kind)) {
     patch.place_kind = body.place_kind;
+  }
+  if (body.ort !== undefined) {
+    patch.ort = (body.ort ?? "").trim().slice(0, 120) || null;
   }
   let { data: updated, error: updErr } = await admin
     .from("delivery_placements")
     .update(patch)
     .eq("id", id)
-    .select("id, standort_name, menge, kind, place_kind, created_at")
+    .select("id, standort_name, menge, kind, place_kind, ort, created_at")
     .single();
-  if (updErr && isMissingPlaceKind(updErr)) {
+  if (updErr && isMissingColumn(updErr)) {
     ({ data: updated, error: updErr } = await admin
       .from("delivery_placements")
       .update({ standort_name: standort, menge: mengeNum })

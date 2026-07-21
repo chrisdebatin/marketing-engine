@@ -26,6 +26,10 @@ alter table public.patient_flows disable row level security;
 alter table public.delivery_placements
   add column if not exists place_kind text;
 
+-- ── 0020: Ortschaft (Stadt) für Auslage-/Liefer-Orte ────────────────
+alter table public.delivery_placements
+  add column if not exists ort text;
+
 -- ── 0019: Flyeraktionen (Verteil-/Postwurf-Aktionen) ────────────────
 create table if not exists public.flyer_actions (
   id          uuid primary key default gen_random_uuid(),

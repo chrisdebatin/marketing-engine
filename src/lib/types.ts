@@ -172,6 +172,7 @@ export interface Database {
           menge: number | null;
           kind: string;
           place_kind: string | null;
+          ort: string | null;
           created_at: string;
         };
         Insert: {
@@ -182,6 +183,7 @@ export interface Database {
           menge?: number | null;
           kind?: string;
           place_kind?: string | null;
+          ort?: string | null;
           created_at?: string;
         };
         Update: Partial<

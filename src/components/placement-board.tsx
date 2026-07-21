@@ -24,6 +24,7 @@ interface Placement {
   menge: number | null;
   kind?: string;
   place_kind?: string | null;
+  ort?: string | null;
 }
 
 // base-ui Select zeigt über `items` das Label statt des Rohwerts an.
@@ -44,6 +45,7 @@ export function PlacementBoard({
   const [placements, setPlacements] = useState<Placement[]>(initial);
   const [kind, setKind] = useState<Kind>("flyer");
   const [standort, setStandort] = useState("");
+  const [ortschaft, setOrtschaft] = useState("");
   const [placeKind, setPlaceKind] = useState<string>("");
   const [menge, setMenge] = useState("");
   const [saving, setSaving] = useState(false);
@@ -52,6 +54,7 @@ export function PlacementBoard({
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editMenge, setEditMenge] = useState("");
+  const [editOrt, setEditOrt] = useState("");
   const [editPlaceKind, setEditPlaceKind] = useState<string>("");
   const [editSaving, setEditSaving] = useState(false);
 
@@ -73,6 +76,7 @@ export function PlacementBoard({
           menge,
           kind,
           place_kind: placeKind,
+          ort: ortschaft,
         }),
       });
       const data = await res.json();
@@ -95,6 +99,7 @@ export function PlacementBoard({
     setEditId(p.id);
     setEditName(p.standort_name);
     setEditMenge(p.menge != null ? String(p.menge) : "");
+    setEditOrt(p.ort ?? "");
     setEditPlaceKind(p.place_kind ?? "sonstiges");
   }
 
@@ -136,6 +141,7 @@ export function PlacementBoard({
           standort_name: name,
           menge: editMenge,
           place_kind: editPlaceKind,
+          ort: editOrt,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -208,6 +214,19 @@ export function PlacementBoard({
           />
         </div>
         <div className="flex flex-col gap-2">
+          <Label htmlFor="ortschaft">
+            {isBox ? "In welchem Ort wurde geliefert?" : "In welchem Ort wurde ausgelegt?"}
+          </Label>
+          <Input
+            id="ortschaft"
+            value={ortschaft}
+            onChange={(e) => setOrtschaft(e.target.value)}
+            placeholder="Stadt/Ortschaft, z. B. Dorsten"
+            autoComplete="off"
+            maxLength={120}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
           <Label>Art des Ortes</Label>
           <Select
             items={PLACE_ITEMS}
@@ -241,7 +260,9 @@ export function PlacementBoard({
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button
           type="submit"
-          disabled={saving || !standort.trim() || !placeKind}
+          disabled={
+            saving || !standort.trim() || !placeKind || !ortschaft.trim()
+          }
         >
           {saving
             ? "Speichere…"
@@ -291,6 +312,7 @@ export function PlacementBoard({
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {placeKindLabel(p.place_kind)}
+                          {p.ort ? ` · ${p.ort}` : ""}
                         </span>
                       </span>
                     </span>
@@ -332,6 +354,13 @@ export function PlacementBoard({
                           className="sm:w-40"
                         />
                       </div>
+                      <Input
+                        value={editOrt}
+                        onChange={(e) => setEditOrt(e.target.value)}
+                        placeholder="Stadt/Ortschaft, z. B. Dorsten"
+                        autoComplete="off"
+                        maxLength={120}
+                      />
                       <Select
                         items={PLACE_ITEMS}
                         value={editPlaceKind}
