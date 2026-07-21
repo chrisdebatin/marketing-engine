@@ -53,6 +53,8 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
     .map((h) => ({ ...h, places: kind === "flyer" ? h.flyer : h.box }))
     .filter((h) => h.places.length > 0);
   const totalPlaces = withPlaces.reduce((s, h) => s + h.places.length, 0);
+  const countFlyer = hubs.reduce((s, h) => s + h.flyer.length, 0);
+  const countBox = hubs.reduce((s, h) => s + h.box.length, 0);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,8 +122,8 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
       <div className="grid max-w-sm grid-cols-2 gap-1 rounded-lg bg-muted p-1">
         {(
           [
-            { k: "flyer", label: "Flyer-Auslagen", Icon: FileText },
-            { k: "box", label: "Box-Lieferungen", Icon: Package },
+            { k: "flyer", label: `Flyer-Auslagen (${countFlyer})`, Icon: FileText },
+            { k: "box", label: `Box-Lieferungen (${countBox})`, Icon: Package },
           ] as const
         ).map(({ k, label, Icon }) => (
           <button
