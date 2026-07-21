@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Map as LeafletMap } from "leaflet";
+import type { Map as LeafletMap, CircleMarker } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { FileText, MapPin, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { HubTags } from "@/components/md-tag";
 import { cn } from "@/lib/utils";
 import { placeKindLabel } from "@/lib/places";
@@ -32,6 +31,8 @@ export interface MapHub {
   box: MapPlace[];
 }
 
+type Filter = "alle" | "flyer" | "box";
+
 function esc(s: string): string {
   return s.replace(
     /[&<>"]/g,
@@ -40,19 +41,26 @@ function esc(s: string): string {
   );
 }
 
+function placesFor(h: MapHub, filter: Filter): MapPlace[] {
+  if (filter === "flyer") return h.flyer;
+  if (filter === "box") return h.box;
+  return [...h.flyer, ...h.box];
+}
+
 /**
- * Karte + Liste aller von den PDLs eingetragenen Orte, gruppiert nach Hub,
- * umschaltbar zwischen den Kategorien Flyer und Boxen.
+ * Karte + Auslagen in einer Ansicht: links die Karte, rechts die Orte je Hub.
+ * Klick auf einen Hub in der Liste springt zum Pin und öffnet das Popup.
  */
 export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
-  const [kind, setKind] = useState<"flyer" | "box">("flyer");
+  const [filter, setFilter] = useState<Filter>("alle");
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const markersRef = useRef<Map<string, CircleMarker>>(new Map());
 
   const withPlaces = hubs
-    .map((h) => ({ ...h, places: kind === "flyer" ? h.flyer : h.box }))
-    .filter((h) => h.places.length > 0);
-  const totalPlaces = withPlaces.reduce((s, h) => s + h.places.length, 0);
+    .map((h) => ({ ...h, places: placesFor(h, filter) }))
+    .filter((h) => h.places.length > 0)
+    .sort((a, b) => b.places.length - a.places.length);
   const countFlyer = hubs.reduce((s, h) => s + h.flyer.length, 0);
   const countBox = hubs.reduce((s, h) => s + h.box.length, 0);
 
@@ -61,9 +69,10 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
     void (async () => {
       const L = await import("leaflet");
       if (cancelled || !containerRef.current) return;
-      // Karte bei Kategorie-Wechsel neu aufbauen.
+      // Bei Filter-Wechsel neu aufbauen (Marker-Größen/Popups ändern sich).
       mapRef.current?.remove();
       mapRef.current = null;
+      markersRef.current.clear();
 
       const map = L.map(containerRef.current).setView([51.3, 8.2], 6);
       mapRef.current = map;
@@ -75,7 +84,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
       const bounds: [number, number][] = [];
       for (const h of withPlaces) {
         if (h.lat == null || h.lng == null) continue;
-        const placesHtml = h.places
+        const lines = h.places
           .slice(0, 10)
           .map(
             (p) =>
@@ -88,7 +97,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
           h.places.length > 10
             ? `<br/>… und ${h.places.length - 10} weitere`
             : "";
-        L.circleMarker([h.lat, h.lng], {
+        const marker = L.circleMarker([h.lat, h.lng], {
           radius: Math.min(9 + h.places.length, 16),
           color: "#ffffff",
           weight: 2,
@@ -98,10 +107,11 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
           .addTo(map)
           .bindPopup(
             `<strong>${esc(h.name)}</strong><br/>` +
-              `${h.places.length} ${kind === "flyer" ? "Flyer-Orte" : "Box-Lieferorte"}<br/><br/>` +
-              placesHtml +
+              `${h.flyer.length} Flyer-Orte · ${h.box.length} Box-Lieferorte<br/><br/>` +
+              lines +
               more,
           );
+        markersRef.current.set(h.id, marker);
         bounds.push([h.lat, h.lng]);
       }
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [30, 30] });
@@ -112,113 +122,129 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
       cancelled = true;
       mapRef.current?.remove();
       mapRef.current = null;
+      markersRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind, hubs]);
+  }, [filter, hubs]);
+
+  function focusHub(h: MapHub) {
+    if (h.lat == null || h.lng == null || !mapRef.current) return;
+    mapRef.current.setView([h.lat, h.lng], 11);
+    markersRef.current.get(h.id)?.openPopup();
+  }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Kategorie-Umschalter */}
-      <div className="grid max-w-sm grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+    <div className="flex flex-col gap-3">
+      {/* Filter-Chips */}
+      <div className="flex flex-wrap items-center gap-1.5">
         {(
           [
-            { k: "flyer", label: `Flyer-Auslagen (${countFlyer})`, Icon: FileText },
-            { k: "box", label: `Box-Lieferungen (${countBox})`, Icon: Package },
+            { k: "alle", label: `Alle (${countFlyer + countBox})` },
+            { k: "flyer", label: `Flyer (${countFlyer})` },
+            { k: "box", label: `Boxen (${countBox})` },
           ] as const
-        ).map(({ k, label, Icon }) => (
+        ).map(({ k, label }) => (
           <button
             key={k}
             type="button"
-            onClick={() => setKind(k)}
+            onClick={() => setFilter(k)}
             className={cn(
-              "flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              kind === k
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+              "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+              filter === k
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-muted text-muted-foreground hover:text-foreground",
             )}
           >
-            <Icon className="size-4" />
             {label}
           </button>
         ))}
+        <span className="ml-auto hidden text-xs text-muted-foreground sm:block">
+          Hub in der Liste anklicken → Karte springt zum Pin.
+        </span>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        {totalPlaces}{" "}
-        {kind === "flyer"
-          ? "Flyer-Orte"
-          : "Box-Lieferorte"}{" "}
-        in {withPlaces.length} Hubs. Pin anklicken für Details; Größe = Anzahl
-        Orte.
-      </p>
+      {/* Karte + Liste in einem */}
+      <div className="grid gap-3 lg:grid-cols-[1fr_400px]">
+        <div
+          ref={containerRef}
+          className="z-0 h-[45vh] w-full overflow-hidden rounded-lg border lg:h-[70vh]"
+        />
 
-      <div
-        ref={containerRef}
-        className="z-0 h-[55vh] w-full overflow-hidden rounded-lg border"
-      />
-
-      {/* Liste nach Hub */}
-      {withPlaces.length === 0 ? (
-        <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-          Noch keine Einträge in dieser Kategorie. Die PDLs tragen Orte über
-          ihren Hub-Link ein.
-        </p>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {withPlaces.map((h) => (
-            <Card key={h.id}>
-              <CardContent className="flex flex-col gap-3 p-5">
-                <div className="flex items-center gap-2">
+        <div className="flex max-h-[70vh] flex-col gap-2 overflow-y-auto pr-1">
+          {withPlaces.length === 0 ? (
+            <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+              Noch keine Einträge in dieser Auswahl. Die PDLs tragen Orte über
+              ihren Hub-Link ein.
+            </p>
+          ) : (
+            withPlaces.map((h) => (
+              <section
+                key={h.id}
+                className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
+              >
+                <button
+                  type="button"
+                  onClick={() => focusHub(h)}
+                  disabled={h.lat == null}
+                  className="flex w-full items-center gap-2 text-left disabled:cursor-default"
+                  title={
+                    h.lat == null
+                      ? "Ohne Koordinaten — nicht auf der Karte"
+                      : "Auf der Karte zeigen"
+                  }
+                >
                   <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-lg text-white"
                     style={{ backgroundColor: h.color }}
                   >
-                    <MapPin className="size-4" />
+                    <MapPin className="size-3.5" />
                   </span>
-                  <span className="min-w-0 truncate font-semibold">
+                  <span className="min-w-0 truncate text-sm font-semibold">
                     {h.name}
                   </span>
-                  <Badge variant="secondary" className="tabular-nums">
+                  <Badge variant="secondary" className="ml-auto tabular-nums">
                     {h.places.length}
                   </Badge>
-                  <HubTags
-                    md={h.md}
-                    pdl={h.pdl}
-                    pdlRole={h.pdlRole}
-                    className="ml-auto"
-                  />
-                </div>
+                </button>
+                <HubTags md={h.md} pdl={h.pdl} pdlRole={h.pdlRole} />
+
                 <ul className="flex flex-col gap-1">
-                  {h.places.map((p, i) => (
-                    <li
-                      key={i}
-                      className="flex items-baseline justify-between gap-3 border-t pt-1 text-sm first:border-t-0 first:pt-0"
-                    >
-                      <span className="min-w-0">
-                        <span className="block truncate">{p.name}</span>
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {placeKindLabel(p.placeKind)}
-                          {p.date ? ` · ${p.date}` : ""}
+                  {h.places.map((p, i) => {
+                    const isBox = h.box.includes(p);
+                    return (
+                      <li
+                        key={i}
+                        className="flex items-baseline justify-between gap-2 border-t pt-1 text-sm first:border-t-0 first:pt-0"
+                      >
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          {isBox ? (
+                            <Package className="size-3.5 shrink-0 translate-y-0.5 text-amber-600" />
+                          ) : (
+                            <FileText className="size-3.5 shrink-0 translate-y-0.5 text-primary" />
+                          )}
+                          <span className="min-w-0">
+                            <span className="block truncate">{p.name}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {placeKindLabel(p.placeKind)}
+                              {p.menge != null ? ` · ${p.menge} Stück` : ""}
+                              {p.date ? ` · ${p.date}` : ""}
+                            </span>
+                          </span>
                         </span>
-                      </span>
-                      {p.menge != null && (
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {p.menge} Stück
-                        </span>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    );
+                  })}
                 </ul>
                 {h.lat == null && (
                   <p className="text-xs text-muted-foreground">
                     Ohne Koordinaten — nicht auf der Karte.
                   </p>
                 )}
-              </CardContent>
-            </Card>
-          ))}
+              </section>
+            ))
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
