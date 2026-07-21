@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { DeleteHubButton } from "@/components/delete-hub-button";
+import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
 import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
@@ -42,8 +43,11 @@ export default async function HubDetailPage({
   ] = await Promise.all([
     admin
       .from("deliveries")
-      .select("flyer_count, box_count, aufsteller_count")
-      .eq("hub_id", id),
+      .select(
+        "id, flyer_count, box_count, aufsteller_count, note, share_token, created_at",
+      )
+      .eq("hub_id", id)
+      .order("created_at", { ascending: false }),
     admin.from("delivery_placements").select("id").eq("hub_id", id),
     admin.from("hub_tasks").select("id, title").order("created_at"),
     admin.from("hub_task_checks").select("task_id").eq("hub_id", id),
@@ -156,6 +160,65 @@ export default async function HubDetailPage({
               label={`${pdlRoleShort(hub.name)}-Link kopieren`}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Inventar: was dieser Hub geliefert bekommen hat — editierbar */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-5">
+          <div>
+            <p className="font-medium">
+              Inventar — erhaltene Lieferungen ({(deliveries ?? []).length})
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Alles, was dieser Hub von dir bekommen hat. Über „Bearbeiten&rdquo;
+              lassen sich Mengen und Notiz korrigieren, Löschen entfernt die
+              Lieferung.
+            </p>
+          </div>
+          {(deliveries ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Noch keine Lieferungen an diesen Hub.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {(deliveries ?? []).map((d) => (
+                <li
+                  key={d.id}
+                  className="flex flex-col gap-2 rounded-lg border bg-background px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline">{d.flyer_count} Flyer</Badge>
+                      {d.aufsteller_count > 0 && (
+                        <Badge variant="outline">
+                          {d.aufsteller_count} Aufsteller
+                        </Badge>
+                      )}
+                      {d.box_count > 0 && (
+                        <Badge variant="outline">{d.box_count} Boxen</Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(d.created_at).toLocaleDateString("de-DE")}
+                      {d.note ? ` · ${d.note}` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    <DeliveryEdit
+                      delivery={{
+                        id: d.id,
+                        flyer_count: d.flyer_count,
+                        aufsteller_count: d.aufsteller_count,
+                        box_count: d.box_count,
+                        note: d.note,
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

@@ -54,6 +54,7 @@ export async function deleteDelivery(id: string): Promise<Result> {
 
   revalidatePath("/lieferungen");
   revalidatePath("/hubs");
+  revalidatePath("/hubs/[id]", "page");
   return { ok: true };
 }
 
@@ -115,5 +116,6 @@ export async function updateDelivery(input: {
 
   revalidatePath("/lieferungen");
   revalidatePath("/hubs");
+  revalidatePath("/hubs/[id]", "page");
   return { ok: true };
 }
