@@ -46,6 +46,23 @@ export default async function HubsPage() {
       a.name.localeCompare(b.name),
   );
 
+  // Nach verantwortlichem MD clustern ("Ohne MD" zuletzt).
+  const mdGroupMap = new Map<
+    string,
+    { md: string | null; hubs: typeof hubs }
+  >();
+  for (const h of hubs) {
+    const key = h.responsible_md ?? "~ohne";
+    const g = mdGroupMap.get(key);
+    if (g) g.hubs.push(h);
+    else mdGroupMap.set(key, { md: h.responsible_md, hubs: [h] });
+  }
+  const mdGroups = [...mdGroupMap.values()].sort((a, b) => {
+    if (a.md === null) return 1;
+    if (b.md === null) return -1;
+    return a.md.localeCompare(b.md, "de");
+  });
+
   const tasks = taskRows ?? [];
   const doneSet = new Set(
     (checkRows ?? []).map((c) => `${c.task_id}|${c.hub_id}`),
@@ -78,10 +95,23 @@ export default async function HubsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {hubs.map((h) => {
-          const a = agg.get(h.id) ?? {
-            flyers: 0,
+      {mdGroups.map((g) => (
+        <section key={g.md ?? "—"} className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden
+              className="size-2.5 rounded-full"
+              style={{ backgroundColor: mdColor(g.md) }}
+            />
+            <h2 className="text-lg font-semibold">{g.md ?? "Ohne MD"}</h2>
+            <span className="text-sm text-muted-foreground">
+              ({g.hubs.length} {g.hubs.length === 1 ? "Hub" : "Hubs"})
+            </span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {g.hubs.map((h) => {
+              const a = agg.get(h.id) ?? {
+                flyers: 0,
             aufsteller: 0,
             boxes: 0,
             placements: 0,
@@ -202,9 +232,11 @@ export default async function HubsPage() {
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
