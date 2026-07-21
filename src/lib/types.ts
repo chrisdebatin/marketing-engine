@@ -343,6 +343,30 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["patient_flows"]["Insert"]>;
         Relationships: [];
       };
+      flyer_actions: {
+        Row: {
+          id: string;
+          action_date: string;
+          anzahl: number;
+          plz: string;
+          inhalt: string;
+          note: string | null;
+          hub_id: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          action_date?: string;
+          anzahl: number;
+          plz: string;
+          inhalt: string;
+          note?: string | null;
+          hub_id?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["flyer_actions"]["Insert"]>;
+        Relationships: [];
+      };
       hub_tasks: {
         Row: {
           id: string;
