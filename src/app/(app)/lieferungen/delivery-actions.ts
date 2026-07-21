@@ -7,6 +7,59 @@ import { createAdminClient } from "@/lib/supabase/admin";
 type Result = { ok: true } | { ok: false; error: string };
 
 /**
+ * Neue Lieferung für einen Hub anlegen (z. B. direkt aus dem Inventar auf
+ * der Hub-Detailseite). MD-Scoping wie überall.
+ */
+export async function createDelivery(input: {
+  hub_id: string;
+  flyer_count: number | string;
+  aufsteller_count: number | string;
+  box_count: number | string;
+  note?: string;
+}): Promise<Result> {
+  const hubId = (input.hub_id ?? "").trim();
+  if (!hubId) return { ok: false, error: "Hub fehlt." };
+
+  const toCount = (v: number | string): number | null => {
+    if (v === "" || v == null) return 0;
+    const n = Math.trunc(Number(v));
+    if (!Number.isFinite(n) || n < 0 || n > 99999) return null;
+    return n;
+  };
+  const flyer = toCount(input.flyer_count);
+  const aufsteller = toCount(input.aufsteller_count);
+  const boxes = toCount(input.box_count);
+  if (flyer == null || aufsteller == null || boxes == null) {
+    return { ok: false, error: "Mengen müssen zwischen 0 und 99999 liegen." };
+  }
+  if (flyer + aufsteller + boxes === 0) {
+    return { ok: false, error: "Mindestens eine Menge größer 0 angeben." };
+  }
+
+  const session = await requireSession();
+  const canAccess =
+    session.isAdmin || session.hubs.some((h) => h.id === hubId);
+  if (!canAccess) return { ok: false, error: "Kein Zugriff auf diesen Hub." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("deliveries").insert({
+    hub_id: hubId,
+    flyer_count: flyer,
+    aufsteller_count: aufsteller,
+    box_count: boxes,
+    note: (input.note ?? "").trim() || null,
+    share_token: crypto.randomUUID(),
+  });
+  if (error) return { ok: false, error: "Speichern fehlgeschlagen." };
+
+  revalidatePath("/lieferungen");
+  revalidatePath("/hubs");
+  revalidatePath("/hubs/[id]", "page");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+/**
  * Erfasste Lieferung löschen (Falscheingabe). Zugehörige Auslage-Orte werden
  * per Cascade mitgelöscht. Stammt die Lieferung aus einer erledigten
  * Bestellung ("[Bestellung #…]"-Marker), wird diese wieder auf "offen"

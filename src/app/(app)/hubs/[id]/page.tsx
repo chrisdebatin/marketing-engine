@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { DeleteHubButton } from "@/components/delete-hub-button";
+import { DeliveryAdd } from "@/components/delivery-add";
 import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
@@ -176,6 +177,7 @@ export default async function HubDetailPage({
               Lieferung.
             </p>
           </div>
+          <DeliveryAdd hubId={hub.id} />
           {(deliveries ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Noch keine Lieferungen an diesen Hub.
