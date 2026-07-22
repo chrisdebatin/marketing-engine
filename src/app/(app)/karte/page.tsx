@@ -37,6 +37,7 @@ export default async function KartePage() {
     kind: string;
     place_kind?: string | null;
     ort?: string | null;
+    adresse?: string | null;
     created_at: string | null;
   }[];
 
@@ -49,6 +50,7 @@ export default async function KartePage() {
       menge: p.menge,
       placeKind: p.place_kind ?? null,
       ort: p.ort ?? null,
+      adresse: p.adresse ?? null,
       date: formatDate(p.created_at),
     };
     if (p.kind === "box") entry.box.push(place);

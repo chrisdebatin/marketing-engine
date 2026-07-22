@@ -18,6 +18,7 @@ export async function POST(req: Request) {
     menge?: number | string | null;
     place_kind?: string;
     ort?: string;
+    adresse?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -57,10 +58,11 @@ export async function POST(req: Request) {
     menge: mengeNum,
   };
   const ort = (body.ort ?? "").trim().slice(0, 120);
+  const adresse = (body.adresse ?? "").trim().slice(0, 200);
   let { data: inserted, error: insErr } = await admin
     .from("delivery_placements")
-    .insert({ ...row, place_kind: placeKind, ort: ort || null })
-    .select("id, standort_name, menge, place_kind, ort, created_at")
+    .insert({ ...row, place_kind: placeKind, ort: ort || null, adresse: adresse || null })
+    .select("id, standort_name, menge, place_kind, ort, adresse, created_at")
     .single();
   if (insErr && isMissingColumn(insErr)) {
     ({ data: inserted, error: insErr } = await admin
@@ -87,6 +89,7 @@ export async function PUT(req: Request) {
     menge?: number | string | null;
     place_kind?: string;
     ort?: string;
+    adresse?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -134,6 +137,7 @@ export async function PUT(req: Request) {
     menge: number | null;
     place_kind?: string;
     ort?: string | null;
+    adresse?: string | null;
   } = { standort_name: standort, menge: mengeNum };
   if (body.place_kind && isPlaceKind(body.place_kind)) {
     patch.place_kind = body.place_kind;
@@ -141,11 +145,14 @@ export async function PUT(req: Request) {
   if (body.ort !== undefined) {
     patch.ort = (body.ort ?? "").trim().slice(0, 120) || null;
   }
+  if (body.adresse !== undefined) {
+    patch.adresse = (body.adresse ?? "").trim().slice(0, 200) || null;
+  }
   let { data: updated, error: updErr } = await admin
     .from("delivery_placements")
     .update(patch)
     .eq("id", id)
-    .select("id, standort_name, menge, place_kind, ort, created_at")
+    .select("id, standort_name, menge, place_kind, ort, adresse, created_at")
     .single();
   if (updErr && isMissingColumn(updErr)) {
     ({ data: updated, error: updErr } = await admin

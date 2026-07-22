@@ -30,6 +30,10 @@ alter table public.delivery_placements
 alter table public.delivery_placements
   add column if not exists ort text;
 
+-- ── 0022: Adresse für Auslage-/Liefer-Orte ──────────────────────────
+alter table public.delivery_placements
+  add column if not exists adresse text;
+
 -- ── 0019: Flyeraktionen (Verteil-/Postwurf-Aktionen) ────────────────
 create table if not exists public.flyer_actions (
   id          uuid primary key default gen_random_uuid(),

@@ -34,14 +34,16 @@ export default async function HubShareLinkPage({
     { data: placements },
     { data: orders },
     { data: catalogData },
+    { data: standorteData },
   ] = await Promise.all([
     admin
       .from("deliveries")
       .select("flyer_count, box_count, aufsteller_count")
       .eq("hub_id", hub.id),
+    // select("*"): tolerant gegenüber noch fehlenden Spalten (0018/0020/0022).
     admin
       .from("delivery_placements")
-      .select("id, standort_name, menge, kind")
+      .select("*")
       .eq("hub_id", hub.id)
       .order("created_at", { ascending: false }),
     admin
@@ -55,10 +57,43 @@ export default async function HubShareLinkPage({
       .select("key, name, description")
       .eq("active", true)
       .order("sort_order", { ascending: true }),
+    admin
+      .from("standorte")
+      .select("name, adresse")
+      .eq("hub_id", hub.id)
+      .order("name"),
   ]);
 
   const catalog = catalogData ?? [];
   const orderList = orders ?? [];
+
+  // Eingabe-Vorschläge: bekannte Standorte des Hubs + frühere Einträge.
+  const suggestionMap = new Map<
+    string,
+    { name: string; adresse: string | null; ort: string | null }
+  >();
+  for (const s of standorteData ?? []) {
+    suggestionMap.set(s.name.toLowerCase(), {
+      name: s.name,
+      adresse: s.adresse ?? null,
+      ort: null,
+    });
+  }
+  for (const p of (placements ?? []) as {
+    standort_name: string;
+    adresse?: string | null;
+    ort?: string | null;
+  }[]) {
+    const key = p.standort_name.toLowerCase();
+    if (!suggestionMap.has(key)) {
+      suggestionMap.set(key, {
+        name: p.standort_name,
+        adresse: p.adresse ?? null,
+        ort: p.ort ?? null,
+      });
+    }
+  }
+  const suggestions = [...suggestionMap.values()].slice(0, 100);
 
   // Second simple query for the cart positions (no embedded-relation selects),
   // then join in JS.
@@ -141,10 +176,11 @@ export default async function HubShareLinkPage({
               <strong className="text-foreground">„Box geliefert&rdquo;</strong>.
             </>,
             <>
-              Ort eintragen (z.&nbsp;B. „Apotheke am Markt&rdquo;), Anzahl
-              angeben und auf{" "}
+              Einrichtung (z.&nbsp;B. „Apotheke am Markt&rdquo;),{" "}
+              <strong className="text-foreground">Adresse</strong>, Ort und
+              Anzahl angeben und auf{" "}
               <strong className="text-foreground">„Hinzufügen&rdquo;</strong>{" "}
-              klicken.
+              klicken — beim Tippen werden bekannte Standorte vorgeschlagen.
             </>,
             <>
               Vertippt? Über das{" "}
@@ -159,6 +195,7 @@ export default async function HubShareLinkPage({
           initial={placements ?? []}
           endpoint="/api/public/hub-placement"
           allowBoxes
+          suggestions={suggestions}
         />
       </section>
 

@@ -173,6 +173,7 @@ export interface Database {
           kind: string;
           place_kind: string | null;
           ort: string | null;
+          adresse: string | null;
           created_at: string;
         };
         Insert: {
@@ -184,6 +185,7 @@ export interface Database {
           kind?: string;
           place_kind?: string | null;
           ort?: string | null;
+          adresse?: string | null;
           created_at?: string;
         };
         Update: Partial<

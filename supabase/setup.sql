@@ -708,6 +708,14 @@ create index if not exists hub_notes_hub_idx on public.hub_notes (hub_id);
 alter table public.hub_notes disable row level security;
 
 -- ============================================================
+-- 0022_placement_adresse.sql
+-- ============================================================
+-- Adresse (Straße + Hausnr.) für Auslage-/Liefer-Orte: "Empfang" allein
+-- reicht nicht — die PDL gibt zusätzlich eine Adresse an. Altbestand: null.
+alter table public.delivery_placements
+  add column if not exists adresse text;
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

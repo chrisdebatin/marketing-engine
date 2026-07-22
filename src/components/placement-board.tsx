@@ -25,6 +25,14 @@ interface Placement {
   kind?: string;
   place_kind?: string | null;
   ort?: string | null;
+  adresse?: string | null;
+}
+
+/** Bekannter Standort als Eingabe-Vorschlag (Autocomplete). */
+export interface PlacementSuggestion {
+  name: string;
+  adresse: string | null;
+  ort: string | null;
 }
 
 // base-ui Select zeigt über `items` das Label statt des Rohwerts an.
@@ -35,25 +43,42 @@ export function PlacementBoard({
   initial,
   endpoint = "/api/public/placement",
   allowBoxes = false,
+  suggestions = [],
 }: {
   token: string;
   initial: Placement[];
   endpoint?: string;
   /** When true, the PDL can log delivered case-management boxes as well as flyers. */
   allowBoxes?: boolean;
+  /** Bekannte Standorte des Hubs als Eingabe-Vorschläge. */
+  suggestions?: PlacementSuggestion[];
 }) {
   const [placements, setPlacements] = useState<Placement[]>(initial);
   const [kind, setKind] = useState<Kind>("flyer");
   const [standort, setStandort] = useState("");
+  const [adresse, setAdresse] = useState("");
   const [ortschaft, setOrtschaft] = useState("");
   const [placeKind, setPlaceKind] = useState<string>("");
   const [menge, setMenge] = useState("");
+
+  // Bei exaktem Vorschlags-Treffer Adresse/Ort automatisch übernehmen.
+  function onStandortChange(value: string) {
+    setStandort(value);
+    const match = suggestions.find(
+      (s) => s.name.toLowerCase() === value.trim().toLowerCase(),
+    );
+    if (match) {
+      if (match.adresse && !adresse) setAdresse(match.adresse);
+      if (match.ort && !ortschaft) setOrtschaft(match.ort);
+    }
+  }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Inline-Bearbeitung eines eingetragenen Ortes
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editMenge, setEditMenge] = useState("");
+  const [editAdresse, setEditAdresse] = useState("");
   const [editOrt, setEditOrt] = useState("");
   const [editPlaceKind, setEditPlaceKind] = useState<string>("");
   const [editSaving, setEditSaving] = useState(false);
@@ -77,6 +102,7 @@ export function PlacementBoard({
           kind,
           place_kind: placeKind,
           ort: ortschaft,
+          adresse,
         }),
       });
       const data = await res.json();
@@ -86,6 +112,7 @@ export function PlacementBoard({
       }
       setPlacements((p) => [data.placement as Placement, ...p]);
       setStandort("");
+      setAdresse("");
       setMenge("");
       toast.success(isBox ? "Box gespeichert" : "Ort gespeichert");
     } catch {
@@ -99,6 +126,7 @@ export function PlacementBoard({
     setEditId(p.id);
     setEditName(p.standort_name);
     setEditMenge(p.menge != null ? String(p.menge) : "");
+    setEditAdresse(p.adresse ?? "");
     setEditOrt(p.ort ?? "");
     setEditPlaceKind(p.place_kind ?? "sonstiges");
   }
@@ -142,6 +170,7 @@ export function PlacementBoard({
           menge: editMenge,
           place_kind: editPlaceKind,
           ort: editOrt,
+          adresse: editAdresse,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -198,20 +227,45 @@ export function PlacementBoard({
         <div className="flex flex-col gap-2">
           <Label htmlFor="ort">
             {isBox
-              ? "Wo wurde die Case-Management-Box geliefert?"
-              : "Wo wurden Flyer ausgelegt?"}
+              ? "Wo wurde die Case-Management-Box geliefert? (Name der Einrichtung)"
+              : "Wo wurden Flyer ausgelegt? (Name der Einrichtung)"}
           </Label>
           <Input
             id="ort"
             value={standort}
-            onChange={(e) => setStandort(e.target.value)}
+            onChange={(e) => onStandortChange(e.target.value)}
             placeholder={
               isBox
                 ? "z. B. Pflegedienst Sonnenschein, Station 3"
-                : "z. B. Wartezimmer, Empfang, Apotheke am Markt"
+                : "z. B. Apotheke am Markt, Praxis Dr. Weber"
             }
             autoComplete="off"
+            list="standort-vorschlaege"
           />
+          {suggestions.length > 0 && (
+            <datalist id="standort-vorschlaege">
+              {suggestions.map((s) => (
+                <option key={s.name} value={s.name}>
+                  {[s.adresse, s.ort].filter(Boolean).join(", ")}
+                </option>
+              ))}
+            </datalist>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="adresse">Adresse (Straße + Hausnr.)</Label>
+          <Input
+            id="adresse"
+            value={adresse}
+            onChange={(e) => setAdresse(e.target.value)}
+            placeholder="z. B. Marktstraße 12"
+            autoComplete="off"
+            maxLength={200}
+          />
+          <p className="text-xs text-muted-foreground">
+            Bitte immer mit Adresse — nur „Empfang&rdquo; o. Ä. reicht nicht,
+            damit wir den Ort später wiederfinden.
+          </p>
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="ortschaft">
@@ -261,7 +315,11 @@ export function PlacementBoard({
         <Button
           type="submit"
           disabled={
-            saving || !standort.trim() || !placeKind || !ortschaft.trim()
+            saving ||
+            !standort.trim() ||
+            !placeKind ||
+            !ortschaft.trim() ||
+            adresse.trim().length < 5
           }
         >
           {saving
@@ -312,6 +370,7 @@ export function PlacementBoard({
                         </span>
                         <span className="block truncate text-xs text-muted-foreground">
                           {placeKindLabel(p.place_kind)}
+                          {p.adresse ? ` · ${p.adresse}` : ""}
                           {p.ort ? ` · ${p.ort}` : ""}
                         </span>
                       </span>
@@ -354,6 +413,13 @@ export function PlacementBoard({
                           className="sm:w-40"
                         />
                       </div>
+                      <Input
+                        value={editAdresse}
+                        onChange={(e) => setEditAdresse(e.target.value)}
+                        placeholder="Adresse, z. B. Marktstraße 12"
+                        autoComplete="off"
+                        maxLength={200}
+                      />
                       <Input
                         value={editOrt}
                         onChange={(e) => setEditOrt(e.target.value)}

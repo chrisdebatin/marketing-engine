@@ -15,6 +15,7 @@ export interface MapPlace {
   menge: number | null;
   placeKind: string | null;
   ort: string | null;
+  adresse: string | null;
   date: string | null;
 }
 
@@ -90,8 +91,10 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
           .map(
             (p) =>
               `• ${esc(p.name)} <em>(${esc(placeKindLabel(p.placeKind))}${
-                p.ort ? `, ${esc(p.ort)}` : ""
-              }${p.menge != null ? `, ${p.menge} Stück` : ""})</em>`,
+                p.adresse ? `, ${esc(p.adresse)}` : ""
+              }${p.ort ? `, ${esc(p.ort)}` : ""}${
+                p.menge != null ? `, ${p.menge} Stück` : ""
+              })</em>`,
           )
           .join("<br/>");
         const more =
@@ -227,6 +230,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
                             <span className="block truncate">{p.name}</span>
                             <span className="block truncate text-xs text-muted-foreground">
                               {placeKindLabel(p.placeKind)}
+                              {p.adresse ? ` · ${p.adresse}` : ""}
                               {p.ort ? ` · ${p.ort}` : ""}
                               {p.menge != null ? ` · ${p.menge} Stück` : ""}
                               {p.date ? ` · ${p.date}` : ""}
