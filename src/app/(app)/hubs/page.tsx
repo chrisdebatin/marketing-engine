@@ -20,7 +20,13 @@ interface Agg {
   placements: number;
 }
 
-export default async function HubsPage() {
+export default async function HubsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter } = await searchParams;
+  const onlyOpen = filter === "offen";
   // Hubs kommen aus der Session (Service-Role-Client, MD-Scoping inklusive) —
   // gleiches Muster wie im Rest der App, unabhängig von RLS/Anon-Key.
   const session = await requireSession();
@@ -49,23 +55,6 @@ export default async function HubsPage() {
       a.name.localeCompare(b.name),
   );
 
-  // Nach verantwortlichem MD clustern ("Ohne MD" zuletzt).
-  const mdGroupMap = new Map<
-    string,
-    { md: string | null; hubs: typeof hubs }
-  >();
-  for (const h of hubs) {
-    const key = h.responsible_md ?? "~ohne";
-    const g = mdGroupMap.get(key);
-    if (g) g.hubs.push(h);
-    else mdGroupMap.set(key, { md: h.responsible_md, hubs: [h] });
-  }
-  const mdGroups = [...mdGroupMap.values()].sort((a, b) => {
-    if (a.md === null) return 1;
-    if (b.md === null) return -1;
-    return a.md.localeCompare(b.md, "de");
-  });
-
   const tasks = taskRows ?? [];
   const doneSet = new Set(
     (checkRows ?? []).map((c) => `${c.task_id}|${c.hub_id}`),
@@ -77,6 +66,33 @@ export default async function HubsPage() {
       openTodos.set(n.hub_id, (openTodos.get(n.hub_id) ?? 0) + 1);
     }
   }
+
+  // "Offene Aufgaben" = offene To-dos aus den Notizen ODER nicht abgehakte
+  // Hub-Aufgaben.
+  const hasOpenWork = (hubId: string) =>
+    (openTodos.get(hubId) ?? 0) > 0 ||
+    tasks.some((t) => !doneSet.has(`${t.id}|${hubId}`));
+
+  const visibleHubs = onlyOpen ? hubs.filter((h) => hasOpenWork(h.id)) : hubs;
+  const openCount = hubs.filter((h) => hasOpenWork(h.id)).length;
+
+  // Nach verantwortlichem MD clustern ("Ohne MD" zuletzt).
+  const mdGroupMap = new Map<
+    string,
+    { md: string | null; hubs: typeof hubs }
+  >();
+  for (const h of visibleHubs) {
+    const key = h.responsible_md ?? "~ohne";
+    const g = mdGroupMap.get(key);
+    if (g) g.hubs.push(h);
+    else mdGroupMap.set(key, { md: h.responsible_md, hubs: [h] });
+  }
+  const mdGroups = [...mdGroupMap.values()].sort((a, b) => {
+    if (a.md === null) return 1;
+    if (b.md === null) return -1;
+    return a.md.localeCompare(b.md, "de");
+  });
+
 
   const agg = new Map<string, Agg>();
   const bump = (id: string): Agg => {
@@ -104,6 +120,38 @@ export default async function HubsPage() {
           und gelieferten Materialien.
         </p>
       </div>
+
+      {/* Filter: alle Hubs vs. nur die mit offenen Aufgaben/To-dos */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Link
+          href="/hubs"
+          className={cn(
+            "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+            !onlyOpen
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-muted text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Alle ({hubs.length})
+        </Link>
+        <Link
+          href="/hubs?filter=offen"
+          className={cn(
+            "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+            onlyOpen
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-muted text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Mit offenen Aufgaben ({openCount})
+        </Link>
+      </div>
+
+      {onlyOpen && visibleHubs.length === 0 && (
+        <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+          Aktuell hat kein Hub offene Aufgaben oder To-dos. 🎉
+        </p>
+      )}
 
       {mdGroups.map((g) => (
         <section key={g.md ?? "—"} className="flex flex-col gap-3">
