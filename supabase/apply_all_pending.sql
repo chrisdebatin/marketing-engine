@@ -45,6 +45,18 @@ create index if not exists flyer_actions_date_idx
   on public.flyer_actions (action_date desc);
 alter table public.flyer_actions disable row level security;
 
+-- ── 0021: Notizen & To-dos je Hub ───────────────────────────────────
+create table if not exists public.hub_notes (
+  id         uuid primary key default gen_random_uuid(),
+  hub_id     uuid not null references public.hubs (id) on delete cascade,
+  text       text not null,
+  is_todo    boolean not null default false,
+  done_at    timestamptz,
+  created_at timestamptz default now()
+);
+create index if not exists hub_notes_hub_idx on public.hub_notes (hub_id);
+alter table public.hub_notes disable row level security;
+
 -- PostgREST-Schema-Cache neu laden, damit die API alles sofort kennt.
 notify pgrst, 'reload schema';
 

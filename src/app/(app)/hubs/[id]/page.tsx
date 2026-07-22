@@ -15,6 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { DeleteHubButton } from "@/components/delete-hub-button";
 import { DeliveryAdd } from "@/components/delivery-add";
+import { HubNotes } from "@/components/hub-notes";
 import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
@@ -41,6 +42,7 @@ export default async function HubDetailPage({
     { data: placements },
     { data: taskRows },
     { data: checkRows },
+    { data: noteRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -52,6 +54,12 @@ export default async function HubDetailPage({
     admin.from("delivery_placements").select("id").eq("hub_id", id),
     admin.from("hub_tasks").select("id, title").order("created_at"),
     admin.from("hub_task_checks").select("task_id").eq("hub_id", id),
+    // Fallback ?? [] — fehlt Migration 0021, darf die Seite nicht crashen.
+    admin
+      .from("hub_notes")
+      .select("id, text, is_todo, done_at, created_at")
+      .eq("hub_id", id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const tasks = taskRows ?? [];
@@ -161,6 +169,13 @@ export default async function HubDetailPage({
               label={`${pdlRoleShort(hub.name)}-Link kopieren`}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Notizen & offene To-dos zu diesem Standort */}
+      <Card>
+        <CardContent className="p-5">
+          <HubNotes hubId={hub.id} initial={noteRows ?? []} />
         </CardContent>
       </Card>
 

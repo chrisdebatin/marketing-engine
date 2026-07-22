@@ -31,6 +31,7 @@ export default async function HubsPage() {
     { data: placements },
     { data: taskRows },
     { data: checkRows },
+    { data: noteRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -38,6 +39,8 @@ export default async function HubsPage() {
     admin.from("delivery_placements").select("hub_id"),
     admin.from("hub_tasks").select("id, title").order("created_at"),
     admin.from("hub_task_checks").select("task_id, hub_id"),
+    // Fallback ?? [] — fehlt Migration 0021, darf die Seite nicht crashen.
+    admin.from("hub_notes").select("hub_id, is_todo, done_at"),
   ]);
 
   const hubs = [...session.hubs].sort(
@@ -67,6 +70,13 @@ export default async function HubsPage() {
   const doneSet = new Set(
     (checkRows ?? []).map((c) => `${c.task_id}|${c.hub_id}`),
   );
+  // Offene To-dos je Hub (aus den Standort-Notizen).
+  const openTodos = new Map<string, number>();
+  for (const n of noteRows ?? []) {
+    if (n.is_todo && !n.done_at) {
+      openTodos.set(n.hub_id, (openTodos.get(n.hub_id) ?? 0) + 1);
+    }
+  }
 
   const agg = new Map<string, Agg>();
   const bump = (id: string): Agg => {
@@ -143,11 +153,19 @@ export default async function HubsPage() {
                       <ChevronRight className="size-3.5" />
                     </span>
                   </Link>
-                  <HubTags
-                    md={h.responsible_md}
-                    pdl={h.pdl_name}
-                    pdlRole={pdlRoleShort(h.name)}
-                  />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <HubTags
+                      md={h.responsible_md}
+                      pdl={h.pdl_name}
+                      pdlRole={pdlRoleShort(h.name)}
+                    />
+                    {(openTodos.get(h.id) ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+                        {openTodos.get(h.id)} To-do
+                        {(openTodos.get(h.id) ?? 0) > 1 ? "s" : ""} offen
+                      </span>
+                    )}
+                  </span>
                   {(h.address || h.region) && (
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       <MapPin className="size-3 shrink-0" />

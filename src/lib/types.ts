@@ -369,6 +369,26 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["flyer_actions"]["Insert"]>;
         Relationships: [];
       };
+      hub_notes: {
+        Row: {
+          id: string;
+          hub_id: string;
+          text: string;
+          is_todo: boolean;
+          done_at: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          text: string;
+          is_todo?: boolean;
+          done_at?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["hub_notes"]["Insert"]>;
+        Relationships: [];
+      };
       hub_tasks: {
         Row: {
           id: string;
