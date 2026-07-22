@@ -76,6 +76,21 @@ export default async function HubsPage({
   const visibleHubs = onlyOpen ? hubs.filter((h) => hasOpenWork(h.id)) : hubs;
   const openCount = hubs.filter((h) => hasOpenWork(h.id)).length;
 
+  // Rundmail: alle PDL-Adressen der (ggf. gefilterten) Hubs als BCC —
+  // öffnet das Standard-Mailprogramm (z. B. Outlook), gesendet wird dort.
+  const emailsOf = (hubList: typeof hubs) => {
+    const set = new Set<string>();
+    for (const h of hubList) {
+      for (const e of splitPdlEmails(h.pdl_email)) set.add(e);
+    }
+    return [...set];
+  };
+  const mailtoFor = (emails: string[]) =>
+    `mailto:?bcc=${encodeURIComponent(emails.join(","))}&subject=${encodeURIComponent(
+      "Info vom Marketing-Team",
+    )}`;
+  const allEmails = emailsOf(visibleHubs);
+
   // Nach verantwortlichem MD clustern ("Ohne MD" zuletzt).
   const mdGroupMap = new Map<
     string,
@@ -145,6 +160,17 @@ export default async function HubsPage({
         >
           Mit offenen Aufgaben ({openCount})
         </Link>
+
+        {allEmails.length > 0 && (
+          <a
+            href={mailtoFor(allEmails)}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-sm font-medium text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+            title={`Öffnet dein Mailprogramm mit ${allEmails.length} PDL-Adressen im BCC`}
+          >
+            <Mail className="size-3.5" />
+            Rundmail an alle PDLs ({allEmails.length})
+          </a>
+        )}
       </div>
 
       {onlyOpen && visibleHubs.length === 0 && (
@@ -165,6 +191,16 @@ export default async function HubsPage({
             <span className="text-sm text-muted-foreground">
               ({g.hubs.length} {g.hubs.length === 1 ? "Hub" : "Hubs"})
             </span>
+            {emailsOf(g.hubs).length > 0 && (
+              <a
+                href={mailtoFor(emailsOf(g.hubs))}
+                className="ml-auto inline-flex items-center gap-1 text-sm text-primary hover:underline"
+                title={`Rundmail an die ${emailsOf(g.hubs).length} PDL-Adressen dieser Gruppe`}
+              >
+                <Mail className="size-3.5" />
+                Rundmail
+              </a>
+            )}
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {g.hubs.map((h) => {
