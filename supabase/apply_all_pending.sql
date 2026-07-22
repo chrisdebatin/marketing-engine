@@ -61,6 +61,15 @@ create table if not exists public.hub_notes (
 create index if not exists hub_notes_hub_idx on public.hub_notes (hub_id);
 alter table public.hub_notes disable row level security;
 
+-- ── 0023: Outlook-Anbindung (OAuth-Token-Speicher) ──────────────────
+create table if not exists public.ms_oauth_tokens (
+  id            text primary key default 'default',
+  account_email text,
+  refresh_token text not null,
+  updated_at    timestamptz not null default now()
+);
+alter table public.ms_oauth_tokens disable row level security;
+
 -- PostgREST-Schema-Cache neu laden, damit die API alles sofort kennt.
 notify pgrst, 'reload schema';
 

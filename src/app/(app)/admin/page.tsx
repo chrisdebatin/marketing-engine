@@ -31,6 +31,7 @@ import {
   Truck,
   User,
 } from "lucide-react";
+import { connectedAccount, outlookConfigured } from "@/lib/outlook";
 import type { Hub } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +89,8 @@ interface HubStats {
 
 export default async function AdminPage() {
   const session = await requireSession();
+  const outlookReady = outlookConfigured();
+  const outlookAccount = outlookReady ? await connectedAccount() : null;
 
   if (!session.isAdmin) {
     return (
@@ -238,6 +241,41 @@ export default async function AdminPage() {
           </div>
         </details>
       )}
+
+      {/* Outlook-Anbindung (Microsoft Graph) */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
+        <p className="font-semibold">Outlook-Anbindung</p>
+        {outlookAccount ? (
+          <p className="text-sm text-muted-foreground">
+            Verbunden als{" "}
+            <span className="font-medium text-foreground">
+              {outlookAccount}
+            </span>
+            . Die App kann Mails dieses Kontos lesen — der E-Mail-Verlauf mit
+            der PDL erscheint auf den Hub-Detailseiten.{" "}
+            <a href="/api/outlook/connect" className="text-primary underline">
+              Anderes Konto verbinden
+            </a>
+          </p>
+        ) : outlookReady ? (
+          <p className="text-sm text-muted-foreground">
+            Noch nicht verbunden.{" "}
+            <a
+              href="/api/outlook/connect"
+              className="font-medium text-primary underline"
+            >
+              Jetzt mit Microsoft anmelden
+            </a>{" "}
+            — danach zeigt die App den E-Mail-Verlauf mit den PDLs an den Hubs.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Einrichtung nötig: App-Registrierung im Microsoft-365-Portal
+            anlegen und <code>MS_CLIENT_ID</code>/<code>MS_CLIENT_SECRET</code>{" "}
+            als Env-Variablen setzen (siehe .env.example).
+          </p>
+        )}
+      </div>
 
       <details className="group rounded-xl border bg-card shadow-sm">
         <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold select-none">

@@ -21,6 +21,8 @@ import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
 import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
 import { splitPdlEmails, splitPdlNames, splitPdlPhones } from "@/lib/pdl";
+import { mailsWith, outlookConfigured } from "@/lib/outlook";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,13 @@ export default async function HubDetailPage({
 
   const tasks = taskRows ?? [];
   const doneTaskIds = new Set((checkRows ?? []).map((c) => c.task_id));
+
+  // E-Mail-Verlauf mit der PDL (nur wenn Outlook verbunden ist).
+  const pdlEmails = splitPdlEmails(hub.pdl_email);
+  const mails =
+    outlookConfigured() && pdlEmails.length > 0
+      ? await mailsWith(pdlEmails, 6)
+      : null;
 
   const flyers = (deliveries ?? []).reduce((s, d) => s + (d.flyer_count ?? 0), 0);
   const aufsteller = (deliveries ?? []).reduce(
@@ -171,6 +180,57 @@ export default async function HubDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* E-Mail-Verlauf mit der PDL (Outlook-Anbindung) */}
+      {mails !== null && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-5">
+            <div>
+              <p className="font-medium">
+                E-Mail-Verlauf mit der {pdlRoleLabel(hub.name)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Letzte Mails mit {pdlEmails.join(", ")} aus dem verbundenen
+                Outlook-Konto.
+              </p>
+            </div>
+            {mails.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Keine Mails mit dieser Adresse gefunden.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {mails.map((m) => (
+                  <li
+                    key={m.id}
+                    className="flex flex-col gap-0.5 rounded-lg border bg-background px-3 py-2.5"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <a
+                        href={m.webLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(
+                          "min-w-0 truncate text-sm hover:text-primary hover:underline",
+                          !m.isRead && "font-semibold",
+                        )}
+                      >
+                        {m.subject}
+                      </a>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {new Date(m.receivedAt).toLocaleDateString("de-DE")}
+                      </span>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {m.from} · {m.preview}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Notizen & offene To-dos zu diesem Standort */}
       <Card>

@@ -371,6 +371,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["flyer_actions"]["Insert"]>;
         Relationships: [];
       };
+      ms_oauth_tokens: {
+        Row: {
+          id: string;
+          account_email: string | null;
+          refresh_token: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          account_email?: string | null;
+          refresh_token: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["ms_oauth_tokens"]["Insert"]
+        >;
+        Relationships: [];
+      };
       hub_notes: {
         Row: {
           id: string;
