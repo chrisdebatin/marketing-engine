@@ -1,7 +1,7 @@
 // Marketing-Engine service worker – app-shell caching for offline load.
 // Data writes are handled offline by the IndexedDB sync queue, not here.
 
-const CACHE = "marketing-engine-v1";
+const CACHE = "marketing-engine-v2";
 const APP_SHELL = ["/", "/offline", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
