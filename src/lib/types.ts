@@ -396,6 +396,7 @@ export interface Database {
           text: string;
           is_todo: boolean;
           done_at: string | null;
+          topic_id: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -404,9 +405,24 @@ export interface Database {
           text: string;
           is_todo?: boolean;
           done_at?: string | null;
+          topic_id?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["hub_notes"]["Insert"]>;
+        Relationships: [];
+      };
+      note_topics: {
+        Row: {
+          id: string;
+          title: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["note_topics"]["Insert"]>;
         Relationships: [];
       };
       hub_tasks: {

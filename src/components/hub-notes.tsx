@@ -12,8 +12,16 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   createHubNote,
@@ -26,8 +34,18 @@ export interface HubNoteRow {
   text: string;
   is_todo: boolean;
   done_at: string | null;
+  topic_id?: string | null;
   created_at: string | null;
 }
+
+export interface NoteTopic {
+  id: string;
+  title: string;
+}
+
+/** Sentinel-Werte für die Themen-Auswahl im Formular. */
+const TOPIC_NONE = "__none__";
+const TOPIC_NEW = "__new__";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "";
@@ -43,13 +61,25 @@ function formatDate(iso: string | null): string {
 export function HubNotes({
   hubId,
   initial,
+  topics = [],
 }: {
   hubId: string;
   initial: HubNoteRow[];
+  topics?: NoteTopic[];
 }) {
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState("");
   const [asTodo, setAsTodo] = useState(false);
+  const [topicChoice, setTopicChoice] = useState<string>(TOPIC_NONE);
+  const [newTopic, setNewTopic] = useState("");
+
+  const topicItems: Record<string, string> = {
+    [TOPIC_NONE]: "Allgemein (kein Thema)",
+    ...Object.fromEntries(topics.map((t) => [t.id, t.title])),
+    [TOPIC_NEW]: "+ Neues Thema…",
+  };
+  const topicTitle = (id: string | null | undefined) =>
+    topics.find((t) => t.id === id)?.title ?? null;
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -63,12 +93,24 @@ export function HubNotes({
   const openCount = initial.filter((n) => n.is_todo && !n.done_at).length;
 
   function create() {
+    const topicTitleToSend =
+      topicChoice === TOPIC_NEW
+        ? newTopic
+        : topicChoice === TOPIC_NONE
+          ? ""
+          : (topicTitle(topicChoice) ?? "");
     startTransition(async () => {
-      const res = await createHubNote({ hub_id: hubId, text, is_todo: asTodo });
+      const res = await createHubNote({
+        hub_id: hubId,
+        text,
+        is_todo: asTodo,
+        topic_title: topicTitleToSend,
+      });
       if (res.ok) {
         toast.success(asTodo ? "To-do angelegt" : "Notiz gespeichert");
         setText("");
         setAsTodo(false);
+        if (topicChoice === TOPIC_NEW) setNewTopic("");
       } else {
         toast.error(res.error);
       }
@@ -123,6 +165,34 @@ export function HubNotes({
           rows={2}
           maxLength={2000}
         />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Select
+            items={topicItems}
+            value={topicChoice}
+            onValueChange={(v) => setTopicChoice(v ?? TOPIC_NONE)}
+          >
+            <SelectTrigger className="sm:w-64">
+              <SelectValue placeholder="Thema wählen…" />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(topicItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {topicChoice === TOPIC_NEW && (
+            <Input
+              value={newTopic}
+              onChange={(e) => setNewTopic(e.target.value)}
+              placeholder="Neues Thema, z. B. Recare"
+              autoComplete="off"
+              maxLength={80}
+              className="sm:flex-1"
+            />
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex cursor-pointer items-center gap-2 text-sm">
             <input
@@ -137,7 +207,11 @@ export function HubNotes({
             type="button"
             size="sm"
             className="ml-auto"
-            disabled={pending || !text.trim()}
+            disabled={
+              pending ||
+              !text.trim() ||
+              (topicChoice === TOPIC_NEW && !newTopic.trim())
+            }
             onClick={create}
           >
             <Plus className="size-4" />
@@ -234,6 +308,11 @@ export function HubNotes({
                         </p>
                         <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                           {formatDate(n.created_at)}
+                          {topicTitle(n.topic_id) && (
+                            <Badge variant="secondary">
+                              {topicTitle(n.topic_id)}
+                            </Badge>
+                          )}
                           {n.is_todo && !done && (
                             <Badge
                               variant="outline"

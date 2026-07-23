@@ -9,6 +9,7 @@ type Result = { ok: true } | { ok: false; error: string };
 function revalidate() {
   revalidatePath("/hubs");
   revalidatePath("/hubs/[id]", "page");
+  revalidatePath("/themen");
 }
 
 /** MD-Scoping: Zugriff nur auf eigene Hubs (Admin: alle). */
@@ -32,10 +33,49 @@ function missingTableError(code?: string): Result | null {
   return null;
 }
 
+/**
+ * Thema per Titel auflösen; existiert es (case-insensitive) nicht, wird es
+ * angelegt. Leerer Titel → null (allgemeine Notiz).
+ */
+async function resolveTopicId(
+  title: string | undefined,
+): Promise<{ ok: true; topicId: string | null } | { ok: false; error: string }> {
+  const clean = (title ?? "").trim();
+  if (!clean) return { ok: true, topicId: null };
+  if (clean.length > 80) {
+    return { ok: false, error: "Thema zu lang (max. 80 Zeichen)." };
+  }
+  const admin = createAdminClient();
+  const { data: existing, error: findErr } = await admin
+    .from("note_topics")
+    .select("id, title")
+    .ilike("title", clean)
+    .maybeSingle();
+  if (findErr) {
+    return (
+      (missingTableError(findErr.code) as { ok: false; error: string } | null) ?? {
+        ok: false,
+        error: "Thema konnte nicht geladen werden.",
+      }
+    );
+  }
+  if (existing) return { ok: true, topicId: existing.id };
+  const { data: created, error: insErr } = await admin
+    .from("note_topics")
+    .insert({ title: clean })
+    .select("id")
+    .single();
+  if (insErr || !created) {
+    return { ok: false, error: "Thema konnte nicht angelegt werden." };
+  }
+  return { ok: true, topicId: created.id };
+}
+
 export async function createHubNote(input: {
   hub_id: string;
   text: string;
   is_todo: boolean;
+  topic_title?: string;
 }): Promise<Result> {
   const hubId = (input.hub_id ?? "").trim();
   const text = (input.text ?? "").trim();
@@ -47,11 +87,15 @@ export async function createHubNote(input: {
   const access = await checkHubAccess(hubId);
   if (!access.ok) return access;
 
+  const topic = await resolveTopicId(input.topic_title);
+  if (!topic.ok) return topic;
+
   const admin = createAdminClient();
   const { error } = await admin.from("hub_notes").insert({
     hub_id: hubId,
     text,
     is_todo: Boolean(input.is_todo),
+    topic_id: topic.topicId,
   });
   if (error) {
     return (

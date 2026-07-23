@@ -13,6 +13,7 @@ const NAV = [
   { href: "/karte", label: "Karte" },
   { href: "/lieferungen", label: "Lieferungen" },
   { href: "/flyeraktionen", label: "Flyeraktionen" },
+  { href: "/themen", label: "Themen" },
   { href: "/patienten", label: "Patienten" },
   { href: "/assistant", label: "Assistant" },
 ];

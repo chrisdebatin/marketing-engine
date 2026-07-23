@@ -45,6 +45,7 @@ export default async function HubDetailPage({
     { data: taskRows },
     { data: checkRows },
     { data: noteRows },
+    { data: topicRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -56,12 +57,13 @@ export default async function HubDetailPage({
     admin.from("delivery_placements").select("id").eq("hub_id", id),
     admin.from("hub_tasks").select("id, title").order("created_at"),
     admin.from("hub_task_checks").select("task_id").eq("hub_id", id),
-    // Fallback ?? [] — fehlt Migration 0021, darf die Seite nicht crashen.
+    // select("*"): tolerant gegenüber fehlenden Migrationen (0021/0024).
     admin
       .from("hub_notes")
-      .select("id, text, is_todo, done_at, created_at")
+      .select("*")
       .eq("hub_id", id)
       .order("created_at", { ascending: false }),
+    admin.from("note_topics").select("id, title").order("title"),
   ]);
 
   const tasks = taskRows ?? [];
@@ -235,7 +237,11 @@ export default async function HubDetailPage({
       {/* Notizen & offene To-dos zu diesem Standort */}
       <Card>
         <CardContent className="p-5">
-          <HubNotes hubId={hub.id} initial={noteRows ?? []} />
+          <HubNotes
+            hubId={hub.id}
+            initial={noteRows ?? []}
+            topics={topicRows ?? []}
+          />
         </CardContent>
       </Card>
 
