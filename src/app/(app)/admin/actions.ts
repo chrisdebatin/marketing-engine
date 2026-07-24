@@ -14,21 +14,29 @@ export async function updateHubPdl(formData: FormData) {
   const pdlEmail = String(formData.get("pdl_email") ?? "").trim();
   const pdlPhone = String(formData.get("pdl_phone") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
+  const ikNummer = String(formData.get("ik_nummer") ?? "").trim();
   if (!hubId) return;
 
+  const patch = {
+    pdl_name: pdlName || null,
+    pdl_email: pdlEmail || null,
+    pdl_phone: pdlPhone || null,
+    address: address || null,
+  };
   const supabase = await createClient();
-  await supabase
+  const { error } = await supabase
     .from("hubs")
-    .update({
-      pdl_name: pdlName || null,
-      pdl_email: pdlEmail || null,
-      pdl_phone: pdlPhone || null,
-      address: address || null,
-    })
+    .update({ ...patch, ik_nummer: ikNummer || null })
     .eq("id", hubId);
+  // Spalte ik_nummer existiert erst nach Migration 0025 — bis dahin die
+  // übrigen Felder trotzdem speichern.
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    await supabase.from("hubs").update(patch).eq("id", hubId);
+  }
 
   revalidatePath("/admin");
   revalidatePath("/hubs");
+  revalidatePath("/hubs/[id]", "page");
 }
 
 type Result = { ok: true } | { ok: false; error: string };

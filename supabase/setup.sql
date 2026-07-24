@@ -750,6 +750,14 @@ alter table public.hub_notes
 create index if not exists hub_notes_topic_idx on public.hub_notes (topic_id);
 
 -- ============================================================
+-- 0025_hub_ik.sql
+-- ============================================================
+-- IK-Nummer (Institutionskennzeichen) je Hub/Standort — u. a. Grundlage
+-- für das geplante Recare-Feature. Altbestand: null.
+alter table public.hubs
+  add column if not exists ik_nummer text;
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

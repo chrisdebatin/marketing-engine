@@ -111,7 +111,7 @@ export default async function AdminPage() {
       supabase
         .from("hubs")
         .select(
-          "id, name, region, address, responsible_md, pdl_name, pdl_email, pdl_phone, share_token, created_at",
+          "*",
         )
         .order("responsible_md")
         .order("name"),
@@ -457,7 +457,7 @@ export default async function AdminPage() {
                   // keying the form by those values remounts it so the new values
                   // become fresh defaults instead of tripping base-ui's "changing
                   // the default value of an initialized uncontrolled FieldControl".
-                  key={`${h.pdl_name ?? ""}|${h.pdl_email ?? ""}|${h.pdl_phone ?? ""}|${h.address ?? ""}`}
+                  key={`${h.pdl_name ?? ""}|${h.pdl_email ?? ""}|${h.pdl_phone ?? ""}|${h.address ?? ""}|${h.ik_nummer ?? ""}`}
                   action={updateHubPdl}
                   className="flex flex-col gap-3 border-t pt-4"
                 >
@@ -504,6 +504,16 @@ export default async function AdminPage() {
                         type="tel"
                         defaultValue={h.pdl_phone ?? ""}
                         placeholder="z. B. 030 1234567, 0171 2345678"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-muted-foreground">
+                        IK-Nummer (optional)
+                      </label>
+                      <Input
+                        name="ik_nummer"
+                        defaultValue={h.ik_nummer ?? ""}
+                        placeholder="z. B. 460 123 456"
                       />
                     </div>
                     <Button type="submit" variant="outline">

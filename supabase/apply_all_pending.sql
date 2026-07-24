@@ -72,6 +72,10 @@ alter table public.hub_notes
   add column if not exists topic_id uuid references public.note_topics (id) on delete cascade;
 create index if not exists hub_notes_topic_idx on public.hub_notes (topic_id);
 
+-- ── 0025: IK-Nummer je Hub/Standort ─────────────────────────────────
+alter table public.hubs
+  add column if not exists ik_nummer text;
+
 -- ── 0023: Outlook-Anbindung (OAuth-Token-Speicher) ──────────────────
 create table if not exists public.ms_oauth_tokens (
   id            text primary key default 'default',

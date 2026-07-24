@@ -129,6 +129,11 @@ export default async function HubDetailPage({
           <div className="grid gap-3 sm:grid-cols-2">
             <Detail label="Adresse" icon={MapPin} value={hub.address} />
             <Detail
+              label="IK-Nummer"
+              icon={Building2}
+              value={hub.ik_nummer ?? null}
+            />
+            <Detail
               label={`Lokale ${pdlRoleLabel(hub.name)}`}
               icon={User}
               value={splitPdlNames(hub.pdl_name).join(" & ") || null}

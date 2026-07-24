@@ -25,6 +25,7 @@ export interface Database {
           pdl_name: string | null;
           pdl_email: string | null;
           pdl_phone: string | null;
+          ik_nummer: string | null;
           share_token: string;
           created_at: string;
         };
@@ -37,6 +38,7 @@ export interface Database {
           pdl_name?: string | null;
           pdl_email?: string | null;
           pdl_phone?: string | null;
+          ik_nummer?: string | null;
           share_token?: string;
           created_at?: string;
         };
@@ -49,6 +51,7 @@ export interface Database {
           pdl_name?: string | null;
           pdl_email?: string | null;
           pdl_phone?: string | null;
+          ik_nummer?: string | null;
           share_token?: string;
           created_at?: string;
         };
