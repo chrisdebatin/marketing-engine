@@ -2,7 +2,25 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Check, MapPin, Pencil, Phone, Package, Users } from "lucide-react";
+import {
+  CalendarClock,
+  Check,
+  ListTodo,
+  MapPin,
+  Pencil,
+  Phone,
+  Package,
+  Plus,
+  Users,
+} from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PLACE_KINDS } from "@/lib/places";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +103,52 @@ export function CrmVisitList({
   const [note, setNote] = useState("");
   const [recare, setRecare] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  // Eigenen Ort hinzufügen
+  const [addOpen, setAddOpen] = useState(false);
+  const [aName, setAName] = useState("");
+  const [aKategorie, setAKategorie] = useState("");
+  const [aAdresse, setAAdresse] = useState("");
+  const [aOrt, setAOrt] = useState("");
+  const [aInfo, setAInfo] = useState("");
+
+  async function addPlace() {
+    if (saving || !aName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/public/crm-target", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          name: aName,
+          kategorie: aKategorie,
+          adresse: aAdresse,
+          ort: aOrt,
+          info: aInfo,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        target?: VisitTarget;
+      };
+      if (!res.ok || !body.target) {
+        toast.error(body.error ?? "Speichern fehlgeschlagen.");
+        return;
+      }
+      setTargets((prev) => [...prev, body.target!]);
+      setAddOpen(false);
+      setAName("");
+      setAAdresse("");
+      setAOrt("");
+      setAInfo("");
+      toast.success("Ort zur Liste hinzugefügt");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Inline-Bearbeitung eines Klinik-Eintrags
   const [editFor, setEditFor] = useState<string | null>(null);
   const [eName, setEName] = useState("");
@@ -151,8 +215,25 @@ export function CrmVisitList({
   const sorted = [...targets].sort(
     (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "de"),
   );
-  const openCount = sorted.filter((t) => rank(t) < 2).length;
+  const pendingList = sorted.filter((t) => rank(t) < 2);
+  const doneList = sorted.filter((t) => rank(t) === 2);
+  const openCount = pendingList.length;
   const goalPct = Math.min(100, Math.round((weekCount / WEEKLY_GOAL) * 100));
+
+  type Row = VisitTarget | { header: string; count: number };
+  const rows: Row[] = [
+    { header: "Noch ausstehend", count: pendingList.length },
+    ...pendingList,
+    ...(doneList.length > 0
+      ? [
+          {
+            header: "Erledigt — nächster Termin steht",
+            count: doneList.length,
+          } as Row,
+        ]
+      : []),
+    ...doneList,
+  ];
 
   async function logContact(t: VisitTarget) {
     if (saving || !art) return;
@@ -204,7 +285,7 @@ export function CrmVisitList({
       <div className="flex flex-col gap-1.5 rounded-xl border bg-card p-4 shadow-sm">
         <div className="flex items-baseline justify-between text-sm">
           <span className="font-medium">
-            Wochenziel: {WEEKLY_GOAL} Klinik-Kontakte
+            Wochenziel: {WEEKLY_GOAL} Kontakte
           </span>
           <span className="font-semibold tabular-nums">
             {weekCount}
@@ -230,19 +311,123 @@ export function CrmVisitList({
         </span>
       </div>
 
-      {targets.length === 0 ? (
+      {/* Eigenen Ort zur Liste hinzufügen */}
+      <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm text-muted-foreground">
-          Aktuell sind Ihnen keine Kliniken zugeteilt.
-        </p>
-      ) : (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {openCount > 0
-              ? `${openCount} ${openCount === 1 ? "Klinik ist" : "Kliniken sind"} dran — Kontakt aufnehmen und unten loggen.`
+          {targets.length === 0
+            ? "Ihre Liste ist noch leer — fügen Sie Orte hinzu, die Sie anfahren möchten."
+            : openCount > 0
+              ? `${openCount} ${openCount === 1 ? "Ort ist" : "Orte sind"} dran — Kontakt aufnehmen und loggen.`
               : "Alles erledigt — die nächsten Termine stehen unten."}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => setAddOpen((v) => !v)}
+        >
+          <Plus className="size-4" />
+          Ort hinzufügen
+        </Button>
+      </div>
+
+      {addOpen && (
+        <div className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm">
+          <p className="text-sm font-medium">
+            Eigenen Ort zur Liste hinzufügen
           </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={aName}
+              onChange={(e) => setAName(e.target.value)}
+              placeholder="Name, z. B. Hausarztpraxis Dr. Weber"
+              maxLength={200}
+              className="sm:flex-1"
+            />
+            <Select
+              items={{
+                "": "Kategorie (optional)",
+                ...Object.fromEntries(PLACE_KINDS.map((p) => [p.key, p.label])),
+              }}
+              value={aKategorie}
+              onValueChange={(v) => setAKategorie(v ?? "")}
+            >
+              <SelectTrigger className="sm:w-56">
+                <SelectValue placeholder="Kategorie (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                {PLACE_KINDS.map((p) => (
+                  <SelectItem key={p.key} value={p.key}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Input
+              value={aAdresse}
+              onChange={(e) => setAAdresse(e.target.value)}
+              placeholder="Adresse (Straße + Nr.)"
+              maxLength={200}
+              className="sm:flex-1"
+            />
+            <Input
+              value={aOrt}
+              onChange={(e) => setAOrt(e.target.value)}
+              placeholder="Ort/Stadt"
+              maxLength={120}
+              className="sm:w-44"
+            />
+          </div>
+          <Input
+            value={aInfo}
+            onChange={(e) => setAInfo(e.target.value)}
+            placeholder="Info (optional), z. B. warum dieser Ort"
+            maxLength={500}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={saving || !aName.trim()}
+              onClick={() => void addPlace()}
+            >
+              {saving ? "Speichere…" : "Zur Liste hinzufügen"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={saving}
+              onClick={() => setAddOpen(false)}
+            >
+              Abbrechen
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {targets.length === 0 ? null : (
+        <>
           <ul className="flex flex-col gap-2">
-            {sorted.map((t) => {
+            {rows.map((row, idx) => {
+              if ("header" in row) {
+                return (
+                  <li
+                    key={`h-${idx}`}
+                    className={cn(
+                      "flex items-center gap-1.5 text-sm font-semibold",
+                      idx > 0 && "mt-3",
+                    )}
+                  >
+                    <ListTodo className="size-4 text-primary" />
+                    {row.header} ({row.count})
+                  </li>
+                );
+              }
+              const t = row;
               const status = crmStatus(t, today);
               const done = status === "geplant";
               const logOpen = logFor === t.id;

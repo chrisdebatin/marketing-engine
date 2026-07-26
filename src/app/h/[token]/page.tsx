@@ -229,8 +229,8 @@ export default async function HubShareLinkPage({
         title="So nutzen Sie diese Seite — 3 Reiter oben:"
         steps={[
           <>
-            <strong className="text-foreground">Meine Kliniken:</strong> Ihre
-            Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt loggen
+            <strong className="text-foreground">Meine Orte:</strong> Ihre
+            To-do-Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt loggen
             (Ziel: 4 pro Woche). Eine geloggte Box zählt automatisch als
             Box-Lieferort.
           </>,
@@ -252,19 +252,19 @@ export default async function HubShareLinkPage({
         tabs={[
           {
             id: "kliniken",
-            label: "Meine Kliniken",
+            label: "Meine Orte",
             badge: dueCount,
             content: (
               <div className="flex flex-col gap-5">
                 <div>
                   <h2 className="text-xl font-semibold">
-                    Ihre Kliniken-Liste
+                    Ihre Orte-Liste (To-do)
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Diese Kliniken sollen Sie kontaktieren — Sie entscheiden,
-                    ob Box, persönlicher Besuch oder Anruf. Wichtig: jeden
-                    Kontakt loggen; das nächste Gespräch wird automatisch
-                    terminiert.
+                    Vorgegebene Kliniken plus eigene Orte, die Sie anfahren
+                    möchten. Sie entscheiden, ob Box, persönlicher Besuch
+                    oder Anruf — wichtig: jeden Kontakt loggen; der nächste
+                    Termin wird automatisch gesetzt.
                   </p>
                 </div>
                 <CrmVisitList
