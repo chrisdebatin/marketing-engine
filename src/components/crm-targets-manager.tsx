@@ -23,7 +23,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PLACE_KINDS, placeKindLabel } from "@/lib/places";
-import { crmStatus, formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
+import {
+  crmStatus,
+  formatIsoDate,
+  kontaktArtLabel,
+  PLAN_ARTEN,
+  planLabel,
+  todayIso,
+} from "@/lib/crm";
 import {
   createCrmTarget,
   deleteCrmTarget,
@@ -46,6 +53,7 @@ export interface CrmTargetRow {
   ansprechpartner?: string | null;
   letzte_kontakt_art?: string | null;
   recare_partner?: boolean | null;
+  plan?: string | null;
 }
 
 export interface HubOption {
@@ -55,6 +63,7 @@ export interface HubOption {
 
 const HUB_NONE = "__none__";
 const KAT_NONE = "__none__";
+const PLAN_NONE = "__none__";
 
 function StatusBadge({ t }: { t: CrmTargetRow }) {
   const status = crmStatus(t, todayIso());
@@ -100,10 +109,15 @@ export function CrmTargetsManager({
     [KAT_NONE]: "Kategorie (optional)",
     ...Object.fromEntries(PLACE_KINDS.map((p) => [p.key, p.label])),
   };
+  const planItems = {
+    [PLAN_NONE]: "To-do (optional)",
+    ...Object.fromEntries(PLAN_ARTEN.map((p) => [p.key, p.label])),
+  };
 
   // Neuer Ziel-Ort
   const [name, setName] = useState("");
   const [kategorie, setKategorie] = useState(KAT_NONE);
+  const [plan, setPlan] = useState(PLAN_NONE);
   const [adresse, setAdresse] = useState("");
   const [ort, setOrt] = useState("");
   const [hubId, setHubId] = useState(HUB_NONE);
@@ -129,6 +143,7 @@ export function CrmTargetsManager({
         adresse,
         ort,
         note,
+        plan: plan === PLAN_NONE ? "" : plan,
         intervall_wochen: intervall,
       });
       if (res.ok) {
@@ -170,6 +185,7 @@ export function CrmTargetsManager({
         adresse: edit.adresse ?? "",
         ort: edit.ort ?? "",
         note: edit.note ?? "",
+        plan: edit.plan ?? "",
         intervall_wochen: edit.intervall_wochen,
       });
       if (res.ok) {
@@ -297,6 +313,22 @@ export function CrmTargetsManager({
             </SelectTrigger>
             <SelectContent>
               {Object.entries(katItems).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            items={planItems}
+            value={plan}
+            onValueChange={(v) => setPlan(v ?? PLAN_NONE)}
+          >
+            <SelectTrigger className="sm:w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(planItems).map(([value, label]) => (
                 <SelectItem key={value} value={value}>
                   {label}
                 </SelectItem>
@@ -465,6 +497,14 @@ export function CrmTargetsManager({
                                 ? "kein Recare"
                                 : "Recare?"}
                           </Badge>
+                          {t.plan && (
+                            <Badge
+                              variant="outline"
+                              className="border-primary/40 bg-primary/10 text-primary"
+                            >
+                              To-do: {planLabel(t.plan)}
+                            </Badge>
+                          )}
                           <StatusBadge t={t} />
                           <Button
                             type="button"
@@ -534,6 +574,29 @@ export function CrmTargetsManager({
                               </SelectTrigger>
                               <SelectContent>
                                 {Object.entries(katItems).map(
+                                  ([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ),
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              items={planItems}
+                              value={edit.plan ?? PLAN_NONE}
+                              onValueChange={(v) =>
+                                setEdit({
+                                  ...edit,
+                                  plan: v === PLAN_NONE ? null : v,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="sm:w-56">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(planItems).map(
                                   ([value, label]) => (
                                     <SelectItem key={value} value={value}>
                                       {label}

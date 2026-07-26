@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { KONTAKT_ARTEN, todayIso } from "@/lib/crm";
+import { KONTAKT_ARTEN } from "@/lib/crm";
+import {
+  isMissingColumn,
+  logContactOnTarget,
+  TARGET_COLS,
+} from "@/lib/crm-log";
 
 export const runtime = "nodejs";
-
-// Spalten/Tabellen aus 0027 fehlen evtl. noch — dann ohne sie weitermachen.
-function isMissingColumn(err: { code?: string } | null): boolean {
-  return (
-    err?.code === "PGRST204" || err?.code === "42703" || err?.code === "PGRST205"
-  );
-}
 
 // Public, token-gated: Die PDL loggt einen Kontakt (Box/Besuch/Anruf) mit
 // Ansprechpartner und Gesprächsnotiz. letzter_besuch = heute;
@@ -36,7 +34,7 @@ export async function POST(req: Request) {
   }
   if (!KONTAKT_ARTEN.some((k) => k.key === kontaktArt)) {
     return NextResponse.json(
-      { error: "Bitte wählen: Box, Besuch oder Anruf." },
+      { error: "Bitte wählen: Box, Flyer, Besuch oder Anruf." },
       { status: 400 },
     );
   }
@@ -53,104 +51,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
   }
 
-  const { data: target } = await admin
-    .from("crm_targets")
-    .select("id, hub_id, intervall_wochen")
-    .eq("id", id)
-    .maybeSingle();
-
-  if (!target || target.hub_id !== hub.id) {
-    return NextResponse.json(
-      { error: "Ziel-Ort nicht gefunden." },
-      { status: 404 },
-    );
-  }
-
-  const today = todayIso();
-  const next = new Date();
-  next.setDate(next.getDate() + (target.intervall_wochen || 4) * 7);
-  const naechster = next.toISOString().slice(0, 10);
-  const ansprechpartner = (body.ansprechpartner ?? "").trim().slice(0, 200);
-  const note = (body.note ?? "").trim().slice(0, 1000);
-
-  const base = {
-    letzter_besuch: today,
-    naechster_besuch: naechster,
-    besuchs_notiz: note || null,
-  };
-  // Recare-Antwort der PDL ("ja"/"nein"; leer = keine Änderung).
-  const recare = (body.recare ?? "").trim();
-  const recarePatch =
-    recare === "ja"
-      ? { recare_partner: true }
-      : recare === "nein"
-        ? { recare_partner: false }
-        : {};
-
-  const selectCols =
-    "id, name, kategorie, adresse, ort, note, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
-  let { data: updated, error: updErr } = await admin
-    .from("crm_targets")
-    .update({
-      ...base,
-      ...recarePatch,
-      ansprechpartner: ansprechpartner || null,
-      letzte_kontakt_art: kontaktArt,
-    })
-    .eq("id", id)
-    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner`)
-    .single();
-  if (updErr && isMissingColumn(updErr)) {
-    ({ data: updated, error: updErr } = await admin
-      .from("crm_targets")
-      .update(base)
-      .eq("id", id)
-      .select(selectCols)
-      .single());
-  }
-
-  if (updErr || !updated) {
-    return NextResponse.json(
-      { error: "Speichern fehlgeschlagen." },
-      { status: 500 },
-    );
-  }
-
-  // Kontakt-Log (Wochenziel-Zählung); tolerant, falls 0027 noch fehlt.
-  await admin.from("crm_contacts").insert({
-    target_id: target.id,
-    hub_id: hub.id,
-    kontakt_art: kontaktArt,
-    ansprechpartner: ansprechpartner || null,
-    note: note || null,
-    contact_date: today,
+  const result = await logContactOnTarget({
+    hubId: hub.id,
+    targetId: id,
+    kontaktArt,
+    ansprechpartner: body.ansprechpartner,
+    note: body.note,
+    recare: body.recare,
   });
-
-  // "Box vorbeigebracht" zählt automatisch als Box-Liefer-Ort — kein
-  // doppeltes Loggen im Auslage-Tab nötig (Karte/Statistik stimmen mit).
-  let placementCreated = false;
-  if (kontaktArt === "box") {
-    const { data: full } = await admin
-      .from("crm_targets")
-      .select("name, kategorie, adresse, ort")
-      .eq("id", id)
-      .single();
-    if (full) {
-      const { error: plErr } = await admin.from("delivery_placements").insert({
-        hub_id: hub.id,
-        delivery_id: null,
-        standort_name: full.name,
-        menge: null,
-        kind: "box",
-        place_kind: full.kategorie ?? "krankenhaus",
-        adresse: full.adresse ?? null,
-        ort: full.ort ?? null,
-      });
-      placementCreated = !plErr;
-    }
+  if (!result.ok) {
+    return NextResponse.json(
+      { error: result.error },
+      { status: result.error === "Ziel-Ort nicht gefunden." ? 404 : 500 },
+    );
   }
-
-  return NextResponse.json({ target: updated, placementCreated });
+  return NextResponse.json({
+    target: result.data.target,
+    placementCreated: result.data.placementCreated,
+  });
 }
 
 // Letzten geloggten Kontakt wieder löschen (Versehen/Test). Der Eintrag
@@ -251,13 +169,12 @@ export async function DELETE(req: Request) {
     extra = { letzte_kontakt_art: null };
   }
 
-  const selectCols =
-    "id, name, kategorie, adresse, ort, note, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
+  const selectCols = TARGET_COLS;
   let { data: updated, error: updErr } = await admin
     .from("crm_targets")
     .update({ ...base, ...extra })
     .eq("id", id)
-    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner`)
+    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner, plan`)
     .single();
   if (updErr && isMissingColumn(updErr)) {
     ({ data: updated, error: updErr } = await admin
@@ -344,13 +261,12 @@ export async function PUT(req: Request) {
         : {}),
   };
 
-  const selectCols =
-    "id, name, kategorie, adresse, ort, note, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
+  const selectCols = TARGET_COLS;
   let { data: updated, error: updErr } = await admin
     .from("crm_targets")
     .update({ ...base, ...extra })
     .eq("id", id)
-    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner`)
+    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner, plan`)
     .single();
   if (updErr && isMissingColumn(updErr)) {
     ({ data: updated, error: updErr } = await admin

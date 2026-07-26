@@ -28,6 +28,7 @@ export function formatIsoDate(iso: string | null): string {
 /** Kontakt-Arten, die die PDL beim Loggen wählt. */
 export const KONTAKT_ARTEN = [
   { key: "box", label: "Box vorbeigebracht" },
+  { key: "flyer", label: "Flyer ausgelegt" },
   { key: "besuch", label: "Persönlicher Besuch" },
   { key: "anruf", label: "Anruf" },
 ] as const;
@@ -35,5 +36,18 @@ export const KONTAKT_ARTEN = [
 export function kontaktArtLabel(key: string | null | undefined): string {
   if (!key) return "";
   return KONTAKT_ARTEN.find((k) => k.key === key)?.label ?? key;
+}
+
+/** Was laut Plan an einen Ziel-Ort geliefert/gemacht werden soll (To-do). */
+export const PLAN_ARTEN = [
+  { key: "box", label: "Box vorbeibringen" },
+  { key: "flyer", label: "Flyer auslegen" },
+  { key: "besuch", label: "Persönlich vorstellen" },
+  { key: "anruf", label: "Anrufen" },
+] as const;
+
+export function planLabel(key: string | null | undefined): string {
+  if (!key) return "";
+  return PLAN_ARTEN.find((k) => k.key === key)?.label ?? key;
 }
 

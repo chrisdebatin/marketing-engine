@@ -40,3 +40,15 @@ select count(*) as crm_contacts_rows from public.crm_contacts;
 alter table public.hubs add column if not exists md_email text;
 
 notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 0029: crm_targets.plan + Kontakt-Art "flyer"
+-- ============================================================
+alter table public.crm_targets add column if not exists plan text
+  check (plan in ('box', 'flyer', 'besuch', 'anruf'));
+
+alter table public.crm_contacts drop constraint if exists crm_contacts_kontakt_art_check;
+alter table public.crm_contacts add constraint crm_contacts_kontakt_art_check
+  check (kontakt_art in ('box', 'flyer', 'besuch', 'anruf'));
+
+notify pgrst, 'reload schema';

@@ -24,12 +24,15 @@ function missingTableError(code?: string): Result | null {
   return null;
 }
 
+const PLAN_KEYS = ["box", "flyer", "besuch", "anruf"] as const;
+
 function cleanTarget(input: {
   name?: string;
   kategorie?: string;
   adresse?: string;
   ort?: string;
   note?: string;
+  plan?: string;
   intervall_wochen?: number | string;
 }):
   | {
@@ -40,6 +43,7 @@ function cleanTarget(input: {
         adresse: string | null;
         ort: string | null;
         note: string | null;
+        plan: string | null;
         intervall_wochen: number;
       };
     }
@@ -62,9 +66,17 @@ function cleanTarget(input: {
       adresse: (input.adresse ?? "").trim().slice(0, 200) || null,
       ort: (input.ort ?? "").trim().slice(0, 120) || null,
       note: (input.note ?? "").trim().slice(0, 1000) || null,
+      plan: PLAN_KEYS.includes((input.plan ?? "").trim() as (typeof PLAN_KEYS)[number])
+        ? (input.plan ?? "").trim()
+        : null,
       intervall_wochen: intervall,
     },
   };
+}
+
+/** Spalte plan fehlt bis Migration 0029 — dann ohne sie erneut versuchen. */
+function isMissingColumn(code?: string): boolean {
+  return code === "PGRST204" || code === "42703";
 }
 
 export async function createCrmTarget(input: {
@@ -74,6 +86,7 @@ export async function createCrmTarget(input: {
   adresse?: string;
   ort?: string;
   note?: string;
+  plan?: string;
   intervall_wochen?: number | string;
 }): Promise<Result> {
   await requireSession();
@@ -81,10 +94,13 @@ export async function createCrmTarget(input: {
   if (!parsed.ok) return parsed;
 
   const admin = createAdminClient();
-  const { error } = await admin.from("crm_targets").insert({
-    ...parsed.row,
-    hub_id: (input.hub_id ?? "").trim() || null,
-  });
+  const row = { ...parsed.row, hub_id: (input.hub_id ?? "").trim() || null };
+  let { error } = await admin.from("crm_targets").insert(row);
+  if (error && isMissingColumn(error.code)) {
+    ({ error } = await admin
+      .from("crm_targets")
+      .insert({ ...row, plan: undefined }));
+  }
   if (error) {
     return (
       missingTableError(error.code) ?? {
@@ -161,6 +177,7 @@ export async function updateCrmTarget(
     adresse?: string;
     ort?: string;
     note?: string;
+    plan?: string;
     intervall_wochen?: number | string;
   },
 ): Promise<Result> {
@@ -171,13 +188,14 @@ export async function updateCrmTarget(
   if (!parsed.ok) return parsed;
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("crm_targets")
-    .update({
-      ...parsed.row,
-      hub_id: (input.hub_id ?? "").trim() || null,
-    })
-    .eq("id", cleanId);
+  const row = { ...parsed.row, hub_id: (input.hub_id ?? "").trim() || null };
+  let { error } = await admin.from("crm_targets").update(row).eq("id", cleanId);
+  if (error && isMissingColumn(error.code)) {
+    ({ error } = await admin
+      .from("crm_targets")
+      .update({ ...row, plan: undefined })
+      .eq("id", cleanId));
+  }
   if (error) return { ok: false, error: "Speichern fehlgeschlagen." };
   revalidate();
   return { ok: true };

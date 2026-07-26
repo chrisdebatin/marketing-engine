@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { CalendarDays, ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PlacementBoard } from "@/components/placement-board";
 import {
   CrmVisitList,
+  type CrmLogEntry,
   type VisitTarget,
 } from "@/components/crm-visit-list";
 import { PdlTabs } from "@/components/pdl-tabs";
@@ -45,7 +45,6 @@ export default async function HubShareLinkPage({
     { data: placements },
     { data: orders },
     { data: catalogData },
-    { data: standorteData },
     { data: crmTargets },
     { data: allTargets },
     { data: allHubs },
@@ -71,11 +70,6 @@ export default async function HubShareLinkPage({
       .select("key, name, description")
       .eq("active", true)
       .order("sort_order", { ascending: true }),
-    admin
-      .from("standorte")
-      .select("name, adresse")
-      .eq("hub_id", hub.id)
-      .order("name"),
     // Fallback ?? [] — fehlt Migration 0026, darf die Seite nicht crashen.
     admin.from("crm_targets").select("*").eq("hub_id", hub.id).order("name"),
     // Für den Blick auf die anderen Standorte (nur Kliniken-Status, DSGVO ok).
@@ -139,33 +133,49 @@ export default async function HubShareLinkPage({
     (t) => crmStatus(t, todayIso()) !== "geplant",
   ).length;
 
-  // Eingabe-Vorschläge: bekannte Standorte des Hubs + frühere Einträge.
-  const suggestionMap = new Map<
-    string,
-    { name: string; adresse: string | null; ort: string | null }
-  >();
-  for (const s of standorteData ?? []) {
-    suggestionMap.set(s.name.toLowerCase(), {
-      name: s.name,
-      adresse: s.adresse ?? null,
-      ort: null,
+  // Vereintes Aktivitäts-Log: Kontakt-Log + manuell erfasste Auslagen.
+  // Auto-Auslagen (aus Box-/Flyer-Kontakten) werden per Name+Datum
+  // dedupliziert, damit nichts doppelt erscheint.
+  const targetNameOf = (id: string | null) =>
+    ownTargets.find((t) => t.id === id)?.name ?? "Unbekannter Ort";
+  const { data: logRows } = await admin
+    .from("crm_contacts")
+    .select("id, target_id, kontakt_art, ansprechpartner, note, contact_date")
+    .eq("hub_id", hub.id)
+    .order("contact_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(25);
+  const logEntries: CrmLogEntry[] = (logRows ?? []).map((c) => ({
+    id: c.id,
+    date: c.contact_date,
+    art: c.kontakt_art,
+    ort: targetNameOf(c.target_id),
+    notiz: c.note ?? null,
+    ansprechpartner: c.ansprechpartner ?? null,
+  }));
+  const contactKeys = new Set(
+    logEntries.map((e) => `${e.ort.toLowerCase()}|${e.date}`),
+  );
+  for (const p of (placements ?? []) as {
+    id: string;
+    standort_name: string;
+    kind?: string | null;
+    created_at: string | null;
+  }[]) {
+    const date = (p.created_at ?? "").slice(0, 10);
+    if (!date) continue;
+    if (contactKeys.has(`${p.standort_name.toLowerCase()}|${date}`)) continue;
+    logEntries.push({
+      id: `pl-${p.id}`,
+      date,
+      art: p.kind === "flyer" ? "flyer" : "box",
+      ort: p.standort_name,
+      notiz: null,
+      ansprechpartner: null,
     });
   }
-  for (const p of (placements ?? []) as {
-    standort_name: string;
-    adresse?: string | null;
-    ort?: string | null;
-  }[]) {
-    const key = p.standort_name.toLowerCase();
-    if (!suggestionMap.has(key)) {
-      suggestionMap.set(key, {
-        name: p.standort_name,
-        adresse: p.adresse ?? null,
-        ort: p.ort ?? null,
-      });
-    }
-  }
-  const suggestions = [...suggestionMap.values()].slice(0, 100);
+  logEntries.sort((a, b) => b.date.localeCompare(a.date));
+  logEntries.splice(20);
 
   // Second simple query for the cart positions (no embedded-relation selects),
   // then join in JS.
@@ -242,20 +252,14 @@ export default async function HubShareLinkPage({
 
       {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
       <StepBox
-        title="So nutzen Sie diese Seite — 3 Reiter oben:"
+        title="So nutzen Sie diese Seite — 2 Reiter oben:"
         steps={[
           <>
             <strong className="text-foreground">Meine Orte:</strong> Ihre
-            To-do-Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt
-            loggen. Jede geloggte Aktion zählt fürs Standort-Ranking; eine
-            geloggte Box zählt automatisch als Box-Lieferort.
-          </>,
-          <>
-            <strong className="text-foreground">
-              Flyer &amp; Boxen unterwegs:
-            </strong>{" "}
-            Nur für spontane Orte außerhalb der Liste — Apotheke, Praxis
-            &amp; Co.
+            To-do-Liste — Kliniken, Praxen, Apotheken &amp; Co. Nach jeder
+            Aktion (Box, Flyer, Besuch, Anruf) kurz loggen: am einfachsten
+            oben ins Schnell-Log schreiben, die KI erledigt den Rest. Neue
+            Orte werden automatisch angelegt.
           </>,
           <>
             <strong className="text-foreground">Material:</strong> Nachschub
@@ -302,10 +306,10 @@ export default async function HubShareLinkPage({
                     Ihre Orte-Liste (To-do)
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Vorgegebene Kliniken plus eigene Orte, die Sie anfahren
-                    möchten. Sie entscheiden, ob Box, persönlicher Besuch
-                    oder Anruf — wichtig: jeden Kontakt loggen; der nächste
-                    Termin wird automatisch gesetzt.
+                    Alles an einem Ort: vorgegebene Kliniken, eigene Orte,
+                    spontane Flyer- und Box-Stopps. Jede Aktion kurz loggen —
+                    der nächste Termin wird automatisch gesetzt, Boxen und
+                    Flyer zählen automatisch für Karte und Statistik.
                   </p>
                 </div>
                 <CrmVisitList
@@ -313,6 +317,7 @@ export default async function HubShareLinkPage({
                   initial={ownTargets}
                   initialScore={ownScore}
                   otherScores={otherScores}
+                  initialLog={logEntries}
                 />
 
                 {otherGroups.length > 0 && (
@@ -367,62 +372,6 @@ export default async function HubShareLinkPage({
                   </div>
                 )}
               </div>
-            ),
-          },
-          {
-            id: "orte",
-            label: "Flyer & Boxen unterwegs",
-            content: (
-              <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-xl font-semibold">
-            Flyer & Boxen unterwegs
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Für spontane Orte außerhalb Ihrer Kliniken-Liste — Apotheke,
-            Praxis, Sanitätshaus &amp; Co.
-          </p>
-        </div>
-        <StepBox
-          title="So geht's:"
-          steps={[
-            <>
-              Oben wählen:{" "}
-              <strong className="text-foreground">„Flyer ausgelegt&rdquo;</strong>{" "}
-              oder{" "}
-              <strong className="text-foreground">„Box geliefert&rdquo;</strong>.
-            </>,
-            <>
-              Einrichtung (z.&nbsp;B. „Apotheke am Markt&rdquo;),{" "}
-              <strong className="text-foreground">Adresse</strong>, Ort und
-              Anzahl angeben und auf{" "}
-              <strong className="text-foreground">„Hinzufügen&rdquo;</strong>{" "}
-              klicken — beim Tippen werden bekannte Standorte vorgeschlagen.
-            </>,
-            <>
-              Vertippt? Über das{" "}
-              <strong className="text-foreground">Stift-Symbol</strong> am
-              Eintrag können Sie Ort und Anzahl korrigieren oder den Eintrag
-              löschen.
-            </>,
-          ]}
-          footer={
-            <>
-              <strong className="text-foreground">Wichtig:</strong> Kliniken
-              aus Ihrer Liste bitte im Reiter „Meine Kliniken&rdquo; loggen —
-              eine dort geloggte Box zählt hier automatisch als
-              Box-Lieferort, kein doppeltes Eintragen nötig.
-            </>
-          }
-        />
-        <PlacementBoard
-          token={token}
-          initial={placements ?? []}
-          endpoint="/api/public/hub-placement"
-          allowBoxes
-          suggestions={suggestions}
-        />
-              </section>
             ),
           },
           {

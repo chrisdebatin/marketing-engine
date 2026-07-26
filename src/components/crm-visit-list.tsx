@@ -7,6 +7,8 @@ import {
   Check,
   ListTodo,
   MapPin,
+  Megaphone,
+  Sparkles,
   Pencil,
   Phone,
   Package,
@@ -34,6 +36,7 @@ import {
   formatIsoDate,
   KONTAKT_ARTEN,
   kontaktArtLabel,
+  planLabel,
   todayIso,
 } from "@/lib/crm";
 
@@ -50,10 +53,26 @@ export interface VisitTarget {
   ansprechpartner?: string | null;
   letzte_kontakt_art?: string | null;
   recare_partner?: boolean | null;
+  plan?: string | null;
   note?: string | null;
 }
 
-const ART_ICON = { box: Package, besuch: Users, anruf: Phone } as const;
+/** Ein Eintrag im vereinten Aktivitäts-Log (Kontakte + Auslagen). */
+export interface CrmLogEntry {
+  id: string;
+  date: string;
+  art: string;
+  ort: string;
+  notiz: string | null;
+  ansprechpartner: string | null;
+}
+
+const ART_ICON = {
+  box: Package,
+  flyer: Megaphone,
+  besuch: Users,
+  anruf: Phone,
+} as const;
 
 /** Recare-Status: Spalte, mit Fallback auf die Notiz-Markierung. */
 function recareOf(t: VisitTarget): boolean | null {
@@ -92,6 +111,7 @@ export function CrmVisitList({
   initial,
   initialScore,
   otherScores,
+  initialLog = [],
 }: {
   token: string;
   initial: VisitTarget[];
@@ -99,9 +119,61 @@ export function CrmVisitList({
   initialScore: number;
   /** Aktivitäts-Werte der anderen Standorte — anonym, nur Zahlen. */
   otherScores: number[];
+  /** Vereintes Log (Kontakte + Auslagen), neueste zuerst. */
+  initialLog?: CrmLogEntry[];
 }) {
   const [targets, setTargets] = useState<VisitTarget[]>(initial);
   const [score, setScore] = useState(initialScore);
+  const [log, setLog] = useState<CrmLogEntry[]>(initialLog);
+  // KI-Schnell-Log (Freitext)
+  const [quickText, setQuickText] = useState("");
+  const [quickBusy, setQuickBusy] = useState(false);
+
+  async function quickLog() {
+    const text = quickText.trim();
+    if (quickBusy || text.length < 5) return;
+    setQuickBusy(true);
+    try {
+      const res = await fetch("/api/public/crm-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, text }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        results?: { ort: string; aktion: string; neu: boolean }[];
+        targets?: VisitTarget[];
+      };
+      if (!res.ok || !body.results) {
+        toast.error(body.error ?? "Loggen fehlgeschlagen.");
+        return;
+      }
+      if (body.targets) setTargets(body.targets);
+      const today = todayIso();
+      setLog((prev) => [
+        ...body.results!.map((r, i) => ({
+          id: `quick-${today}-${i}-${r.ort}`,
+          date: today,
+          art: r.aktion,
+          ort: r.ort,
+          notiz: null,
+          ansprechpartner: null,
+        })),
+        ...prev,
+      ]);
+      setScore((c) => c + body.results!.length);
+      setQuickText("");
+      toast.success(
+        `Geloggt: ${body.results
+          .map((r) => `${r.aktion} — ${r.ort}${r.neu ? " (neu angelegt)" : ""}`)
+          .join(" · ")}`,
+      );
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setQuickBusy(false);
+    }
+  }
   const [logFor, setLogFor] = useState<string | null>(null);
   const [art, setArt] = useState<string>("");
   const [ansprechpartner, setAnsprechpartner] = useState("");
@@ -378,6 +450,39 @@ export function CrmVisitList({
         </span>
       </div>
 
+      {/* KI-Schnell-Log: Freitext → strukturierte Log-Einträge */}
+      <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Sparkles className="size-4 text-primary" />
+          Schnell-Log — einfach schreiben, was Sie gemacht haben
+        </p>
+        <Textarea
+          value={quickText}
+          onChange={(e) => setQuickText(e.target.value)}
+          placeholder={
+            'z. B. "War heute im Klinikum und habe eine Box bei Frau Weber vom Sozialdienst abgegeben, die arbeiten mit Recare. Danach Flyer in der Apotheke am Markt ausgelegt."'
+          }
+          maxLength={2000}
+          className="min-h-20 bg-background"
+          disabled={quickBusy}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            disabled={quickBusy || quickText.trim().length < 5}
+            onClick={() => void quickLog()}
+          >
+            <Sparkles className="size-4" />
+            {quickBusy ? "KI liest mit…" : "Loggen — KI erkennt den Rest"}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Orte, Aktion (Box/Flyer/Besuch/Anruf), Ansprechpartner und Recare
+            werden automatisch erkannt und in Liste und Log eingetragen.
+          </span>
+        </div>
+      </div>
+
       {/* Eigenen Ort zur Liste hinzufügen */}
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm text-muted-foreground">
@@ -535,6 +640,20 @@ export function CrmVisitList({
                         </p>
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground">
+                        {!done &&
+                          (() => {
+                            const p =
+                              planLabel(t.plan) ||
+                              (t.kategorie === "krankenhaus"
+                                ? "Box vorbeibringen"
+                                : "");
+                            return p ? (
+                              <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[0.7rem] font-semibold text-primary">
+                                <ListTodo className="size-3" />
+                                To-do: {p}
+                              </span>
+                            ) : null;
+                          })()}
                         {status === "erstbesuch" && (
                           <span className="font-medium text-primary">
                             Erstkontakt ausstehend
@@ -706,7 +825,7 @@ export function CrmVisitList({
                         <Label className="text-xs">
                           Was war es? (Pflicht)
                         </Label>
-                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                        <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-4">
                           {KONTAKT_ARTEN.map((k) => {
                             const Icon = ART_ICON[k.key];
                             return (
@@ -796,6 +915,47 @@ export function CrmVisitList({
             })}
           </ul>
         </>
+      )}
+
+      {/* Vereintes Aktivitäts-Log: Kontakte + Auslagen, neueste zuerst */}
+      {log.length > 0 && (
+        <div className="flex flex-col gap-2 border-t pt-4">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <CalendarClock className="size-4 text-primary" />
+            Log — Ihre letzten Aktionen ({log.length})
+          </p>
+          <ul className="flex flex-col gap-1">
+            {log.slice(0, 15).map((e) => {
+              const Icon =
+                ART_ICON[e.art as keyof typeof ART_ICON] ?? Check;
+              return (
+                <li
+                  key={e.id}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
+                >
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {formatIsoDate(e.date)}
+                  </span>
+                  <span className="flex items-center gap-1 font-medium">
+                    <Icon className="size-3.5 text-primary" />
+                    {kontaktArtLabel(e.art) || e.art}
+                  </span>
+                  <span className="min-w-0">— {e.ort}</span>
+                  {e.ansprechpartner && (
+                    <span className="text-xs text-muted-foreground">
+                      ({e.ansprechpartner})
+                    </span>
+                  )}
+                  {e.notiz && (
+                    <span className="w-full pl-5 text-xs text-muted-foreground">
+                      „{e.notiz}“
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
     </div>
   );
