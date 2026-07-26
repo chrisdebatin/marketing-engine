@@ -15,6 +15,7 @@ export async function updateHubPdl(formData: FormData) {
   const pdlPhone = String(formData.get("pdl_phone") ?? "").trim();
   const address = String(formData.get("address") ?? "").trim();
   const ikNummer = String(formData.get("ik_nummer") ?? "").trim();
+  const mdEmail = String(formData.get("md_email") ?? "").trim();
   if (!hubId) return;
 
   const patch = {
@@ -26,10 +27,10 @@ export async function updateHubPdl(formData: FormData) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("hubs")
-    .update({ ...patch, ik_nummer: ikNummer || null })
+    .update({ ...patch, ik_nummer: ikNummer || null, md_email: mdEmail || null })
     .eq("id", hubId);
-  // Spalte ik_nummer existiert erst nach Migration 0025 — bis dahin die
-  // übrigen Felder trotzdem speichern.
+  // Spalten ik_nummer/md_email existieren erst nach Migration 0025/0028 —
+  // bis dahin die übrigen Felder trotzdem speichern.
   if (error && (error.code === "PGRST204" || error.code === "42703")) {
     await supabase.from("hubs").update(patch).eq("id", hubId);
   }
@@ -179,4 +180,31 @@ export async function setCatalogItemActive(
 
   revalidatePath("/admin");
   return { ok: true };
+}
+
+/** Wochen-Mails manuell auslösen (Test/Nachholen) — nutzt dieselbe Logik wie der Montags-Cron. */
+export async function triggerWeeklyMails(
+  kind: "md" | "pdl",
+): Promise<{ ok: boolean; message: string }> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  const { outlookConfigured } = await import("@/lib/outlook");
+  if (!outlookConfigured()) {
+    return {
+      ok: false,
+      message: "Outlook ist nicht konfiguriert (MS_CLIENT_ID fehlt).",
+    };
+  }
+
+  const { sendMdUpdates, sendPdlReminders } = await import(
+    "@/lib/weekly-mails"
+  );
+  const r = kind === "md" ? await sendMdUpdates() : await sendPdlReminders();
+  const parts = [
+    r.sent.length > 0 ? `Gesendet: ${r.sent.join("; ")}` : "Nichts gesendet.",
+    r.skipped.length > 0 ? `Übersprungen: ${r.skipped.join("; ")}` : "",
+    r.errors.length > 0 ? `Fehler: ${r.errors.join("; ")}` : "",
+  ].filter(Boolean);
+  return { ok: r.errors.length === 0, message: parts.join(" · ") };
 }

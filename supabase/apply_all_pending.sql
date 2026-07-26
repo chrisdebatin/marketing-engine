@@ -33,3 +33,10 @@ update public.crm_targets set recare_partner = true
 
 notify pgrst, 'reload schema';
 select count(*) as crm_contacts_rows from public.crm_contacts;
+
+-- ============================================================
+-- 0028: hubs.md_email (MD-Adresse für Wochen-Updates per Outlook)
+-- ============================================================
+alter table public.hubs add column if not exists md_email text;
+
+notify pgrst, 'reload schema';

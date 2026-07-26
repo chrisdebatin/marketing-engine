@@ -161,6 +161,80 @@ export async function getAccessToken(): Promise<string | null> {
   return tokens.access_token;
 }
 
+/** Mail über das verbundene Konto senden (Graph /me/sendMail). */
+export async function sendMail(input: {
+  to: string[];
+  subject: string;
+  html: string;
+  bcc?: string[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const token = await getAccessToken();
+  if (!token) {
+    return { ok: false, error: "Outlook ist nicht verbunden." };
+  }
+  const recipients = (list: string[]) =>
+    list.map((address) => ({ emailAddress: { address } }));
+  const res = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: {
+        subject: input.subject,
+        body: { contentType: "HTML", content: input.html },
+        toRecipients: recipients(input.to),
+        ...(input.bcc?.length ? { bccRecipients: recipients(input.bcc) } : {}),
+      },
+      saveToSentItems: true,
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    console.error("outlook: sendMail failed:", res.status, detail.slice(0, 300));
+    return { ok: false, error: `Versand fehlgeschlagen (${res.status}).` };
+  }
+  return { ok: true };
+}
+
+/** Neueste Posteingangs-Mails, neueste zuerst. */
+export async function inboxMails(top = 40): Promise<OutlookMail[] | null> {
+  const token = await getAccessToken();
+  if (!token) return null;
+  const params = new URLSearchParams({
+    $select: "id,subject,from,receivedDateTime,bodyPreview,webLink,isRead",
+    $orderby: "receivedDateTime desc",
+    $top: String(Math.min(top, 50)),
+  });
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?${params}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return null;
+  const body = (await res.json()) as {
+    value?: {
+      id: string;
+      subject: string | null;
+      from?: { emailAddress?: { name?: string; address?: string } };
+      receivedDateTime: string;
+      bodyPreview?: string;
+      webLink?: string;
+      isRead?: boolean;
+    }[];
+  };
+  return (body.value ?? []).map((m) => ({
+    id: m.id,
+    subject: m.subject ?? "(kein Betreff)",
+    from: m.from?.emailAddress?.name ?? m.from?.emailAddress?.address ?? "",
+    fromAddress: (m.from?.emailAddress?.address ?? "").toLowerCase(),
+    receivedAt: m.receivedDateTime,
+    preview: (m.bodyPreview ?? "").slice(0, 160),
+    webLink: m.webLink ?? "",
+    isRead: m.isRead ?? true,
+  }));
+}
+
 export interface OutlookMail {
   id: string;
   subject: string;

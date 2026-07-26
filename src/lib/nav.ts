@@ -2,6 +2,7 @@ import {
   BookOpen,
   Building2,
   Home,
+  Inbox,
   Map,
   Megaphone,
   Settings,
@@ -47,6 +48,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
+      { href: "/postfach", label: "Postfach", Icon: Inbox },
     ],
   },
   {

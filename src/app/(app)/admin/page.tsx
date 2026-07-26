@@ -32,6 +32,7 @@ import {
   User,
 } from "lucide-react";
 import { connectedAccount, outlookConfigured } from "@/lib/outlook";
+import { WeeklyMailButtons } from "@/components/weekly-mail-buttons";
 import type { Hub } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -257,6 +258,19 @@ export default async function AdminPage() {
               Anderes Konto verbinden
             </a>
           </p>
+        ) : null}
+        {outlookAccount ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Jeden Montag gehen automatisch die Wochen-Mails raus: Update an
+              die MDs (E-Mail je Hub unten im Hub-Formular hinterlegen) und
+              Anfahr-Erinnerung an die PDLs. Anfragen der Standorte:{" "}
+              <a href="/postfach" className="text-primary underline">
+                Postfach öffnen
+              </a>
+            </p>
+            <WeeklyMailButtons />
+          </>
         ) : outlookReady ? (
           <p className="text-sm text-muted-foreground">
             Noch nicht verbunden.{" "}
@@ -457,7 +471,7 @@ export default async function AdminPage() {
                   // keying the form by those values remounts it so the new values
                   // become fresh defaults instead of tripping base-ui's "changing
                   // the default value of an initialized uncontrolled FieldControl".
-                  key={`${h.pdl_name ?? ""}|${h.pdl_email ?? ""}|${h.pdl_phone ?? ""}|${h.address ?? ""}|${h.ik_nummer ?? ""}`}
+                  key={`${h.pdl_name ?? ""}|${h.pdl_email ?? ""}|${h.pdl_phone ?? ""}|${h.address ?? ""}|${h.ik_nummer ?? ""}|${h.md_email ?? ""}`}
                   action={updateHubPdl}
                   className="flex flex-col gap-3 border-t pt-4"
                 >
@@ -514,6 +528,17 @@ export default async function AdminPage() {
                         name="ik_nummer"
                         defaultValue={h.ik_nummer ?? ""}
                         placeholder="z. B. 460 123 456"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-muted-foreground">
+                        MD E-Mail (für Wochen-Update)
+                      </label>
+                      <Input
+                        name="md_email"
+                        type="email"
+                        defaultValue={h.md_email ?? ""}
+                        placeholder="md@…"
                       />
                     </div>
                     <Button type="submit" variant="outline">
