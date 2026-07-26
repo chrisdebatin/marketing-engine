@@ -126,23 +126,46 @@ export default async function HubShareLinkPage({
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8">
-      <div>
-        <p className="text-sm text-muted-foreground">Marketing-Engine</p>
-        <h1 className="text-2xl font-semibold">
-          Marketing Dashboard · {hub.name}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {flyers > 0 ? (
-            <>
-              Für diesen Hub geliefert: <strong>{flyers} Flyer</strong>
-              {aufsteller > 0 && <> · {aufsteller} Aufsteller</>}
-              {boxes > 0 && <> · {boxes} Boxen</>}.{" "}
-            </>
-          ) : null}
-          Dies ist Ihre persönliche Seite für den Standort — kein Login nötig,
-          Link einfach speichern.
+    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8">
+      {/* Hero mit Standort und Liefer-Kennzahlen */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-chart-5 p-6 text-primary-foreground shadow-lg">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-16 -right-16 size-56 rounded-full bg-white/10 blur-2xl"
+        />
+        <p className="text-sm font-medium tracking-wide text-primary-foreground/80 uppercase">
+          Marketing Dashboard
         </p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+          {hub.name}
+        </h1>
+        <p className="mt-2 text-sm text-primary-foreground/85">
+          Ihre persönliche Standort-Seite — kein Login nötig, Link einfach
+          speichern.
+        </p>
+        {(flyers > 0 || aufsteller > 0 || boxes > 0) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [
+                [flyers, "Flyer"],
+                [aufsteller, "Aufsteller"],
+                [boxes, "Boxen"],
+              ] as const
+            )
+              .filter(([v]) => v > 0)
+              .map(([value, label]) => (
+                <span
+                  key={label}
+                  className="rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur-sm"
+                >
+                  <span className="font-semibold tabular-nums">
+                    {value.toLocaleString("de-DE")}
+                  </span>{" "}
+                  {label} geliefert
+                </span>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
