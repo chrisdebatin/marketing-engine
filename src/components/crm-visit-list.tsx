@@ -12,6 +12,7 @@ import {
   Package,
   Plus,
   Trash2,
+  Trophy,
   Users,
 } from "lucide-react";
 import {
@@ -34,8 +35,6 @@ import {
   KONTAKT_ARTEN,
   kontaktArtLabel,
   todayIso,
-  WEEKLY_GOAL,
-  weekStartIso,
 } from "@/lib/crm";
 
 export interface VisitTarget {
@@ -84,21 +83,25 @@ function RecareChip({ t }: { t: VisitTarget }) {
 }
 
 /**
- * Klinik-/CRM-Liste für die PDL: Wochenziel, fällige Kontakte zuerst,
+ * Klinik-/CRM-Liste für die PDL: anonymes Aktivitäts-Ranking, fällige Kontakte zuerst,
  * Kontakt loggen (Box/Besuch/Anruf + Ansprechpartner + Gesprächsnotiz);
  * das nächste Gespräch wird automatisch in `intervall_wochen` terminiert.
  */
 export function CrmVisitList({
   token,
   initial,
-  initialWeekCount,
+  initialScore,
+  otherScores,
 }: {
   token: string;
   initial: VisitTarget[];
-  initialWeekCount: number;
+  /** Aktivitäten dieses Standorts in den letzten 4 Wochen. */
+  initialScore: number;
+  /** Aktivitäts-Werte der anderen Standorte — anonym, nur Zahlen. */
+  otherScores: number[];
 }) {
   const [targets, setTargets] = useState<VisitTarget[]>(initial);
-  const [weekCount, setWeekCount] = useState(initialWeekCount);
+  const [score, setScore] = useState(initialScore);
   const [logFor, setLogFor] = useState<string | null>(null);
   const [art, setArt] = useState<string>("");
   const [ansprechpartner, setAnsprechpartner] = useState("");
@@ -235,9 +238,14 @@ export function CrmVisitList({
         return;
       }
       setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
-      // Wochenzähler korrigieren, wenn der Kontakt aus dieser Woche war.
-      if (body.deletedDate && body.deletedDate >= weekStartIso()) {
-        setWeekCount((c) => Math.max(0, c - 1));
+      // Ranking-Punkte korrigieren, wenn der Kontakt aus dem 4-Wochen-Fenster war.
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 28);
+      if (
+        body.deletedDate &&
+        body.deletedDate >= cutoff.toISOString().slice(0, 10)
+      ) {
+        setScore((c) => Math.max(0, c - 1));
       }
       toast.success("Kontakt gelöscht");
     } catch {
@@ -258,7 +266,12 @@ export function CrmVisitList({
   const pendingList = sorted.filter((t) => rank(t) < 2);
   const doneList = sorted.filter((t) => rank(t) === 2);
   const openCount = pendingList.length;
-  const goalPct = Math.min(100, Math.round((weekCount / WEEKLY_GOAL) * 100));
+
+  // Anonymes Aktivitäts-Ranking: Platz = 1 + Standorte mit mehr Punkten.
+  const totalHubs = otherScores.length + 1;
+  const place = 1 + otherScores.filter((s) => s > score).length;
+  const nextBetter =
+    place > 1 ? Math.min(...otherScores.filter((s) => s > score)) : null;
 
   type Row = VisitTarget | { header: string; count: number };
   const rows: Row[] = [
@@ -301,7 +314,8 @@ export function CrmVisitList({
         return;
       }
       setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
-      setWeekCount((c) => c + 1);
+      // Box-Kontakt erzeugt zusätzlich einen Liefer-Ort → 2 Ranking-Punkte.
+      setScore((c) => c + 1 + (body.placementCreated ? 1 : 0));
       setLogFor(null);
       setArt("");
       setAnsprechpartner("");
@@ -321,33 +335,46 @@ export function CrmVisitList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Wochenziel */}
-      <div className="flex flex-col gap-1.5 rounded-xl border bg-card p-4 shadow-sm">
-        <div className="flex items-baseline justify-between text-sm">
-          <span className="font-medium">
-            Wochenziel: {WEEKLY_GOAL} Kontakte
-          </span>
-          <span className="font-semibold tabular-nums">
-            {weekCount}
-            <span className="font-normal text-muted-foreground">
-              {" "}
-              / {WEEKLY_GOAL} diese Woche
-            </span>
-          </span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
+      {/* Anonymes Aktivitäts-Ranking der Standorte */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
+        <span
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-full",
+            place === 1 ? "bg-chart-4/15" : "bg-primary/10",
+          )}
+        >
+          <Trophy
             className={cn(
-              "h-full rounded-full transition-all",
-              weekCount >= WEEKLY_GOAL ? "bg-chart-4" : "bg-primary",
+              "size-5",
+              place === 1 ? "text-chart-4" : "text-primary",
             )}
-            style={{ width: `${goalPct}%` }}
           />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">
+            Ihr Standort ist{" "}
+            <span className={cn(place === 1 && "text-chart-4")}>
+              Platz {place} von {totalHubs}
+            </span>{" "}
+            auf der Wachstums-Aktivitäts-Skala
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {place === 1
+              ? "Spitzenreiter — weiter so! 🏆"
+              : nextBetter != null
+                ? `Noch ${nextBetter - score + 1} geloggte Aktion${nextBetter - score + 1 === 1 ? "" : "en"} bis zum nächsten Platz. Jede zählt: Box, Besuch, Anruf oder Auslage.`
+                : "Jede geloggte Aktion zählt: Box, Besuch, Anruf oder Auslage."}{" "}
+            Gewertet werden die letzten 4 Wochen, alle Standorte anonym im
+            Vergleich.
+          </p>
         </div>
-        <span className="text-xs text-muted-foreground">
-          {weekCount >= WEEKLY_GOAL
-            ? "Wochenziel erreicht — stark! 🎉"
-            : `Noch ${WEEKLY_GOAL - weekCount} Kontakt${WEEKLY_GOAL - weekCount === 1 ? "" : "e"} bis zum Wochenziel. Jeder Kontakt zählt: Box, Besuch oder Anruf — bitte immer loggen.`}
+        <span className="shrink-0 text-right">
+          <span className="block text-2xl font-semibold tabular-nums">
+            {score}
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            Aktion{score === 1 ? "" : "en"} / 4 Wochen
+          </span>
         </span>
       </div>
 

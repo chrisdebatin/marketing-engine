@@ -37,13 +37,3 @@ export function kontaktArtLabel(key: string | null | undefined): string {
   return KONTAKT_ARTEN.find((k) => k.key === key)?.label ?? key;
 }
 
-/** Wochenziel: so viele Klinik-Kontakte soll jede PDL pro Woche loggen. */
-export const WEEKLY_GOAL = 4;
-
-/** Montag der aktuellen Woche als ISO-Datum. */
-export function weekStartIso(today: string = todayIso()): string {
-  const d = new Date(`${today}T00:00:00`);
-  const day = (d.getDay() + 6) % 7; // Mo=0 … So=6
-  d.setDate(d.getDate() - day);
-  return d.toISOString().slice(0, 10);
-}

@@ -17,7 +17,6 @@ import {
   formatIsoDate,
   kontaktArtLabel,
   todayIso,
-  weekStartIso,
 } from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
@@ -87,22 +86,39 @@ export default async function HubShareLinkPage({
   const catalog = catalogData ?? [];
   const orderList = orders ?? [];
 
-  // Wochenziel: geloggte Kontakte dieses Hubs seit Montag. Fällt auf die
-  // letzter_besuch-Daten zurück, solange das Kontakt-Log (0027) fehlt.
-  const weekStart = weekStartIso();
-  let weekCount = 0;
-  const { count: contactCount, error: contactErr } = await admin
+  // Aktivitäts-Ranking (anonym): geloggte Kontakte + ausgelegte Flyer/Boxen
+  // der letzten 4 Wochen, je Hub gezählt. Fällt auf letzter_besuch zurück,
+  // solange das Kontakt-Log (0027) fehlt.
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 28);
+  const cutoff = cutoffDate.toISOString().slice(0, 10);
+  const scoreByHub = new Map<string, number>();
+  const bump = (hubId: string | null) => {
+    if (!hubId) return;
+    scoreByHub.set(hubId, (scoreByHub.get(hubId) ?? 0) + 1);
+  };
+  const { data: contactRows, error: contactErr } = await admin
     .from("crm_contacts")
-    .select("id", { count: "exact", head: true })
-    .eq("hub_id", hub.id)
-    .gte("contact_date", weekStart);
-  if (!contactErr && contactCount != null) {
-    weekCount = contactCount;
+    .select("hub_id")
+    .gte("contact_date", cutoff);
+  if (!contactErr && contactRows) {
+    for (const c of contactRows) bump(c.hub_id);
   } else {
-    weekCount = ((crmTargets ?? []) as VisitTarget[]).filter(
-      (t) => t.letzter_besuch && t.letzter_besuch >= weekStart,
-    ).length;
+    for (const t of ((allTargets ?? []) as (VisitTarget & {
+      hub_id: string | null;
+    })[])) {
+      if (t.letzter_besuch && t.letzter_besuch >= cutoff) bump(t.hub_id);
+    }
   }
+  const { data: placementRows } = await admin
+    .from("delivery_placements")
+    .select("hub_id, created_at")
+    .gte("created_at", cutoff);
+  for (const p of placementRows ?? []) bump(p.hub_id);
+  const ownScore = scoreByHub.get(hub.id) ?? 0;
+  const otherScores = (allHubs ?? [])
+    .filter((h) => h.id !== hub.id)
+    .map((h) => scoreByHub.get(h.id) ?? 0);
 
   // Kliniken-Listen der anderen Standorte (nur lesend).
   const hubNameOf = (id: string | null) =>
@@ -230,9 +246,9 @@ export default async function HubShareLinkPage({
         steps={[
           <>
             <strong className="text-foreground">Meine Orte:</strong> Ihre
-            To-do-Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt loggen
-            (Ziel: 4 pro Woche). Eine geloggte Box zählt automatisch als
-            Box-Lieferort.
+            To-do-Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt
+            loggen. Jede geloggte Aktion zählt fürs Standort-Ranking; eine
+            geloggte Box zählt automatisch als Box-Lieferort.
           </>,
           <>
             <strong className="text-foreground">
@@ -295,7 +311,8 @@ export default async function HubShareLinkPage({
                 <CrmVisitList
                   token={token}
                   initial={ownTargets}
-                  initialWeekCount={weekCount}
+                  initialScore={ownScore}
+                  otherScores={otherScores}
                 />
 
                 {otherGroups.length > 0 && (
