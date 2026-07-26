@@ -30,9 +30,38 @@ export interface VisitTarget {
   besuchs_notiz: string | null;
   ansprechpartner?: string | null;
   letzte_kontakt_art?: string | null;
+  recare_partner?: boolean | null;
+  note?: string | null;
 }
 
 const ART_ICON = { box: Package, besuch: Users, anruf: Phone } as const;
+
+/** Recare-Status: Spalte, mit Fallback auf die Notiz-Markierung. */
+function recareOf(t: VisitTarget): boolean | null {
+  if (t.recare_partner != null) return t.recare_partner;
+  if (t.note?.includes("Recare-Partner")) return true;
+  return null;
+}
+
+function RecareChip({ t }: { t: VisitTarget }) {
+  const status = recareOf(t);
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
+        status === true && "bg-chart-4/15 text-chart-4",
+        status === false && "bg-destructive/10 text-destructive",
+        status === null && "bg-muted text-muted-foreground",
+      )}
+    >
+      {status === true
+        ? "Recare-Partner"
+        : status === false
+          ? "kein Recare"
+          : "Recare? erfragen"}
+    </span>
+  );
+}
 
 /**
  * Klinik-/CRM-Liste für die PDL: Wochenziel, fällige Kontakte zuerst,
@@ -54,6 +83,7 @@ export function CrmVisitList({
   const [art, setArt] = useState<string>("");
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [note, setNote] = useState("");
+  const [recare, setRecare] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
   const today = todayIso();
@@ -80,6 +110,7 @@ export function CrmVisitList({
           kontakt_art: art,
           ansprechpartner,
           note,
+          recare,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -96,6 +127,7 @@ export function CrmVisitList({
       setArt("");
       setAnsprechpartner("");
       setNote("");
+      setRecare("");
       toast.success(
         `Kontakt gespeichert — nächstes Gespräch ab ${formatIsoDate(body.target.naechster_besuch)}`,
       );
@@ -168,7 +200,10 @@ export function CrmVisitList({
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium">{t.name}</p>
+                      <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                        {t.name}
+                        <RecareChip t={t} />
+                      </p>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <MapPin className="size-3 shrink-0" />
                         {[
@@ -182,6 +217,11 @@ export function CrmVisitList({
                           ? ` · Ansprechpartner: ${t.ansprechpartner}`
                           : ""}
                       </p>
+                      {t.note && (
+                        <p className="mt-0.5 text-xs text-muted-foreground/80">
+                          {t.note}
+                        </p>
+                      )}
                       <p className="mt-0.5 text-xs text-muted-foreground">
                         {status === "erstbesuch" && (
                           <span className="font-medium text-primary">
@@ -256,15 +296,45 @@ export function CrmVisitList({
                           })}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2 sm:flex-row">
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                          Ansprechpartner Sozialdienst / Case Management
+                        </Label>
                         <Input
                           value={ansprechpartner}
                           onChange={(e) => setAnsprechpartner(e.target.value)}
-                          placeholder="Ansprechpartner, z. B. Frau Weber (Sozialdienst)"
+                          placeholder="z. B. Frau Weber, Sozialdienst, Tel. -123"
                           autoComplete="off"
                           maxLength={200}
-                          className="sm:flex-1"
                         />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                          Arbeitet die Klinik mit Recare?
+                        </Label>
+                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                          {(
+                            [
+                              ["ja", "Ja"],
+                              ["nein", "Nein"],
+                              ["", "Weiß nicht"],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => setRecare(value)}
+                              className={cn(
+                                "rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:text-sm",
+                                recare === value
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <Textarea
                         value={note}

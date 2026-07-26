@@ -26,5 +26,10 @@ create index if not exists crm_contacts_hub_date_idx
   on public.crm_contacts (hub_id, contact_date desc);
 alter table public.crm_contacts disable row level security;
 
+alter table public.crm_targets
+  add column if not exists recare_partner boolean;
+update public.crm_targets set recare_partner = true
+  where note like '%Recare-Partner%' and recare_partner is null;
+
 notify pgrst, 'reload schema';
 select count(*) as crm_contacts_rows from public.crm_contacts;

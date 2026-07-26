@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PLACE_KINDS, placeKindLabel } from "@/lib/places";
-import { crmStatus, formatIsoDate, todayIso } from "@/lib/crm";
+import { crmStatus, formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
 import {
   createCrmTarget,
   deleteCrmTarget,
@@ -43,6 +43,9 @@ export interface CrmTargetRow {
   letzter_besuch: string | null;
   naechster_besuch: string | null;
   besuchs_notiz: string | null;
+  ansprechpartner?: string | null;
+  letzte_kontakt_art?: string | null;
+  recare_partner?: boolean | null;
 }
 
 export interface HubOption {
@@ -424,7 +427,12 @@ export function CrmTargetsManager({
                           {t.letzter_besuch && (
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               <CalendarClock className="mr-1 inline size-3" />
-                              Zuletzt besucht {formatIsoDate(t.letzter_besuch)}
+                              {kontaktArtLabel(t.letzte_kontakt_art) ||
+                                "Kontakt"}{" "}
+                              am {formatIsoDate(t.letzter_besuch)}
+                              {t.ansprechpartner
+                                ? ` · Ansprechpartner: ${t.ansprechpartner}`
+                                : ""}
                               {t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""}
                             </p>
                           )}
@@ -435,6 +443,28 @@ export function CrmTargetsManager({
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                          <Badge
+                            variant="outline"
+                            className={
+                              (t.recare_partner ??
+                                (t.note?.includes("Recare-Partner")
+                                  ? true
+                                  : null)) === true
+                                ? "border-chart-4/40 bg-chart-4/10 text-chart-4"
+                                : (t.recare_partner ?? null) === false
+                                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                                  : "text-muted-foreground"
+                            }
+                          >
+                            {(t.recare_partner ??
+                              (t.note?.includes("Recare-Partner")
+                                ? true
+                                : null)) === true
+                              ? "Recare-Partner"
+                              : (t.recare_partner ?? null) === false
+                                ? "kein Recare"
+                                : "Recare?"}
+                          </Badge>
                           <StatusBadge t={t} />
                           <Button
                             type="button"

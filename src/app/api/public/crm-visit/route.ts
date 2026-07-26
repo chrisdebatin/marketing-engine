@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     kontakt_art?: string;
     ansprechpartner?: string;
     note?: string;
+    recare?: string;
   };
 
   const token = (body.token ?? "").trim();
@@ -77,17 +78,27 @@ export async function POST(req: Request) {
     naechster_besuch: naechster,
     besuchs_notiz: note || null,
   };
+  // Recare-Antwort der PDL ("ja"/"nein"; leer = keine Änderung).
+  const recare = (body.recare ?? "").trim();
+  const recarePatch =
+    recare === "ja"
+      ? { recare_partner: true }
+      : recare === "nein"
+        ? { recare_partner: false }
+        : {};
+
   const selectCols =
-    "id, name, kategorie, adresse, ort, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
+    "id, name, kategorie, adresse, ort, note, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
   let { data: updated, error: updErr } = await admin
     .from("crm_targets")
     .update({
       ...base,
+      ...recarePatch,
       ansprechpartner: ansprechpartner || null,
       letzte_kontakt_art: kontaktArt,
     })
     .eq("id", id)
-    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art`)
+    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner`)
     .single();
   if (updErr && isMissingColumn(updErr)) {
     ({ data: updated, error: updErr } = await admin

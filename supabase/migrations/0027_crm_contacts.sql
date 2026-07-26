@@ -22,3 +22,11 @@ create table if not exists public.crm_contacts (
 create index if not exists crm_contacts_hub_date_idx
   on public.crm_contacts (hub_id, contact_date desc);
 alter table public.crm_contacts disable row level security;
+
+-- Recare-Status je Klinik: true = Partner, false = arbeitet nicht mit
+-- Recare, null = unbekannt (PDLs erfragen es beim Kontakt).
+alter table public.crm_targets
+  add column if not exists recare_partner boolean;
+-- Backfill: die importierten Recare-Partnerkliniken sind markiert.
+update public.crm_targets set recare_partner = true
+  where note like '%Recare-Partner%' and recare_partner is null;
