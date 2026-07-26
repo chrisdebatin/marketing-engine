@@ -128,3 +128,96 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ target: updated });
 }
+
+// Klinik-Eintrag korrigieren (Name/Adresse/Ort/Ansprechpartner/Recare/Info).
+// Der Eintrag muss zum Hub des Tokens gehören.
+export async function PUT(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as {
+    token?: string;
+    id?: string;
+    name?: string;
+    adresse?: string;
+    ort?: string;
+    ansprechpartner?: string;
+    recare?: string;
+    info?: string;
+  };
+
+  const token = (body.token ?? "").trim();
+  const id = (body.id ?? "").trim();
+  const name = (body.name ?? "").trim();
+  if (!token || !id) {
+    return NextResponse.json(
+      { error: "Token oder Ziel-Ort fehlt." },
+      { status: 400 },
+    );
+  }
+  if (!name) {
+    return NextResponse.json({ error: "Name angeben." }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  const { data: hub, error: findErr } = await admin
+    .from("hubs")
+    .select("id")
+    .eq("share_token", token)
+    .single();
+  if (findErr || !hub) {
+    return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+  }
+
+  const { data: target } = await admin
+    .from("crm_targets")
+    .select("id, hub_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!target || target.hub_id !== hub.id) {
+    return NextResponse.json(
+      { error: "Ziel-Ort nicht gefunden." },
+      { status: 404 },
+    );
+  }
+
+  const recare = (body.recare ?? "").trim();
+  const base = {
+    name: name.slice(0, 200),
+    adresse: (body.adresse ?? "").trim().slice(0, 200) || null,
+    ort: (body.ort ?? "").trim().slice(0, 120) || null,
+    note: (body.info ?? "").trim().slice(0, 1000) || null,
+  };
+  const extra = {
+    ansprechpartner:
+      (body.ansprechpartner ?? "").trim().slice(0, 200) || null,
+    ...(recare === "ja"
+      ? { recare_partner: true }
+      : recare === "nein"
+        ? { recare_partner: false }
+        : {}),
+  };
+
+  const selectCols =
+    "id, name, kategorie, adresse, ort, note, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
+  let { data: updated, error: updErr } = await admin
+    .from("crm_targets")
+    .update({ ...base, ...extra })
+    .eq("id", id)
+    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art, recare_partner`)
+    .single();
+  if (updErr && isMissingColumn(updErr)) {
+    ({ data: updated, error: updErr } = await admin
+      .from("crm_targets")
+      .update(base)
+      .eq("id", id)
+      .select(selectCols)
+      .single());
+  }
+
+  if (updErr || !updated) {
+    return NextResponse.json(
+      { error: "Speichern fehlgeschlagen." },
+      { status: 500 },
+    );
+  }
+  return NextResponse.json({ target: updated });
+}

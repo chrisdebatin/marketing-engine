@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Check, MapPin, Phone, Package, Users } from "lucide-react";
+import { CalendarClock, Check, MapPin, Pencil, Phone, Package, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,6 +85,63 @@ export function CrmVisitList({
   const [note, setNote] = useState("");
   const [recare, setRecare] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  // Inline-Bearbeitung eines Klinik-Eintrags
+  const [editFor, setEditFor] = useState<string | null>(null);
+  const [eName, setEName] = useState("");
+  const [eAdresse, setEAdresse] = useState("");
+  const [eOrt, setEOrt] = useState("");
+  const [eAnsprech, setEAnsprech] = useState("");
+  const [eRecare, setERecare] = useState("");
+  const [eInfo, setEInfo] = useState("");
+
+  function startEdit(t: VisitTarget) {
+    setEditFor(t.id);
+    setLogFor(null);
+    setEName(t.name);
+    setEAdresse(t.adresse ?? "");
+    setEOrt(t.ort ?? "");
+    setEAnsprech(t.ansprechpartner ?? "");
+    setERecare(
+      t.recare_partner === true ? "ja" : t.recare_partner === false ? "nein" : "",
+    );
+    setEInfo(t.note ?? "");
+  }
+
+  async function saveEdit(t: VisitTarget) {
+    if (saving || !eName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/public/crm-visit", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          id: t.id,
+          name: eName,
+          adresse: eAdresse,
+          ort: eOrt,
+          ansprechpartner: eAnsprech,
+          recare: eRecare,
+          info: eInfo,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        target?: VisitTarget;
+      };
+      if (!res.ok || !body.target) {
+        toast.error(body.error ?? "Speichern fehlgeschlagen.");
+        return;
+      }
+      setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
+      setEditFor(null);
+      toast.success("Eintrag aktualisiert");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const today = todayIso();
   const rank = (t: VisitTarget) => {
@@ -250,23 +307,129 @@ export function CrmVisitList({
                         )}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={done ? "outline" : "default"}
-                      className="shrink-0"
-                      disabled={saving}
-                      onClick={() => {
-                        setLogFor(logOpen ? null : t.id);
-                        setArt("");
-                        setAnsprechpartner(t.ansprechpartner ?? "");
-                        setNote("");
-                      }}
-                    >
-                      <Check className="size-4" />
-                      Kontakt loggen
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 text-muted-foreground"
+                        disabled={saving}
+                        onClick={() =>
+                          editFor === t.id ? setEditFor(null) : startEdit(t)
+                        }
+                        aria-label="Eintrag bearbeiten"
+                        title="Eintrag bearbeiten"
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={done ? "outline" : "default"}
+                        disabled={saving}
+                        onClick={() => {
+                          setLogFor(logOpen ? null : t.id);
+                          setEditFor(null);
+                          setArt("");
+                          setAnsprechpartner(t.ansprechpartner ?? "");
+                          setNote("");
+                        }}
+                      >
+                        <Check className="size-4" />
+                        Kontakt loggen
+                      </Button>
+                    </div>
                   </div>
+
+                  {editFor === t.id && (
+                    <div className="flex flex-col gap-2 border-t pt-2.5">
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          value={eName}
+                          onChange={(e) => setEName(e.target.value)}
+                          placeholder="Name der Klinik"
+                          maxLength={200}
+                          className="sm:flex-1"
+                        />
+                        <Input
+                          value={eOrt}
+                          onChange={(e) => setEOrt(e.target.value)}
+                          placeholder="Ort/Stadt"
+                          maxLength={120}
+                          className="sm:w-44"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          value={eAdresse}
+                          onChange={(e) => setEAdresse(e.target.value)}
+                          placeholder="Adresse (Straße + Nr.)"
+                          maxLength={200}
+                          className="sm:flex-1"
+                        />
+                        <Input
+                          value={eAnsprech}
+                          onChange={(e) => setEAnsprech(e.target.value)}
+                          placeholder="Ansprechpartner Sozialdienst/CM"
+                          maxLength={200}
+                          className="sm:flex-1"
+                        />
+                      </div>
+                      <Input
+                        value={eInfo}
+                        onChange={(e) => setEInfo(e.target.value)}
+                        placeholder="Info zur Klinik (optional)"
+                        maxLength={1000}
+                      />
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                          Arbeitet die Klinik mit Recare?
+                        </Label>
+                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                          {(
+                            [
+                              ["ja", "Ja"],
+                              ["nein", "Nein"],
+                              ["", "Unbekannt"],
+                            ] as const
+                          ).map(([value, label]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => setERecare(value)}
+                              className={cn(
+                                "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                                eRecare === value
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={saving || !eName.trim()}
+                          onClick={() => void saveEdit(t)}
+                        >
+                          {saving ? "Speichere…" : "Speichern"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() => setEditFor(null)}
+                        >
+                          Abbrechen
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   {logOpen && (
                     <div className="flex flex-col gap-2.5 border-t pt-2.5">
