@@ -11,6 +11,7 @@ import {
   Phone,
   Package,
   Plus,
+  Trash2,
   Users,
 } from "lucide-react";
 import {
@@ -34,6 +35,7 @@ import {
   kontaktArtLabel,
   todayIso,
   WEEKLY_GOAL,
+  weekStartIso,
 } from "@/lib/crm";
 
 export interface VisitTarget {
@@ -200,6 +202,44 @@ export function CrmVisitList({
       setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
       setEditFor(null);
       toast.success("Eintrag aktualisiert");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteContact(t: VisitTarget) {
+    if (saving) return;
+    if (
+      !window.confirm(
+        `Letzten Kontakt für „${t.name}“ wirklich löschen? Der Eintrag springt auf den Stand davor zurück.`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/public/crm-visit", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, id: t.id }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        target?: VisitTarget;
+        deletedDate?: string;
+      };
+      if (!res.ok || !body.target) {
+        toast.error(body.error ?? "Löschen fehlgeschlagen.");
+        return;
+      }
+      setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
+      // Wochenzähler korrigieren, wenn der Kontakt aus dieser Woche war.
+      if (body.deletedDate && body.deletedDate >= weekStartIso()) {
+        setWeekCount((c) => Math.max(0, c - 1));
+      }
+      toast.success("Kontakt gelöscht");
     } catch {
       toast.error("Netzwerkfehler. Bitte erneut versuchen.");
     } finally {
@@ -510,6 +550,20 @@ export function CrmVisitList({
                       >
                         <Pencil className="size-3.5" />
                       </Button>
+                      {t.letzter_besuch && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-muted-foreground hover:text-destructive"
+                          disabled={saving}
+                          onClick={() => void deleteContact(t)}
+                          aria-label="Letzten Kontakt löschen"
+                          title="Letzten Kontakt löschen"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="sm"
