@@ -427,6 +427,8 @@ export interface Database {
           letzter_besuch: string | null;
           naechster_besuch: string | null;
           besuchs_notiz: string | null;
+          ansprechpartner: string | null;
+          letzte_kontakt_art: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -441,9 +443,35 @@ export interface Database {
           letzter_besuch?: string | null;
           naechster_besuch?: string | null;
           besuchs_notiz?: string | null;
+          ansprechpartner?: string | null;
+          letzte_kontakt_art?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;
+        Relationships: [];
+      };
+      crm_contacts: {
+        Row: {
+          id: string;
+          target_id: string;
+          hub_id: string | null;
+          kontakt_art: string;
+          ansprechpartner: string | null;
+          note: string | null;
+          contact_date: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_id: string;
+          hub_id?: string | null;
+          kontakt_art: string;
+          ansprechpartner?: string | null;
+          note?: string | null;
+          contact_date?: string;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_contacts"]["Insert"]>;
         Relationships: [];
       };
       note_topics: {

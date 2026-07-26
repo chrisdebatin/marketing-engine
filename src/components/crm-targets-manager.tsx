@@ -104,7 +104,7 @@ export function CrmTargetsManager({
   const [adresse, setAdresse] = useState("");
   const [ort, setOrt] = useState("");
   const [hubId, setHubId] = useState(HUB_NONE);
-  const [intervall, setIntervall] = useState("3");
+  const [intervall, setIntervall] = useState("4");
   const [note, setNote] = useState("");
 
   // Bulk-Import

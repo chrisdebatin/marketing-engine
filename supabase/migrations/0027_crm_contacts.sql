@@ -1,10 +1,7 @@
--- Ausstehende DB-Änderungen (idempotent). In den Supabase SQL-Editor
--- einfügen und ausführen:
--- https://supabase.com/dashboard/project/xbzcplpaalccjiyjhypr/sql/new
---
--- Stand: nur noch 0027 offen — alles davor ist bereits eingespielt.
+-- CRM-Ausbau: PDLs loggen jeden Kontakt (Box vorbeigebracht / Besuch /
+-- Anruf) mit Ansprechpartner und Gesprächsnotiz; Follow-up standardmäßig
+-- in 4 Wochen. Kontakt-Historie in eigener Log-Tabelle (Wochenziel-Zählung).
 
--- ── 0027: CRM-Kontakt-Log (Box/Besuch/Anruf, Ansprechpartner) ───────
 alter table public.crm_targets
   add column if not exists ansprechpartner text;
 alter table public.crm_targets
@@ -25,6 +22,3 @@ create table if not exists public.crm_contacts (
 create index if not exists crm_contacts_hub_date_idx
   on public.crm_contacts (hub_id, contact_date desc);
 alter table public.crm_contacts disable row level security;
-
-notify pgrst, 'reload schema';
-select count(*) as crm_contacts_rows from public.crm_contacts;

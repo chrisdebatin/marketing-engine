@@ -1,24 +1,41 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { todayIso } from "@/lib/crm";
+import { KONTAKT_ARTEN, todayIso } from "@/lib/crm";
 
 export const runtime = "nodejs";
 
-// Public, token-gated: Die PDL hakt einen Besuch bei einem Ziel-Ort ab.
-// letzter_besuch = heute; naechster_besuch = heute + intervall_wochen —
-// so entsteht automatisch das Follow-up ("in 3 Wochen wieder").
+// Spalten/Tabellen aus 0027 fehlen evtl. noch — dann ohne sie weitermachen.
+function isMissingColumn(err: { code?: string } | null): boolean {
+  return (
+    err?.code === "PGRST204" || err?.code === "42703" || err?.code === "PGRST205"
+  );
+}
+
+// Public, token-gated: Die PDL loggt einen Kontakt (Box/Besuch/Anruf) mit
+// Ansprechpartner und Gesprächsnotiz. letzter_besuch = heute;
+// naechster_besuch = heute + intervall_wochen (Standard 4) — das nächste
+// Gespräch wird automatisch terminiert. Jeder Kontakt landet im Log.
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     token?: string;
     id?: string;
+    kontakt_art?: string;
+    ansprechpartner?: string;
     note?: string;
   };
 
   const token = (body.token ?? "").trim();
   const id = (body.id ?? "").trim();
+  const kontaktArt = (body.kontakt_art ?? "").trim();
   if (!token || !id) {
     return NextResponse.json(
       { error: "Token oder Ziel-Ort fehlt." },
+      { status: 400 },
+    );
+  }
+  if (!KONTAKT_ARTEN.some((k) => k.key === kontaktArt)) {
+    return NextResponse.json(
+      { error: "Bitte wählen: Box, Besuch oder Anruf." },
       { status: 400 },
     );
   }
@@ -50,21 +67,36 @@ export async function POST(req: Request) {
 
   const today = todayIso();
   const next = new Date();
-  next.setDate(next.getDate() + (target.intervall_wochen || 3) * 7);
+  next.setDate(next.getDate() + (target.intervall_wochen || 4) * 7);
   const naechster = next.toISOString().slice(0, 10);
+  const ansprechpartner = (body.ansprechpartner ?? "").trim().slice(0, 200);
+  const note = (body.note ?? "").trim().slice(0, 1000);
 
-  const { data: updated, error: updErr } = await admin
+  const base = {
+    letzter_besuch: today,
+    naechster_besuch: naechster,
+    besuchs_notiz: note || null,
+  };
+  const selectCols =
+    "id, name, kategorie, adresse, ort, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz";
+  let { data: updated, error: updErr } = await admin
     .from("crm_targets")
     .update({
-      letzter_besuch: today,
-      naechster_besuch: naechster,
-      besuchs_notiz: (body.note ?? "").trim().slice(0, 500) || null,
+      ...base,
+      ansprechpartner: ansprechpartner || null,
+      letzte_kontakt_art: kontaktArt,
     })
     .eq("id", id)
-    .select(
-      "id, name, kategorie, adresse, ort, intervall_wochen, letzter_besuch, naechster_besuch, besuchs_notiz",
-    )
+    .select(`${selectCols}, ansprechpartner, letzte_kontakt_art`)
     .single();
+  if (updErr && isMissingColumn(updErr)) {
+    ({ data: updated, error: updErr } = await admin
+      .from("crm_targets")
+      .update(base)
+      .eq("id", id)
+      .select(selectCols)
+      .single());
+  }
 
   if (updErr || !updated) {
     return NextResponse.json(
@@ -72,6 +104,16 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+
+  // Kontakt-Log (Wochenziel-Zählung); tolerant, falls 0027 noch fehlt.
+  await admin.from("crm_contacts").insert({
+    target_id: target.id,
+    hub_id: hub.id,
+    kontakt_art: kontaktArt,
+    ansprechpartner: ansprechpartner || null,
+    note: note || null,
+    contact_date: today,
+  });
 
   return NextResponse.json({ target: updated });
 }

@@ -6,11 +6,19 @@ import {
   CrmVisitList,
   type VisitTarget,
 } from "@/components/crm-visit-list";
+import { PdlTabs } from "@/components/pdl-tabs";
 import {
   OrderShop,
   type OrderWithItems,
   type ShopOrderItemLine,
 } from "@/components/order-shop";
+import {
+  crmStatus,
+  formatIsoDate,
+  kontaktArtLabel,
+  todayIso,
+  weekStartIso,
+} from "@/lib/crm";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +48,8 @@ export default async function HubShareLinkPage({
     { data: catalogData },
     { data: standorteData },
     { data: crmTargets },
+    { data: allTargets },
+    { data: allHubs },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -69,10 +79,49 @@ export default async function HubShareLinkPage({
       .order("name"),
     // Fallback ?? [] — fehlt Migration 0026, darf die Seite nicht crashen.
     admin.from("crm_targets").select("*").eq("hub_id", hub.id).order("name"),
+    // Für den Blick auf die anderen Standorte (nur Kliniken-Status, DSGVO ok).
+    admin.from("crm_targets").select("*").not("hub_id", "is", null).order("name"),
+    admin.from("hubs").select("id, name"),
   ]);
 
   const catalog = catalogData ?? [];
   const orderList = orders ?? [];
+
+  // Wochenziel: geloggte Kontakte dieses Hubs seit Montag. Fällt auf die
+  // letzter_besuch-Daten zurück, solange das Kontakt-Log (0027) fehlt.
+  const weekStart = weekStartIso();
+  let weekCount = 0;
+  const { count: contactCount, error: contactErr } = await admin
+    .from("crm_contacts")
+    .select("id", { count: "exact", head: true })
+    .eq("hub_id", hub.id)
+    .gte("contact_date", weekStart);
+  if (!contactErr && contactCount != null) {
+    weekCount = contactCount;
+  } else {
+    weekCount = ((crmTargets ?? []) as VisitTarget[]).filter(
+      (t) => t.letzter_besuch && t.letzter_besuch >= weekStart,
+    ).length;
+  }
+
+  // Kliniken-Listen der anderen Standorte (nur lesend).
+  const hubNameOf = (id: string | null) =>
+    (allHubs ?? []).find((h) => h.id === id)?.name ?? "Unbekannt";
+  const otherByHub = new Map<string, VisitTarget[]>();
+  for (const t of ((allTargets ?? []) as (VisitTarget & { hub_id: string | null })[])) {
+    if (!t.hub_id || t.hub_id === hub.id) continue;
+    const arr = otherByHub.get(t.hub_id) ?? [];
+    arr.push(t);
+    otherByHub.set(t.hub_id, arr);
+  }
+  const otherGroups = [...otherByHub.entries()]
+    .map(([hubId, list]) => ({ hubName: hubNameOf(hubId), list }))
+    .sort((a, b) => a.hubName.localeCompare(b.hubName, "de"));
+
+  const ownTargets = (crmTargets ?? []) as VisitTarget[];
+  const dueCount = ownTargets.filter(
+    (t) => crmStatus(t, todayIso()) !== "geplant",
+  ).length;
 
   // Eingabe-Vorschläge: bekannte Standorte des Hubs + frühere Einträge.
   const suggestionMap = new Map<
@@ -133,7 +182,7 @@ export default async function HubShareLinkPage({
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8">
       {/* Hero mit Standort und Liefer-Kennzahlen */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-chart-5 p-6 text-primary-foreground shadow-lg">
         <div
@@ -177,11 +226,12 @@ export default async function HubShareLinkPage({
 
       {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
       <StepBox
-        title="So nutzen Sie diese Seite — 3 Aufgaben:"
+        title="So nutzen Sie diese Seite — 3 Aufgaben (Reiter oben):"
         steps={[
           <>
-            <strong className="text-foreground">Besuchs-Liste abarbeiten:</strong>{" "}
-            Dort Boxen vorbeibringen und den Besuch abhaken.
+            <strong className="text-foreground">Kliniken kontaktieren:</strong>{" "}
+            Ihre Liste abarbeiten — Box, Besuch oder Anruf, und jeden Kontakt
+            loggen. Ziel: 4 Kliniken pro Woche.
           </>,
           <>
             <strong className="text-foreground">Orte eintragen:</strong> Wo
@@ -194,27 +244,93 @@ export default async function HubShareLinkPage({
         ]}
       />
 
-      {((crmTargets ?? []) as VisitTarget[]).length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="text-xl font-semibold">1. Ihre Besuchs-Liste</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Diese Orte sollen Sie mit Case-Management-Boxen besuchen. Nach
-              dem Abhaken meldet sich die Liste automatisch, wenn das nächste
-              Follow-up ansteht.
-            </p>
-          </div>
-          <CrmVisitList
-            token={token}
-            initial={(crmTargets ?? []) as VisitTarget[]}
-          />
-        </section>
-      )}
+      <PdlTabs
+        tabs={[
+          {
+            id: "kliniken",
+            label: "Kliniken (CRM)",
+            badge: dueCount,
+            content: (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    Ihre Kliniken-Liste
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Diese Kliniken sollen Sie kontaktieren — Sie entscheiden,
+                    ob Box, persönlicher Besuch oder Anruf. Wichtig: jeden
+                    Kontakt loggen; das nächste Gespräch wird automatisch
+                    terminiert.
+                  </p>
+                </div>
+                <CrmVisitList
+                  token={token}
+                  initial={ownTargets}
+                  initialWeekCount={weekCount}
+                />
 
-      <section className="flex flex-col gap-3 border-t pt-6">
+                {otherGroups.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t pt-5">
+                    <h3 className="font-semibold">
+                      Listen der anderen Standorte (nur ansehen)
+                    </h3>
+                    {otherGroups.map((g) => (
+                      <details
+                        key={g.hubName}
+                        className="group rounded-xl border bg-card"
+                      >
+                        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium select-none">
+                          {g.hubName}
+                          <span className="text-xs font-normal text-muted-foreground">
+                            ({g.list.length} Kliniken)
+                          </span>
+                          <span className="ml-auto text-xs text-muted-foreground group-open:hidden">
+                            aufklappen
+                          </span>
+                        </summary>
+                        <ul className="flex flex-col gap-1 border-t px-4 py-3">
+                          {g.list.map((t) => {
+                            const s = crmStatus(t, todayIso());
+                            return (
+                              <li
+                                key={t.id}
+                                className="flex items-baseline justify-between gap-3 border-t pt-1 text-sm first:border-t-0 first:pt-0"
+                              >
+                                <span className="min-w-0 truncate">
+                                  {t.name}
+                                  {t.ort ? (
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      · {t.ort}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="shrink-0 text-xs text-muted-foreground">
+                                  {s === "erstbesuch"
+                                    ? "noch kein Kontakt"
+                                    : s === "faellig"
+                                      ? "fällig"
+                                      : `${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}`}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            id: "orte",
+            label: "Auslage-Orte",
+            content: (
+              <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-xl font-semibold">
-            2. Auslage-Orte eintragen
+            Auslage-Orte eintragen
           </h2>
         </div>
         <StepBox
@@ -248,11 +364,16 @@ export default async function HubShareLinkPage({
           allowBoxes
           suggestions={suggestions}
         />
-      </section>
-
-      <section className="flex flex-col gap-3 border-t pt-6">
+              </section>
+            ),
+          },
+          {
+            id: "material",
+            label: "Material",
+            content: (
+              <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-xl font-semibold">3. Material bestellen</h2>
+          <h2 className="text-xl font-semibold">Material bestellen</h2>
         </div>
         <StepBox
           title="So geht's:"
@@ -309,8 +430,11 @@ export default async function HubShareLinkPage({
         ) : (
           <OrderShop token={token} catalog={catalog} initial={shopOrders} />
         )}
-      </section>
-
+              </section>
+            ),
+          },
+        ]}
+      />
     </main>
   );
 }

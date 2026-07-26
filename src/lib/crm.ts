@@ -24,3 +24,26 @@ export function formatIsoDate(iso: string | null): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("de-DE");
 }
+
+/** Kontakt-Arten, die die PDL beim Loggen wählt. */
+export const KONTAKT_ARTEN = [
+  { key: "box", label: "Box vorbeigebracht" },
+  { key: "besuch", label: "Persönlicher Besuch" },
+  { key: "anruf", label: "Anruf" },
+] as const;
+
+export function kontaktArtLabel(key: string | null | undefined): string {
+  if (!key) return "";
+  return KONTAKT_ARTEN.find((k) => k.key === key)?.label ?? key;
+}
+
+/** Wochenziel: so viele Klinik-Kontakte soll jede PDL pro Woche loggen. */
+export const WEEKLY_GOAL = 4;
+
+/** Montag der aktuellen Woche als ISO-Datum. */
+export function weekStartIso(today: string = todayIso()): string {
+  const d = new Date(`${today}T00:00:00`);
+  const day = (d.getDay() + 6) % 7; // Mo=0 … So=6
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
