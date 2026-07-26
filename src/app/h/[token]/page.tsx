@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ListChecks } from "lucide-react";
+import { CalendarDays, ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PlacementBoard } from "@/components/placement-board";
 import {
@@ -247,6 +247,31 @@ export default async function HubShareLinkPage({
           </>,
         ]}
       />
+
+      {/* Monatliches Abstimmungs-Meeting mit dem Marketing-Team */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <CalendarDays className="size-5 text-primary" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">
+            Meeting mit dem Marketing-Team
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Buchen Sie sich einen 30-Minuten-Termin — empfohlen: einmal im
+            Monat.
+          </p>
+        </div>
+        <a
+          href="https://calendly.com/christopher-debatin-tern-group/30min"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        >
+          <CalendarDays className="size-4" />
+          Termin buchen
+        </a>
+      </div>
 
       <PdlTabs
         tabs={[
