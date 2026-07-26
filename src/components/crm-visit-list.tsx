@@ -173,6 +173,7 @@ export function CrmVisitList({
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         target?: VisitTarget;
+        placementCreated?: boolean;
       };
       if (!res.ok || !body.target) {
         toast.error(body.error ?? "Speichern fehlgeschlagen.");
@@ -186,7 +187,9 @@ export function CrmVisitList({
       setNote("");
       setRecare("");
       toast.success(
-        `Kontakt gespeichert — nächstes Gespräch ab ${formatIsoDate(body.target.naechster_besuch)}`,
+        body.placementCreated
+          ? `Kontakt gespeichert — Box-Lieferung automatisch als Ort eingetragen. Nächstes Gespräch ab ${formatIsoDate(body.target.naechster_besuch)}`
+          : `Kontakt gespeichert — nächstes Gespräch ab ${formatIsoDate(body.target.naechster_besuch)}`,
       );
     } catch {
       toast.error("Netzwerkfehler. Bitte erneut versuchen.");

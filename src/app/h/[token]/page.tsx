@@ -226,20 +226,24 @@ export default async function HubShareLinkPage({
 
       {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
       <StepBox
-        title="So nutzen Sie diese Seite — 3 Aufgaben (Reiter oben):"
+        title="So nutzen Sie diese Seite — 3 Reiter oben:"
         steps={[
           <>
-            <strong className="text-foreground">Kliniken kontaktieren:</strong>{" "}
-            Ihre Liste abarbeiten — Box, Besuch oder Anruf, und jeden Kontakt
-            loggen. Ziel: 4 Kliniken pro Woche.
+            <strong className="text-foreground">Meine Kliniken:</strong> Ihre
+            Liste abarbeiten — Box, Besuch oder Anruf, jeden Kontakt loggen
+            (Ziel: 4 pro Woche). Eine geloggte Box zählt automatisch als
+            Box-Lieferort.
           </>,
           <>
-            <strong className="text-foreground">Orte eintragen:</strong> Wo
-            haben Sie Flyer ausgelegt oder Boxen abgegeben?
+            <strong className="text-foreground">
+              Flyer &amp; Boxen unterwegs:
+            </strong>{" "}
+            Nur für spontane Orte außerhalb der Liste — Apotheke, Praxis
+            &amp; Co.
           </>,
           <>
-            <strong className="text-foreground">Material bestellen:</strong>{" "}
-            Nachschub an Flyern, Boxen &amp; Co. anfordern.
+            <strong className="text-foreground">Material:</strong> Nachschub
+            an Flyern, Boxen &amp; Co. bestellen — bitte nur bei Bedarf.
           </>,
         ]}
       />
@@ -248,7 +252,7 @@ export default async function HubShareLinkPage({
         tabs={[
           {
             id: "kliniken",
-            label: "Kliniken (CRM)",
+            label: "Meine Kliniken",
             badge: dueCount,
             content: (
               <div className="flex flex-col gap-5">
@@ -325,13 +329,17 @@ export default async function HubShareLinkPage({
           },
           {
             id: "orte",
-            label: "Auslage-Orte",
+            label: "Flyer & Boxen unterwegs",
             content: (
               <section className="flex flex-col gap-3">
         <div>
           <h2 className="text-xl font-semibold">
-            Auslage-Orte eintragen
+            Flyer & Boxen unterwegs
           </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Für spontane Orte außerhalb Ihrer Kliniken-Liste — Apotheke,
+            Praxis, Sanitätshaus &amp; Co.
+          </p>
         </div>
         <StepBox
           title="So geht's:"
@@ -356,6 +364,14 @@ export default async function HubShareLinkPage({
               löschen.
             </>,
           ]}
+          footer={
+            <>
+              <strong className="text-foreground">Wichtig:</strong> Kliniken
+              aus Ihrer Liste bitte im Reiter „Meine Kliniken&rdquo; loggen —
+              eine dort geloggte Box zählt hier automatisch als
+              Box-Lieferort, kein doppeltes Eintragen nötig.
+            </>
+          }
         />
         <PlacementBoard
           token={token}

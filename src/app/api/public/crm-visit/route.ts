@@ -126,7 +126,31 @@ export async function POST(req: Request) {
     contact_date: today,
   });
 
-  return NextResponse.json({ target: updated });
+  // "Box vorbeigebracht" zählt automatisch als Box-Liefer-Ort — kein
+  // doppeltes Loggen im Auslage-Tab nötig (Karte/Statistik stimmen mit).
+  let placementCreated = false;
+  if (kontaktArt === "box") {
+    const { data: full } = await admin
+      .from("crm_targets")
+      .select("name, kategorie, adresse, ort")
+      .eq("id", id)
+      .single();
+    if (full) {
+      const { error: plErr } = await admin.from("delivery_placements").insert({
+        hub_id: hub.id,
+        delivery_id: null,
+        standort_name: full.name,
+        menge: null,
+        kind: "box",
+        place_kind: full.kategorie ?? "krankenhaus",
+        adresse: full.adresse ?? null,
+        ort: full.ort ?? null,
+      });
+      placementCreated = !plErr;
+    }
+  }
+
+  return NextResponse.json({ target: updated, placementCreated });
 }
 
 // Klinik-Eintrag korrigieren (Name/Adresse/Ort/Ansprechpartner/Recare/Info).
