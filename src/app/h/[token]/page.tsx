@@ -3,6 +3,10 @@ import { ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PlacementBoard } from "@/components/placement-board";
 import {
+  CrmVisitList,
+  type VisitTarget,
+} from "@/components/crm-visit-list";
+import {
   OrderShop,
   type OrderWithItems,
   type ShopOrderItemLine,
@@ -35,6 +39,7 @@ export default async function HubShareLinkPage({
     { data: orders },
     { data: catalogData },
     { data: standorteData },
+    { data: crmTargets },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -62,6 +67,8 @@ export default async function HubShareLinkPage({
       .select("name, adresse")
       .eq("hub_id", hub.id)
       .order("name"),
+    // Fallback ?? [] — fehlt Migration 0026, darf die Seite nicht crashen.
+    admin.from("crm_targets").select("*").eq("hub_id", hub.id).order("name"),
   ]);
 
   const catalog = catalogData ?? [];
@@ -170,8 +177,12 @@ export default async function HubShareLinkPage({
 
       {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
       <StepBox
-        title="So nutzen Sie diese Seite — 2 Aufgaben:"
+        title="So nutzen Sie diese Seite — 3 Aufgaben:"
         steps={[
+          <>
+            <strong className="text-foreground">Besuchs-Liste abarbeiten:</strong>{" "}
+            Dort Boxen vorbeibringen und den Besuch abhaken.
+          </>,
           <>
             <strong className="text-foreground">Orte eintragen:</strong> Wo
             haben Sie Flyer ausgelegt oder Boxen abgegeben?
@@ -183,10 +194,27 @@ export default async function HubShareLinkPage({
         ]}
       />
 
-      <section className="flex flex-col gap-3">
+      {((crmTargets ?? []) as VisitTarget[]).length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">1. Ihre Besuchs-Liste</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Diese Orte sollen Sie mit Case-Management-Boxen besuchen. Nach
+              dem Abhaken meldet sich die Liste automatisch, wenn das nächste
+              Follow-up ansteht.
+            </p>
+          </div>
+          <CrmVisitList
+            token={token}
+            initial={(crmTargets ?? []) as VisitTarget[]}
+          />
+        </section>
+      )}
+
+      <section className="flex flex-col gap-3 border-t pt-6">
         <div>
           <h2 className="text-xl font-semibold">
-            1. Auslage-Orte eintragen
+            2. Auslage-Orte eintragen
           </h2>
         </div>
         <StepBox
@@ -224,7 +252,7 @@ export default async function HubShareLinkPage({
 
       <section className="flex flex-col gap-3 border-t pt-6">
         <div>
-          <h2 className="text-xl font-semibold">2. Material bestellen</h2>
+          <h2 className="text-xl font-semibold">3. Material bestellen</h2>
         </div>
         <StepBox
           title="So geht's:"

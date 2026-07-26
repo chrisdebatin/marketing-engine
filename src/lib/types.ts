@@ -414,6 +414,38 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["hub_notes"]["Insert"]>;
         Relationships: [];
       };
+      crm_targets: {
+        Row: {
+          id: string;
+          hub_id: string | null;
+          name: string;
+          kategorie: string | null;
+          adresse: string | null;
+          ort: string | null;
+          note: string | null;
+          intervall_wochen: number;
+          letzter_besuch: string | null;
+          naechster_besuch: string | null;
+          besuchs_notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          hub_id?: string | null;
+          name: string;
+          kategorie?: string | null;
+          adresse?: string | null;
+          ort?: string | null;
+          note?: string | null;
+          intervall_wochen?: number;
+          letzter_besuch?: string | null;
+          naechster_besuch?: string | null;
+          besuchs_notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;
+        Relationships: [];
+      };
       note_topics: {
         Row: {
           id: string;

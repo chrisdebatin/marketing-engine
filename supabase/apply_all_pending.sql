@@ -76,6 +76,24 @@ create index if not exists hub_notes_topic_idx on public.hub_notes (topic_id);
 alter table public.hubs
   add column if not exists ik_nummer text;
 
+-- ── 0026: CRM — zentrale Ziel-Orte mit Hub-Zuteilung & Follow-ups ───
+create table if not exists public.crm_targets (
+  id               uuid primary key default gen_random_uuid(),
+  hub_id           uuid references public.hubs (id) on delete set null,
+  name             text not null,
+  kategorie        text,
+  adresse          text,
+  ort              text,
+  note             text,
+  intervall_wochen integer not null default 3 check (intervall_wochen between 1 and 52),
+  letzter_besuch   date,
+  naechster_besuch date,
+  besuchs_notiz    text,
+  created_at       timestamptz default now()
+);
+create index if not exists crm_targets_hub_idx on public.crm_targets (hub_id);
+alter table public.crm_targets disable row level security;
+
 -- ── 0023: Outlook-Anbindung (OAuth-Token-Speicher) ──────────────────
 create table if not exists public.ms_oauth_tokens (
   id            text primary key default 'default',
