@@ -4,24 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isNavActive, navItems } from "@/lib/nav";
 import { OnlineIndicator } from "@/components/online-indicator";
 import { SyncBadge } from "@/components/sync-badge";
 
-const NAV = [
-  { href: "/", label: "Start" },
-  { href: "/hubs", label: "Hubs" },
-  { href: "/karte", label: "Karte" },
-  { href: "/ziele", label: "Ziele" },
-  { href: "/lieferungen", label: "Lieferungen" },
-  { href: "/flyeraktionen", label: "Flyeraktionen" },
-  { href: "/themen", label: "Themen" },
-  { href: "/patienten", label: "Patienten" },
-  { href: "/assistant", label: "Assistant" },
-];
-
 export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string | null }) {
   const pathname = usePathname();
-  const links = isAdmin ? [...NAV, { href: "/admin", label: "Admin" }] : NAV;
+  const links = navItems(isAdmin);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
@@ -34,8 +23,7 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
         </Link>
         <nav className="ml-1 flex flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {links.map((l) => {
-            const active =
-              l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+            const active = isNavActive(l.href, pathname);
             return (
               <Link
                 key={l.href}
