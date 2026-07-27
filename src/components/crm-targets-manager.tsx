@@ -138,6 +138,14 @@ export function CrmTargetsManager({
   const [importText, setImportText] = useState("");
   const [importHub, setImportHub] = useState(HUB_NONE);
 
+  // Suche & Filter
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "alle" | "faellig" | "erstbesuch" | "geplant"
+  >("alle");
+  const [prioFilter, setPrioFilter] = useState<0 | 1 | 2 | 3>(0);
+  const [nurPdl, setNurPdl] = useState(false);
+
   // Bearbeiten
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState<CrmTargetRow | null>(null);
@@ -220,11 +228,27 @@ export function CrmTargetsManager({
     });
   }
 
+  // Suche + Filter über alle Ziele, dann Gruppierung.
+  const isPdlAdded = (t: CrmTargetRow) => /Von der PDL/i.test(t.note ?? "");
+  const q = query.trim().toLowerCase();
+  const filtered = targets.filter((t) => {
+    if (q) {
+      const hay = `${t.name} ${t.ort ?? ""} ${t.adresse ?? ""} ${t.ansprechpartner ?? ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (statusFilter !== "alle" && crmStatus(t, todayIso()) !== statusFilter) {
+      return false;
+    }
+    if (prioFilter !== 0 && relevanzOf(t) !== prioFilter) return false;
+    if (nurPdl && !isPdlAdded(t)) return false;
+    return true;
+  });
+
   // Gruppierung: je Hub (alphabetisch), "Nicht zugeteilt" zuerst (Handlungsbedarf).
   const hubName = (id: string | null) =>
     hubs.find((h) => h.id === id)?.name ?? null;
   const groups = new Map<string, CrmTargetRow[]>();
-  for (const t of targets) {
+  for (const t of filtered) {
     const key = t.hub_id ?? HUB_NONE;
     const arr = groups.get(key) ?? [];
     arr.push(t);
@@ -240,6 +264,13 @@ export function CrmTargetsManager({
     const s = crmStatus(t, todayIso());
     return s === "faellig" ? 0 : s === "erstbesuch" ? 1 : 2;
   };
+
+  const cnFilterChip = (active: boolean) =>
+    `cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors select-none ${
+      active
+        ? "border-primary bg-primary/10 text-primary"
+        : "text-muted-foreground hover:text-foreground"
+    }`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -417,11 +448,72 @@ export function CrmTargetsManager({
         </Button>
       </div>
 
+      {/* Suche & Filter */}
+      {targets.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-2xl border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Suchen: Name, Ort, Adresse, Ansprechpartner…"
+              className="min-w-56 flex-1"
+              autoComplete="off"
+            />
+            <label className="flex cursor-pointer items-center gap-1.5 text-sm select-none">
+              <input
+                type="checkbox"
+                checked={nurPdl}
+                onChange={(e) => setNurPdl(e.target.checked)}
+                className="size-4 accent-primary"
+              />
+              nur von PDLs eingetragene
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                ["alle", "Alle"],
+                ["faellig", "Follow-up fällig"],
+                ["erstbesuch", "Erstkontakt offen"],
+                ["geplant", "Erledigt/geplant"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStatusFilter(value)}
+                className={cnFilterChip(statusFilter === value)}
+              >
+                {label}
+              </button>
+            ))}
+            <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+            {([0, 1, 2, 3] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setPrioFilter(v)}
+                className={cnFilterChip(prioFilter === v)}
+              >
+                {v === 0 ? "Alle Prios" : `Prio ${v}`}
+              </button>
+            ))}
+            <span className="ml-auto text-xs text-muted-foreground">
+              {filtered.length} von {targets.length} Orten
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Gruppen je Hub */}
       {targets.length === 0 ? (
         <p className="rounded-2xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
           Noch keine Ziel-Orte. Lege oben die Krankenhäuser &amp; Co. an oder
           importiere deine Liste.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="rounded-2xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+          Kein Ziel-Ort passt zu Suche/Filter.
         </p>
       ) : (
         groupKeys.map((key) => {
@@ -508,6 +600,14 @@ export function CrmTargetsManager({
                                 ? "kein Recare"
                                 : "Recare?"}
                           </Badge>
+                          {isPdlAdded(t) && (
+                            <Badge
+                              variant="outline"
+                              className="border-chart-4/40 bg-chart-4/10 text-chart-4"
+                            >
+                              von PDL
+                            </Badge>
+                          )}
                           {relevanzOf(t) != null && (
                             <Badge
                               variant="outline"

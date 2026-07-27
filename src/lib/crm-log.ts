@@ -203,3 +203,76 @@ export async function logContactOnTarget(input: {
     },
   };
 }
+
+/** Namens-Normalisierung für den Abgleich Auslage-Ort ↔ CRM-Ziel. */
+function normName(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/[^a-zäöüß0-9]+/g, " ")
+    .replace(
+      /\b(krankenhaus|klinikum|kliniken|klinik|hospital|st|sankt|ev|evangelisches|agaplesion|helios|sana)\b/g,
+      "",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Auslage (delivery_placements) ins CRM übernehmen: passenden Ziel-Ort
+ * suchen (fuzzy), sonst anlegen; Kontakt loggen und den Ziel-Ort neu
+ * ableiten. Fehlertolerant — eine Auslage darf nie am CRM scheitern.
+ */
+export async function syncPlacementToCrm(input: {
+  hubId: string;
+  name: string;
+  kind: string; // box | flyer
+  placeKind?: string | null;
+  adresse?: string | null;
+  ort?: string | null;
+}): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: targets } = await admin
+      .from("crm_targets")
+      .select("id, name")
+      .eq("hub_id", input.hubId);
+    const n = normName(input.name);
+    let target = (targets ?? []).find((t) => {
+      const h = normName(t.name);
+      return (
+        h === n ||
+        (h.includes(n) && n.length >= 10) ||
+        (n.includes(h) && h.length >= 10)
+      );
+    });
+
+    if (!target) {
+      const { data: created } = await admin
+        .from("crm_targets")
+        .insert({
+          hub_id: input.hubId,
+          name: input.name.slice(0, 200),
+          kategorie: input.placeKind ?? null,
+          adresse: input.adresse ?? null,
+          ort: input.ort ?? null,
+          intervall_wochen: 4,
+          note: "Von der PDL erfasst (Auslage)",
+        })
+        .select("id, name")
+        .single();
+      if (!created) return;
+      target = created;
+    }
+
+    await admin.from("crm_contacts").insert({
+      target_id: target.id,
+      hub_id: input.hubId,
+      kontakt_art: input.kind === "box" ? "box" : "flyer",
+      contact_date: todayIso(),
+    });
+    await resyncTargetFromLog(input.hubId, target.id);
+  } catch (err) {
+    console.error("syncPlacementToCrm fehlgeschlagen:", err);
+  }
+}

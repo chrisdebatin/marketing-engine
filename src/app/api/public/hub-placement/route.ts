@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlaceKind } from "@/lib/places";
+import { syncPlacementToCrm } from "@/lib/crm-log";
 
 export const runtime = "nodejs";
 
@@ -75,6 +76,16 @@ export async function POST(req: Request) {
   if (insErr) {
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
+
+  // Ort auch ins zentrale CRM übernehmen (Ziel-Ort + Kontakt-Log).
+  await syncPlacementToCrm({
+    hubId: hub.id,
+    name: standort,
+    kind,
+    placeKind,
+    adresse: adresse || null,
+    ort: ort || null,
+  });
 
   return NextResponse.json({ placement: inserted });
 }
