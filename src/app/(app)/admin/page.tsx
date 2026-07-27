@@ -277,9 +277,12 @@ export default async function AdminPage() {
         {outlookAccount || smtpReady ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Jeden Montag gehen automatisch die Wochen-Mails raus: Update an
-              die MDs (E-Mail je Hub unten im Hub-Formular hinterlegen) und
-              Wochen-Plan an die PDLs.{" "}
+              Es wird nichts automatisch versendet — Wochen-Mails (MD-Updates,
+              PDL-Plan, Gruppen-Report) prüfen und freigeben Sie im{" "}
+              <a href="/kommunikation" className="text-primary underline">
+                Kommunikations-Tab
+              </a>
+              .{" "}
               {outlookAccount ? (
                 <>
                   Anfragen der Standorte:{" "}

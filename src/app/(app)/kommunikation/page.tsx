@@ -61,10 +61,10 @@ export default async function KommunikationPage() {
         <h1 className="text-2xl font-semibold">Kommunikation</h1>
         <p className="text-sm text-muted-foreground">
           Wochen-Report der Gruppe ({formatIsoDate(g.from)} –{" "}
-          {formatIsoDate(g.to)}). Automatisch jeden Montag: Wochen-Plan an die
-          PDLs und Gruppen-Report an die Geschäftsführung. Die MD-Updates
-          liegen unten als Entwürfe und gehen erst nach Ihrer Freigabe raus.
-          Demnächst zusätzlich: neue Patienten je Standort.
+          {formatIsoDate(g.to)}). Es wird nichts automatisch versendet — alle
+          Mails (MD-Updates, PDL-Wochen-Plan, Gruppen-Report) prüfen Sie hier
+          und geben sie per Klick frei. Demnächst zusätzlich: neue Patienten
+          je Standort.
         </p>
       </div>
 

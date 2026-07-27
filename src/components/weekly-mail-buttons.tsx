@@ -36,7 +36,7 @@ export function WeeklyMailButtons() {
   return (
     <div className="flex flex-col gap-2 border-t pt-3">
       <p className="text-sm font-medium">
-        Wochen-Mails (automatisch jeden Montag 8:00 Uhr)
+        Wochen-Mails (kein Automatik-Versand — nur manuell)
       </p>
       <div className="flex flex-wrap gap-2">
         <Button

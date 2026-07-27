@@ -312,7 +312,7 @@ Aktion zählt für das Standort-Ranking, und der nächste Termin wird
 automatisch gesetzt.</p>
 <p>Viele Grüße<br>Ihr Marketing-Team<br>
 Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
-<p style="color:#8a90a3;font-size:12px">Diese Erinnerung wird automatisch jeden Montag versendet.</p>
+<p style="color:#8a90a3;font-size:12px">Wochen-Plan des Marketing-Teams.</p>
 </div>`;
 
     const res = await deliverMail({
@@ -494,7 +494,7 @@ ${placementRows}
 <p>Details im Dashboard: <a href="${appUrl()}/kommunikation">${appUrl()}/kommunikation</a></p>
 <p>Viele Grüße<br>Ihr Marketing-Team<br>
 Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
-<p style="color:#8a90a3;font-size:12px">Automatischer Wochen-Report, jeden Montag. Demnächst zusätzlich: neue Patienten je Standort.</p>
+<p style="color:#8a90a3;font-size:12px">Wochen-Report des Marketing-Teams. Demnächst zusätzlich: neue Patienten je Standort.</p>
 </div>`;
 
   return {

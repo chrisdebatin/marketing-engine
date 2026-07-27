@@ -44,7 +44,7 @@ export function KommunikationSend({ gfAddress }: { gfAddress: string }) {
 
   return (
     <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-5 shadow-sm">
-      <p className="font-semibold">Jetzt senden (statt Montag zu warten)</p>
+      <p className="font-semibold">Versand — nur nach Ihrer Freigabe</p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
@@ -80,9 +80,7 @@ export function KommunikationSend({ gfAddress }: { gfAddress: string }) {
       <p className="text-xs text-muted-foreground">
         {pending
           ? "Sende…"
-          : gfConfigured
-            ? `PDL-Plan und Gruppen-Report (an ${gfAddress}) gehen automatisch jeden Montag ~8:00 Uhr raus. MD-Updates: nur nach Freigabe der Entwürfe unten.`
-            : "PDL-Plan geht automatisch jeden Montag raus. MD-Updates: nur nach Freigabe der Entwürfe unten."}
+          : `Nichts wird automatisch versendet. Gruppen-Report geht an ${gfConfigured ? gfAddress : "die eingegebene Adresse"}; MD-Updates unten als Entwürfe einzeln freigeben.`}
       </p>
       {result && (
         <p className="text-xs break-words text-muted-foreground">{result}</p>
