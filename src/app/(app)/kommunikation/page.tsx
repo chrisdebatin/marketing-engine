@@ -1,6 +1,10 @@
 import { Megaphone, Package, Phone, ShoppingCart, Trophy, Users } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { buildMdDrafts, collectGroupWeekly } from "@/lib/weekly-mails";
+import {
+  buildMdDrafts,
+  collectGroupWeekly,
+  gfRecipients,
+} from "@/lib/weekly-mails";
 import { formatIsoDate } from "@/lib/crm";
 import { mailConfigured } from "@/lib/mailer";
 import { KommunikationSend } from "@/components/kommunikation-send";
@@ -65,7 +69,7 @@ export default async function KommunikationPage() {
       </div>
 
       {mailConfigured() ? (
-        <KommunikationSend gfConfigured={Boolean(process.env.GF_EMAIL)} />
+        <KommunikationSend gfAddress={gfRecipients().join(", ")} />
       ) : (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
           Mail-Versand noch nicht eingerichtet — SMTP-Zugangsdaten setzen

@@ -503,22 +503,27 @@ Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-ho
   };
 }
 
-/** Gruppen-Report senden — an GF_EMAIL (Env) oder übergebene Adressen. */
+// Geschäftsführer der Gruppe — per Env-Variable GF_EMAIL überschreibbar.
+const GF_DEFAULT = "mike.sablowsky@igs-holding.de";
+
+/** Empfänger des Gruppen-Reports (Env GF_EMAIL, sonst Mike Sablowsky). */
+export function gfRecipients(): string[] {
+  const fromEnv = (process.env.GF_EMAIL ?? "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.includes("@"));
+  return fromEnv.length > 0 ? fromEnv : [GF_DEFAULT];
+}
+
+/** Gruppen-Report senden — an die Geschäftsführung oder übergebene Adressen. */
 export async function sendGroupReport(
   toOverride?: string[],
 ): Promise<MailRunResult> {
   const result: MailRunResult = { sent: [], skipped: [], errors: [] };
   const to =
-    toOverride && toOverride.length > 0
-      ? toOverride
-      : (process.env.GF_EMAIL ?? "")
-          .split(/[,;\s]+/)
-          .map((s) => s.trim())
-          .filter((s) => s.includes("@"));
+    toOverride && toOverride.length > 0 ? toOverride : gfRecipients();
   if (to.length === 0) {
-    result.skipped.push(
-      "Keine Geschäftsführungs-Adresse (GF_EMAIL) hinterlegt.",
-    );
+    result.skipped.push("Keine Geschäftsführungs-Adresse hinterlegt.");
     return result;
   }
   const g = await collectGroupWeekly();
