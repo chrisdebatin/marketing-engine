@@ -274,6 +274,8 @@ export async function syncPlacementToCrm(input: {
         .single();
       if (!created) return;
       target = created;
+      const match = await checkCrossHubVisit(input.hubId, input.name, input.ort);
+      if (match) await flagCrossHubVisit(created.id, match);
     }
 
     await admin.from("crm_contacts").insert({
@@ -286,4 +288,82 @@ export async function syncPlacementToCrm(input: {
   } catch (err) {
     console.error("syncPlacementToCrm fehlgeschlagen:", err);
   }
+}
+
+/**
+ * Doppel-Check über alle Standorte: War eine ANDERE PDL an diesem Ort
+ * schon? Match über normalisierten Namen; wenn beide eine Stadt haben,
+ * muss sie übereinstimmen (sonst würde jede "Rathaus-Apotheke" anschlagen).
+ * Gibt den jüngsten Fremd-Besuch zurück — oder null.
+ */
+export async function checkCrossHubVisit(
+  hubId: string,
+  name: string,
+  ort?: string | null,
+): Promise<{ hubName: string; besuchtAm: string; ort: string | null } | null> {
+  try {
+    const admin = createAdminClient();
+    const [{ data: others }, { data: hubs }] = await Promise.all([
+      admin
+        .from("crm_targets")
+        .select("hub_id, name, ort, letzter_besuch")
+        .neq("hub_id", hubId)
+        .not("hub_id", "is", null)
+        .not("letzter_besuch", "is", null),
+      admin.from("hubs").select("id, name"),
+    ]);
+    const n = normName(name);
+    if (!n) return null;
+    const city = (ort ?? "").trim().toLowerCase();
+
+    let best: { hubId: string; besuchtAm: string; ort: string | null } | null =
+      null;
+    for (const t of others ?? []) {
+      const h = normName(t.name);
+      const nameMatch =
+        h === n ||
+        (h.includes(n) && n.length >= 10) ||
+        (n.includes(h) && h.length >= 10);
+      if (!nameMatch) continue;
+      const otherCity = (t.ort ?? "").trim().toLowerCase();
+      if (city && otherCity && city !== otherCity) continue;
+      if (!best || (t.letzter_besuch ?? "") > best.besuchtAm) {
+        best = {
+          hubId: t.hub_id as string,
+          besuchtAm: t.letzter_besuch as string,
+          ort: t.ort,
+        };
+      }
+    }
+    if (!best) return null;
+    const hubName =
+      (hubs ?? []).find((h) => h.id === best!.hubId)?.name ?? "einem anderen Standort";
+    return { hubName, besuchtAm: best.besuchtAm, ort: best.ort };
+  } catch {
+    return null;
+  }
+}
+
+/** Fremd-Besuch als Markierung an die Notiz des neuen Ziel-Orts anhängen. */
+export async function flagCrossHubVisit(
+  targetId: string,
+  match: { hubName: string; besuchtAm: string },
+): Promise<string> {
+  const warnung = `⚠ Standort ${match.hubName} war dort bereits (${match.besuchtAm.split("-").reverse().join(".")})`;
+  try {
+    const admin = createAdminClient();
+    const { data: t } = await admin
+      .from("crm_targets")
+      .select("note")
+      .eq("id", targetId)
+      .single();
+    const note = ((t?.note ?? "").trim()
+      ? `${t!.note!.trim()} · ${warnung}`
+      : warnung
+    ).slice(0, 1000);
+    await admin.from("crm_targets").update({ note }).eq("id", targetId);
+  } catch {
+    // Markierung ist nice-to-have — Warnung geht trotzdem an die UI.
+  }
+  return warnung;
 }

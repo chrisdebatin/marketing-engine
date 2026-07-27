@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isPlaceKind } from "@/lib/places";
+import { checkCrossHubVisit, flagCrossHubVisit } from "@/lib/crm-log";
 
 export const runtime = "nodejs";
 
@@ -60,5 +61,22 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-  return NextResponse.json({ target: inserted });
+
+  // Doppel-Check: War eine andere PDL an diesem Ort schon?
+  let warnung: string | null = null;
+  const match = await checkCrossHubVisit(
+    hub.id,
+    name,
+    (body.ort ?? "").trim() || null,
+  );
+  if (match) {
+    warnung = await flagCrossHubVisit(inserted.id, match);
+    const { data: fresh } = await admin
+      .from("crm_targets")
+      .select("*")
+      .eq("id", inserted.id)
+      .single();
+    return NextResponse.json({ target: fresh ?? inserted, warnung });
+  }
+  return NextResponse.json({ target: inserted, warnung });
 }

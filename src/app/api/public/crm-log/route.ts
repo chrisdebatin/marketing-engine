@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { logContactOnTarget } from "@/lib/crm-log";
+import {
+  checkCrossHubVisit,
+  flagCrossHubVisit,
+  logContactOnTarget,
+} from "@/lib/crm-log";
 import { KONTAKT_ARTEN, kontaktArtLabel } from "@/lib/crm";
 import { isPlaceKind } from "@/lib/places";
 
@@ -115,6 +119,17 @@ export async function POST(req: Request) {
     neu = true;
   }
 
+  // Doppel-Check: War eine andere PDL an diesem (neuen) Ort schon?
+  let warnung: string | null = null;
+  if (neu && targetId) {
+    const match = await checkCrossHubVisit(
+      hub.id,
+      matchedName ?? ortName,
+      (body.ort ?? "").trim() || null,
+    );
+    if (match) warnung = await flagCrossHubVisit(targetId, match);
+  }
+
   const logged = await logContactOnTarget({
     hubId: hub.id,
     targetId,
@@ -141,6 +156,7 @@ export async function POST(req: Request) {
       art: aktion,
       neu,
       contactId: logged.data.contactId,
+      warnung,
     },
     targets: freshRows ?? [],
   });

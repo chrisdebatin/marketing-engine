@@ -324,6 +324,7 @@ export function CrmVisitList({
           art: string;
           neu: boolean;
           contactId?: string | null;
+          warnung?: string | null;
         };
         targets?: VisitTarget[];
       };
@@ -361,6 +362,9 @@ export function CrmVisitList({
       toast.success(
         `Geloggt: ${body.result.aktion} — ${body.result.ort}${body.result.neu ? " (neu zur Liste hinzugefügt)" : ""}`,
       );
+      if (body.result.warnung) {
+        toast.warning(body.result.warnung, { duration: 8000 });
+      }
     } catch {
       toast.error("Netzwerkfehler. Bitte erneut versuchen.");
     } finally {
@@ -400,12 +404,14 @@ export function CrmVisitList({
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
         target?: VisitTarget;
+        warnung?: string | null;
       };
       if (!res.ok || !body.target) {
         toast.error(body.error ?? "Speichern fehlgeschlagen.");
         return;
       }
       setTargets((prev) => [...prev, body.target!]);
+      if (body.warnung) toast.warning(body.warnung, { duration: 8000 });
       setAddOpen(false);
       setAName("");
       setAAdresse("");
