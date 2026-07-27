@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { mailConfigured } from "@/lib/mailer";
-import { sendMdUpdates, sendPdlReminders } from "@/lib/weekly-mails";
+import {
+  sendGroupReport,
+  sendMdUpdates,
+  sendPdlReminders,
+} from "@/lib/weekly-mails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,5 +37,6 @@ export async function GET(req: Request) {
 
   const md = await sendMdUpdates();
   const pdl = await sendPdlReminders();
-  return NextResponse.json({ md, pdl });
+  const gruppe = await sendGroupReport();
+  return NextResponse.json({ md, pdl, gruppe });
 }

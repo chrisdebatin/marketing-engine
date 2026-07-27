@@ -304,3 +304,32 @@ Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-ho
       (errors.length > 0 ? ` Fehler: ${errors.join("; ")}` : ""),
   };
 }
+
+/** Gruppen-Wochenreport an die Geschäftsführung senden (GF_EMAIL oder Eingabe). */
+export async function triggerGroupReport(
+  address?: string,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  const { mailConfigured } = await import("@/lib/mailer");
+  if (!mailConfigured()) {
+    return {
+      ok: false,
+      message: "Kein Mail-Versandweg eingerichtet (SMTP oder Outlook).",
+    };
+  }
+
+  const { sendGroupReport } = await import("@/lib/weekly-mails");
+  const to = (address ?? "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.includes("@"));
+  const r = await sendGroupReport(to.length > 0 ? to : undefined);
+  const parts = [
+    r.sent.length > 0 ? `Gesendet: ${r.sent.join("; ")}` : "Nichts gesendet.",
+    r.skipped.length > 0 ? r.skipped.join("; ") : "",
+    r.errors.length > 0 ? `Fehler: ${r.errors.join("; ")}` : "",
+  ].filter(Boolean);
+  return { ok: r.errors.length === 0 && r.sent.length > 0, message: parts.join(" · ") };
+}

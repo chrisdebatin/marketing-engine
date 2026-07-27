@@ -5,6 +5,7 @@ import {
   Inbox,
   Map,
   Megaphone,
+  Send,
   Settings,
   Sparkles,
   Target,
@@ -48,6 +49,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
+      { href: "/kommunikation", label: "Kommunikation", Icon: Send },
       { href: "/postfach", label: "Postfach", Icon: Inbox },
     ],
   },

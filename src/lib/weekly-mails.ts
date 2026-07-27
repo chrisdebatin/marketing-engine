@@ -254,3 +254,202 @@ Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-ho
 
   return result;
 }
+
+// ── Gruppen-Report (Geschäftsführung): eine Mail über alle Standorte ──
+
+export interface HubActivity {
+  hubId: string;
+  name: string;
+  box: number;
+  besuch: number;
+  anruf: number;
+  flyer: number;
+  auslagen: number;
+  bestellungen: number;
+  score: number;
+}
+
+export interface GroupWeekly {
+  from: string;
+  to: string;
+  hubs: HubActivity[];
+  totals: {
+    kontakte: number;
+    box: number;
+    besuch: number;
+    anruf: number;
+    auslagen: number;
+    bestellungen: number;
+  };
+  placements: { hub: string; ort: string; kind: string }[];
+}
+
+/** Aktivität aller Standorte der letzten 7 Tage — für Report-Seite und Mail. */
+export async function collectGroupWeekly(): Promise<GroupWeekly> {
+  const admin = createAdminClient();
+  const cutoff = isoDaysAgo(7);
+
+  const [{ data: hubRows }, { data: contactRows }, { data: placementRows }, { data: orderRows }] =
+    await Promise.all([
+      admin.from("hubs").select("id, name"),
+      admin.from("crm_contacts").select("hub_id, kontakt_art").gte("contact_date", cutoff),
+      admin
+        .from("delivery_placements")
+        .select("hub_id, standort_name, kind, created_at")
+        .gte("created_at", cutoff)
+        .order("created_at", { ascending: false }),
+      admin.from("orders").select("hub_id, created_at").gte("created_at", cutoff),
+    ]);
+
+  const hubs = new Map<string, HubActivity>();
+  for (const h of hubRows ?? []) {
+    hubs.set(h.id, {
+      hubId: h.id,
+      name: h.name,
+      box: 0,
+      besuch: 0,
+      anruf: 0,
+      flyer: 0,
+      auslagen: 0,
+      bestellungen: 0,
+      score: 0,
+    });
+  }
+  for (const c of contactRows ?? []) {
+    const h = c.hub_id ? hubs.get(c.hub_id) : undefined;
+    if (!h) continue;
+    if (c.kontakt_art === "box") h.box++;
+    else if (c.kontakt_art === "anruf") h.anruf++;
+    else if (c.kontakt_art === "flyer") h.flyer++;
+    else h.besuch++;
+  }
+  const hubName = (id: string | null) =>
+    (id && hubs.get(id)?.name) || "Unbekannt";
+  const placements: GroupWeekly["placements"] = [];
+  for (const p of placementRows ?? []) {
+    const h = p.hub_id ? hubs.get(p.hub_id) : undefined;
+    if (h) h.auslagen++;
+    placements.push({
+      hub: hubName(p.hub_id),
+      ort: p.standort_name,
+      kind: p.kind === "flyer" ? "Flyer" : "Box",
+    });
+  }
+  for (const o of orderRows ?? []) {
+    const h = o.hub_id ? hubs.get(o.hub_id) : undefined;
+    if (h) h.bestellungen++;
+  }
+
+  const list = [...hubs.values()];
+  for (const h of list) {
+    h.score = h.box + h.besuch + h.anruf + h.flyer + h.auslagen;
+  }
+  list.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, "de"));
+
+  const totals = list.reduce(
+    (acc, h) => ({
+      kontakte: acc.kontakte + h.box + h.besuch + h.anruf + h.flyer,
+      box: acc.box + h.box,
+      besuch: acc.besuch + h.besuch,
+      anruf: acc.anruf + h.anruf,
+      auslagen: acc.auslagen + h.auslagen,
+      bestellungen: acc.bestellungen + h.bestellungen,
+    }),
+    { kontakte: 0, box: 0, besuch: 0, anruf: 0, auslagen: 0, bestellungen: 0 },
+  );
+
+  return {
+    from: cutoff,
+    to: todayIso(),
+    hubs: list,
+    totals,
+    placements: placements.slice(0, 40),
+  };
+}
+
+/** Gruppen-Report als Mail-HTML (Geschäftsführung). */
+export function groupReportHtml(g: GroupWeekly): { subject: string; html: string } {
+  const from = formatIsoDate(g.from);
+  const to = formatIsoDate(g.to);
+  const active = g.hubs.filter((h) => h.score > 0);
+  const inactive = g.hubs.length - active.length;
+  const medals = ["🥇", "🥈", "🥉"];
+  const top = active
+    .slice(0, 3)
+    .map((h, i) => `${medals[i]} ${esc(h.name)} (${h.score} Aktionen)`)
+    .join(" · ");
+
+  const rows = active
+    .map(
+      (h) =>
+        `<tr><td style="${TD}">${esc(h.name)}</td><td style="${TD}">${h.box}</td><td style="${TD}">${h.besuch}</td><td style="${TD}">${h.anruf}</td><td style="${TD}">${h.auslagen}</td><td style="${TD}">${h.bestellungen}</td><td style="${TD}"><strong>${h.score}</strong></td></tr>`,
+    )
+    .join("");
+  const placementRows = g.placements
+    .map(
+      (p) =>
+        `<tr><td style="${TD}">${esc(p.hub)}</td><td style="${TD}">${esc(p.ort)}</td><td style="${TD}">${p.kind}</td></tr>`,
+    )
+    .join("");
+
+  const html = `<div style="${MAIL_STYLE}">
+<p>Guten Morgen,</p>
+<p>hier das wöchentliche Marketing-Update der Gruppe (${esc(from)} – ${esc(to)}):</p>
+<p><strong>${g.totals.kontakte} Klinik-Kontakte</strong> (${g.totals.box} Boxen, ${g.totals.besuch} Besuche, ${g.totals.anruf} Anrufe) ·
+<strong>${g.totals.auslagen} Flyer-/Box-Auslagen</strong> · ${g.totals.bestellungen} Material-Bestellungen</p>
+${top ? `<p><strong>Aktivste Standorte:</strong> ${top}</p>` : ""}
+${
+  active.length > 0
+    ? `<table style="border-collapse:collapse">
+<tr><th style="${TH}">Standort</th><th style="${TH}">Boxen</th><th style="${TH}">Besuche</th><th style="${TH}">Anrufe</th><th style="${TH}">Auslagen</th><th style="${TH}">Bestell.</th><th style="${TH}">Gesamt</th></tr>
+${rows}
+</table>`
+    : "<p>Diese Woche wurden keine Aktivitäten geloggt.</p>"
+}
+${inactive > 0 ? `<p style="color:#8a90a3">${inactive} Standort${inactive === 1 ? "" : "e"} ohne geloggte Aktivität diese Woche.</p>` : ""}
+${
+  g.placements.length > 0
+    ? `<p><strong>Wo ausgelegt/beliefert wurde:</strong></p>
+<table style="border-collapse:collapse">
+<tr><th style="${TH}">Standort</th><th style="${TH}">Ort</th><th style="${TH}">Art</th></tr>
+${placementRows}
+</table>`
+    : ""
+}
+<p>Details im Dashboard: <a href="${appUrl()}/kommunikation">${appUrl()}/kommunikation</a></p>
+<p>Viele Grüße<br>Ihr Marketing-Team<br>
+Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
+<p style="color:#8a90a3;font-size:12px">Automatischer Wochen-Report, jeden Montag. Demnächst zusätzlich: neue Patienten je Standort.</p>
+</div>`;
+
+  return {
+    subject: `Marketing-Wochenreport der Gruppe (${from} – ${to})`,
+    html,
+  };
+}
+
+/** Gruppen-Report senden — an GF_EMAIL (Env) oder übergebene Adressen. */
+export async function sendGroupReport(
+  toOverride?: string[],
+): Promise<MailRunResult> {
+  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+  const to =
+    toOverride && toOverride.length > 0
+      ? toOverride
+      : (process.env.GF_EMAIL ?? "")
+          .split(/[,;\s]+/)
+          .map((s) => s.trim())
+          .filter((s) => s.includes("@"));
+  if (to.length === 0) {
+    result.skipped.push(
+      "Keine Geschäftsführungs-Adresse (GF_EMAIL) hinterlegt.",
+    );
+    return result;
+  }
+  const g = await collectGroupWeekly();
+  const { subject, html } = groupReportHtml(g);
+  const res = await deliverMail({ to, subject, html });
+  if (res.ok) result.sent.push(`Geschäftsführung <${to.join(", ")}>`);
+  else result.errors.push(`Geschäftsführung: ${res.error}`);
+  return result;
+}
