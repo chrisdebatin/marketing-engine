@@ -1,6 +1,7 @@
 import {
   BookOpen,
   Building2,
+  ChartColumn,
   Home,
   Inbox,
   Map,
@@ -33,6 +34,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Übersicht",
     items: [
       { href: "/", label: "Start", Icon: Home },
+      { href: "/statistik", label: "Statistik", Icon: ChartColumn },
       { href: "/karte", label: "Karte", Icon: Map },
     ],
   },
