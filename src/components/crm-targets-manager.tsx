@@ -29,6 +29,7 @@ import {
   kontaktArtLabel,
   PLAN_ARTEN,
   planLabel,
+  relevanzOf,
   todayIso,
 } from "@/lib/crm";
 import {
@@ -54,6 +55,7 @@ export interface CrmTargetRow {
   letzte_kontakt_art?: string | null;
   recare_partner?: boolean | null;
   plan?: string | null;
+  relevanz?: number | null;
 }
 
 export interface HubOption {
@@ -64,6 +66,7 @@ export interface HubOption {
 const HUB_NONE = "__none__";
 const KAT_NONE = "__none__";
 const PLAN_NONE = "__none__";
+const REL_NONE = "__none__";
 
 function StatusBadge({ t }: { t: CrmTargetRow }) {
   const status = crmStatus(t, todayIso());
@@ -112,6 +115,12 @@ export function CrmTargetsManager({
   const planItems = {
     [PLAN_NONE]: "To-do (optional)",
     ...Object.fromEntries(PLAN_ARTEN.map((p) => [p.key, p.label])),
+  };
+  const relItems = {
+    [REL_NONE]: "Prio (optional)",
+    "1": "Prio 1 — hoch",
+    "2": "Prio 2 — mittel",
+    "3": "Prio 3 — niedrig",
   };
 
   // Neuer Ziel-Ort
@@ -186,6 +195,7 @@ export function CrmTargetsManager({
         ort: edit.ort ?? "",
         note: edit.note ?? "",
         plan: edit.plan ?? "",
+        relevanz: edit.relevanz ?? "",
         intervall_wochen: edit.intervall_wochen,
       });
       if (res.ok) {
@@ -418,6 +428,7 @@ export function CrmTargetsManager({
           const list = [...(groups.get(key) ?? [])].sort(
             (a, b) =>
               statusRank(a) - statusRank(b) ||
+              (relevanzOf(a) ?? 9) - (relevanzOf(b) ?? 9) ||
               a.name.localeCompare(b.name, "de"),
           );
           const due = list.filter((t) => crmStatus(t, todayIso()) !== "geplant")
@@ -497,6 +508,20 @@ export function CrmTargetsManager({
                                 ? "kein Recare"
                                 : "Recare?"}
                           </Badge>
+                          {relevanzOf(t) != null && (
+                            <Badge
+                              variant="outline"
+                              className={
+                                relevanzOf(t) === 1
+                                  ? "border-primary/60 bg-primary text-primary-foreground"
+                                  : relevanzOf(t) === 2
+                                    ? "border-primary/40 bg-primary/10 text-primary"
+                                    : "text-muted-foreground"
+                              }
+                            >
+                              Prio {relevanzOf(t)}
+                            </Badge>
+                          )}
                           {t.plan && (
                             <Badge
                               variant="outline"
@@ -574,6 +599,30 @@ export function CrmTargetsManager({
                               </SelectTrigger>
                               <SelectContent>
                                 {Object.entries(katItems).map(
+                                  ([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ),
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <Select
+                              items={relItems}
+                              value={String(edit.relevanz ?? REL_NONE)}
+                              onValueChange={(v) =>
+                                setEdit({
+                                  ...edit,
+                                  relevanz:
+                                    !v || v === REL_NONE ? null : Number(v),
+                                })
+                              }
+                            >
+                              <SelectTrigger className="sm:w-40">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(relItems).map(
                                   ([value, label]) => (
                                     <SelectItem key={value} value={value}>
                                       {label}

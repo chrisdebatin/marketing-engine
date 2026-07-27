@@ -37,6 +37,7 @@ import {
   KONTAKT_ARTEN,
   kontaktArtLabel,
   planLabel,
+  relevanzOf,
   todayIso,
 } from "@/lib/crm";
 
@@ -54,6 +55,7 @@ export interface VisitTarget {
   letzte_kontakt_art?: string | null;
   recare_partner?: boolean | null;
   plan?: string | null;
+  relevanz?: number | null;
   note?: string | null;
 }
 
@@ -348,12 +350,19 @@ export function CrmVisitList({
     const s = crmStatus(t, today);
     return s === "faellig" ? 0 : s === "erstbesuch" ? 1 : 2;
   };
+  // Innerhalb der Gruppen: wichtigste zuerst (Prio 1–3), dann alphabetisch.
   const sorted = [...targets].sort(
-    (a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name, "de"),
+    (a, b) =>
+      rank(a) - rank(b) ||
+      (relevanzOf(a) ?? 9) - (relevanzOf(b) ?? 9) ||
+      a.name.localeCompare(b.name, "de"),
   );
-  const pendingList = sorted.filter((t) => rank(t) < 2);
+  // Ein Menü, drei Abschnitte: offene Follow-ups, vorgeschlagene (noch nie
+  // besuchte) Orte zum Abhaken, erledigte mit stehendem Termin.
+  const offenList = sorted.filter((t) => rank(t) === 0);
+  const vorgeschlagenList = sorted.filter((t) => rank(t) === 1);
   const doneList = sorted.filter((t) => rank(t) === 2);
-  const openCount = pendingList.length;
+  const openCount = offenList.length + vorgeschlagenList.length;
 
   // Anonymes Aktivitäts-Ranking: Platz = 1 + Standorte mit mehr Punkten.
   const totalHubs = otherScores.length + 1;
@@ -361,10 +370,27 @@ export function CrmVisitList({
   const nextBetter =
     place > 1 ? Math.min(...otherScores.filter((s) => s > score)) : null;
 
-  type Row = VisitTarget | { header: string; count: number };
+  type Row = VisitTarget | { header: string; hint?: string; count: number };
   const rows: Row[] = [
-    { header: "Noch ausstehend", count: pendingList.length },
-    ...pendingList,
+    ...(offenList.length > 0
+      ? [
+          {
+            header: "Offene Orte — Follow-up fällig",
+            count: offenList.length,
+          } as Row,
+          ...offenList,
+        ]
+      : []),
+    ...(vorgeschlagenList.length > 0
+      ? [
+          {
+            header: "Vorgeschlagene Orte — abhaken, sobald erledigt",
+            hint: "Nach Priorität sortiert. Eigene Orte einfach oben im Schnell-Log oder über „Ort hinzufügen“ eintragen.",
+            count: vorgeschlagenList.length,
+          } as Row,
+          ...vorgeschlagenList,
+        ]
+      : []),
     ...(doneList.length > 0
       ? [
           {
@@ -677,15 +703,16 @@ export function CrmVisitList({
             {rows.map((row, idx) => {
               if ("header" in row) {
                 return (
-                  <li
-                    key={`h-${idx}`}
-                    className={cn(
-                      "flex items-center gap-1.5 text-sm font-semibold",
-                      idx > 0 && "mt-3",
+                  <li key={`h-${idx}`} className={cn(idx > 0 && "mt-3")}>
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      <ListTodo className="size-4 text-primary" />
+                      {row.header} ({row.count})
+                    </p>
+                    {row.hint && (
+                      <p className="mt-0.5 ml-5.5 text-xs text-muted-foreground">
+                        {row.hint}
+                      </p>
                     )}
-                  >
-                    <ListTodo className="size-4 text-primary" />
-                    {row.header} ({row.count})
                   </li>
                 );
               }
@@ -709,6 +736,20 @@ export function CrmVisitList({
                     <div className="min-w-0">
                       <p className="flex flex-wrap items-center gap-1.5 font-medium">
                         {t.name}
+                        {relevanzOf(t) != null && (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
+                              relevanzOf(t) === 1
+                                ? "bg-primary text-primary-foreground"
+                                : relevanzOf(t) === 2
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            Prio {relevanzOf(t)}
+                          </span>
+                        )}
                         <RecareChip t={t} />
                       </p>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">

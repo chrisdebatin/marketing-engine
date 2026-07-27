@@ -38,6 +38,21 @@ export function kontaktArtLabel(key: string | null | undefined): string {
   return KONTAKT_ARTEN.find((k) => k.key === key)?.label ?? key;
 }
 
+/**
+ * Relevanz eines Ziel-Ortes (1 = höchste Priorität, 3 = niedrigste).
+ * Fallback: aus der note ("… Relevanz 2 …"), solange Spalte 0030 fehlt.
+ */
+export function relevanzOf(t: {
+  relevanz?: number | null;
+  note?: string | null;
+}): 1 | 2 | 3 | null {
+  if (t.relevanz === 1 || t.relevanz === 2 || t.relevanz === 3) {
+    return t.relevanz;
+  }
+  const m = t.note?.match(/Relevanz ([1-3])/);
+  return m ? ((Number(m[1]) as 1 | 2 | 3) ?? null) : null;
+}
+
 /** Was laut Plan an einen Ziel-Ort geliefert/gemacht werden soll (To-do). */
 export const PLAN_ARTEN = [
   { key: "box", label: "Box vorbeibringen" },

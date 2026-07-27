@@ -434,6 +434,7 @@ export interface Database {
           letzte_kontakt_art: string | null;
           recare_partner: boolean | null;
           plan: string | null;
+          relevanz: number | null;
           created_at: string | null;
         };
         Insert: {
@@ -452,6 +453,7 @@ export interface Database {
           letzte_kontakt_art?: string | null;
           recare_partner?: boolean | null;
           plan?: string | null;
+          relevanz?: number | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;

@@ -33,6 +33,7 @@ function cleanTarget(input: {
   ort?: string;
   note?: string;
   plan?: string;
+  relevanz?: number | string;
   intervall_wochen?: number | string;
 }):
   | {
@@ -44,6 +45,7 @@ function cleanTarget(input: {
         ort: string | null;
         note: string | null;
         plan: string | null;
+        relevanz: number | null;
         intervall_wochen: number;
       };
     }
@@ -69,6 +71,9 @@ function cleanTarget(input: {
       plan: PLAN_KEYS.includes((input.plan ?? "").trim() as (typeof PLAN_KEYS)[number])
         ? (input.plan ?? "").trim()
         : null,
+      relevanz: [1, 2, 3].includes(Math.trunc(Number(input.relevanz)))
+        ? Math.trunc(Number(input.relevanz))
+        : null,
       intervall_wochen: intervall,
     },
   };
@@ -87,6 +92,7 @@ export async function createCrmTarget(input: {
   ort?: string;
   note?: string;
   plan?: string;
+  relevanz?: number | string;
   intervall_wochen?: number | string;
 }): Promise<Result> {
   await requireSession();
@@ -99,7 +105,7 @@ export async function createCrmTarget(input: {
   if (error && isMissingColumn(error.code)) {
     ({ error } = await admin
       .from("crm_targets")
-      .insert({ ...row, plan: undefined }));
+      .insert({ ...row, plan: undefined, relevanz: undefined }));
   }
   if (error) {
     return (
@@ -178,6 +184,7 @@ export async function updateCrmTarget(
     ort?: string;
     note?: string;
     plan?: string;
+    relevanz?: number | string;
     intervall_wochen?: number | string;
   },
 ): Promise<Result> {
@@ -193,7 +200,7 @@ export async function updateCrmTarget(
   if (error && isMissingColumn(error.code)) {
     ({ error } = await admin
       .from("crm_targets")
-      .update({ ...row, plan: undefined })
+      .update({ ...row, plan: undefined, relevanz: undefined })
       .eq("id", cleanId));
   }
   if (error) return { ok: false, error: "Speichern fehlgeschlagen." };

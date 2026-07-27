@@ -2,53 +2,16 @@
 -- einfügen und ausführen:
 -- https://supabase.com/dashboard/project/xbzcplpaalccjiyjhypr/sql/new
 --
--- Stand: nur noch 0027 offen — alles davor ist bereits eingespielt.
+-- Stand: nur noch 0030 offen — alles davor (bis inkl. 0029) ist eingespielt.
 
--- ── 0027: CRM-Kontakt-Log (Box/Besuch/Anruf, Ansprechpartner) ───────
-alter table public.crm_targets
-  add column if not exists ansprechpartner text;
-alter table public.crm_targets
-  add column if not exists letzte_kontakt_art text;
-alter table public.crm_targets
-  alter column intervall_wochen set default 4;
+-- ── 0030: Relevanz-Kategorie (1–3) für CRM-Ziel-Orte ────────────────
+alter table public.crm_targets add column if not exists relevanz smallint
+  check (relevanz between 1 and 3);
 
-create table if not exists public.crm_contacts (
-  id              uuid primary key default gen_random_uuid(),
-  target_id       uuid not null references public.crm_targets (id) on delete cascade,
-  hub_id          uuid references public.hubs (id) on delete set null,
-  kontakt_art     text not null check (kontakt_art in ('box', 'besuch', 'anruf')),
-  ansprechpartner text,
-  note            text,
-  contact_date    date not null default current_date,
-  created_at      timestamptz default now()
-);
-create index if not exists crm_contacts_hub_date_idx
-  on public.crm_contacts (hub_id, contact_date desc);
-alter table public.crm_contacts disable row level security;
-
-alter table public.crm_targets
-  add column if not exists recare_partner boolean;
-update public.crm_targets set recare_partner = true
-  where note like '%Recare-Partner%' and recare_partner is null;
+-- Importierte Orte tragen "Relevanz X" in der note — in die Spalte übernehmen.
+update public.crm_targets
+  set relevanz = (substring(note from 'Relevanz ([1-3])'))::smallint
+  where relevanz is null and note ~ 'Relevanz [1-3]';
 
 notify pgrst, 'reload schema';
-select count(*) as crm_contacts_rows from public.crm_contacts;
-
--- ============================================================
--- 0028: hubs.md_email (MD-Adresse für Wochen-Updates per Outlook)
--- ============================================================
-alter table public.hubs add column if not exists md_email text;
-
-notify pgrst, 'reload schema';
-
--- ============================================================
--- 0029: crm_targets.plan + Kontakt-Art "flyer"
--- ============================================================
-alter table public.crm_targets add column if not exists plan text
-  check (plan in ('box', 'flyer', 'besuch', 'anruf'));
-
-alter table public.crm_contacts drop constraint if exists crm_contacts_kontakt_art_check;
-alter table public.crm_contacts add constraint crm_contacts_kontakt_art_check
-  check (kontakt_art in ('box', 'flyer', 'besuch', 'anruf'));
-
-notify pgrst, 'reload schema';
+select count(*) as targets_mit_relevanz from public.crm_targets where relevanz is not null;
