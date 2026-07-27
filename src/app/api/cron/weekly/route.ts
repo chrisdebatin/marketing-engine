@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { outlookConfigured } from "@/lib/outlook";
+import { mailConfigured } from "@/lib/mailer";
 import { sendMdUpdates, sendPdlReminders } from "@/lib/weekly-mails";
 
 export const runtime = "nodejs";
@@ -24,9 +24,9 @@ export async function GET(req: Request) {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Nicht erlaubt." }, { status: 401 });
   }
-  if (!outlookConfigured()) {
+  if (!mailConfigured()) {
     return NextResponse.json(
-      { error: "Outlook ist nicht konfiguriert (MS_CLIENT_ID fehlt)." },
+      { error: "Kein Mail-Versandweg eingerichtet (Outlook oder SMTP)." },
       { status: 503 },
     );
   }

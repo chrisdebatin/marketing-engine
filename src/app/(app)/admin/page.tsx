@@ -32,6 +32,7 @@ import {
   User,
 } from "lucide-react";
 import { connectedAccount, outlookConfigured } from "@/lib/outlook";
+import { smtpConfigured } from "@/lib/mailer";
 import { WeeklyMailButtons } from "@/components/weekly-mail-buttons";
 import type { Hub } from "@/lib/types";
 
@@ -91,6 +92,7 @@ interface HubStats {
 export default async function AdminPage() {
   const session = await requireSession();
   const outlookReady = outlookConfigured();
+  const smtpReady = smtpConfigured();
   const outlookAccount = outlookReady ? await connectedAccount() : null;
 
   if (!session.isAdmin) {
@@ -243,12 +245,12 @@ export default async function AdminPage() {
         </details>
       )}
 
-      {/* Outlook-Anbindung (Microsoft Graph) */}
+      {/* Mail-Anbindung: Outlook (lesen + senden) oder SMTP (nur senden) */}
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
-        <p className="font-semibold">Outlook-Anbindung</p>
+        <p className="font-semibold">E-Mail-Anbindung</p>
         {outlookAccount ? (
           <p className="text-sm text-muted-foreground">
-            Verbunden als{" "}
+            Outlook verbunden als{" "}
             <span className="font-medium text-foreground">
               {outlookAccount}
             </span>
@@ -258,16 +260,31 @@ export default async function AdminPage() {
               Anderes Konto verbinden
             </a>
           </p>
+        ) : smtpReady ? (
+          <p className="text-sm text-muted-foreground">
+            Versand über <span className="font-medium text-foreground">SMTP</span>{" "}
+            eingerichtet. (Optional: Outlook verbinden, um zusätzlich Mails zu
+            lesen —{" "}
+            <a href="/api/outlook/connect" className="text-primary underline">
+              mit Microsoft anmelden
+            </a>
+            .)
+          </p>
         ) : null}
-        {outlookAccount ? (
+        {outlookAccount || smtpReady ? (
           <>
             <p className="text-sm text-muted-foreground">
               Jeden Montag gehen automatisch die Wochen-Mails raus: Update an
               die MDs (E-Mail je Hub unten im Hub-Formular hinterlegen) und
-              Anfahr-Erinnerung an die PDLs. Anfragen der Standorte:{" "}
-              <a href="/postfach" className="text-primary underline">
-                Postfach öffnen
-              </a>
+              Wochen-Plan an die PDLs.{" "}
+              {outlookAccount ? (
+                <>
+                  Anfragen der Standorte:{" "}
+                  <a href="/postfach" className="text-primary underline">
+                    Postfach öffnen
+                  </a>
+                </>
+              ) : null}
             </p>
             <WeeklyMailButtons />
           </>
@@ -284,9 +301,11 @@ export default async function AdminPage() {
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Einrichtung nötig: App-Registrierung im Microsoft-365-Portal
-            anlegen und <code>MS_CLIENT_ID</code>/<code>MS_CLIENT_SECRET</code>{" "}
-            als Env-Variablen setzen (siehe .env.example).
+            Einrichtung nötig — der einfachste Weg ist SMTP mit einem
+            Gmail-App-Passwort: <code>SMTP_HOST</code>, <code>SMTP_USER</code>,{" "}
+            <code>SMTP_PASS</code> als Env-Variablen setzen (siehe
+            .env.example). Alternativ Outlook über eine Azure-App-Registrierung
+            (<code>MS_CLIENT_ID</code>/<code>MS_CLIENT_SECRET</code>).
           </p>
         )}
       </div>

@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendMail } from "@/lib/outlook";
-import { crmStatus, formatIsoDate, todayIso } from "@/lib/crm";
+import { deliverMail } from "@/lib/mailer";
+import { crmStatus, formatIsoDate, relevanzOf, todayIso } from "@/lib/crm";
 import { splitPdlEmails } from "@/lib/pdl";
 import type { Hub } from "@/lib/types";
 
@@ -153,7 +153,7 @@ Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-ho
 <p style="color:#8a90a3;font-size:12px">Diese Mail wird automatisch jeden Montag versendet.</p>
 </div>`;
 
-    const res = await sendMail({
+    const res = await deliverMail({
       to: [email],
       subject: `Marketing-Update Ihrer Standorte (${from} – ${to})`,
       html,
@@ -184,7 +184,7 @@ export async function sendPdlReminders(): Promise<MailRunResult> {
 
   const targetsByHub = new Map<
     string,
-    { name: string; status: "erstbesuch" | "faellig" }[]
+    { name: string; status: "erstbesuch" | "faellig"; prio: number }[]
   >();
   for (const t of (targetRows ?? []) as {
     hub_id: string | null;
@@ -192,12 +192,14 @@ export async function sendPdlReminders(): Promise<MailRunResult> {
     intervall_wochen: number;
     letzter_besuch: string | null;
     naechster_besuch: string | null;
+    relevanz?: number | null;
+    note?: string | null;
   }[]) {
     if (!t.hub_id) continue;
     const status = crmStatus(t, today);
     if (status === "geplant") continue;
     const arr = targetsByHub.get(t.hub_id) ?? [];
-    arr.push({ name: t.name, status });
+    arr.push({ name: t.name, status, prio: relevanzOf(t) ?? 9 });
     targetsByHub.set(t.hub_id, arr);
   }
 
@@ -210,32 +212,40 @@ export async function sendPdlReminders(): Promise<MailRunResult> {
       continue;
     }
 
-    const shown = due.slice(0, 6);
+    // Wochen-Plan statt Zahlenberg: Fällige zuerst, dann Top-Vorschläge
+    // nach Priorität — maximal 6 konkrete Empfehlungen.
+    const faellig = due.filter((d) => d.status === "faellig");
+    const vorschlaege = due
+      .filter((d) => d.status === "erstbesuch")
+      .sort((a, b) => a.prio - b.prio);
+    const shown = [...faellig, ...vorschlaege].slice(0, 6);
     const items = shown
       .map(
         (d) =>
-          `<li>${esc(d.name)} <span style="color:#8a90a3">(${d.status === "erstbesuch" ? "Erstkontakt ausstehend" : "Follow-up fällig"})</span></li>`,
+          `<li>${esc(d.name)} <span style="color:#8a90a3">(${d.status === "erstbesuch" ? "Vorschlag — noch nie besucht" : "Follow-up fällig"})</span></li>`,
       )
       .join("");
     const link = `${appUrl()}/h/${h.share_token}`;
 
     const html = `<div style="${MAIL_STYLE}">
 <p>Guten Morgen,</p>
-<p>kurze Wochen-Erinnerung: Auf Ihrer To-do-Liste für
-<strong>${esc(h.name)}</strong> ${due.length === 1 ? "wartet 1 Ort" : `warten ${due.length} Orte`} auf einen Kontakt — Box vorbeibringen, persönlich besuchen oder anrufen:</p>
+<p>Ihr Wochen-Plan für <strong>${esc(h.name)}</strong>${faellig.length > 0 ? ` — ${faellig.length === 1 ? "1 Follow-up ist" : `${faellig.length} Follow-ups sind`} fällig` : ""}. Unsere Empfehlung für diese Woche:</p>
 <ul>${items}</ul>
-${due.length > shown.length ? `<p>… und ${due.length - shown.length} weitere.</p>` : ""}
 <p><a href="${link}" style="display:inline-block;background:#5b5bd6;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Zur Liste — Kontakt loggen</a></p>
-<p>Bitte jeden Kontakt direkt auf der Seite loggen — jede Aktion zählt für
-das Standort-Ranking, und das nächste Gespräch wird automatisch terminiert.</p>
+<p>Bitte jeden Kontakt direkt auf der Seite loggen (Schnell-Log) — jede
+Aktion zählt für das Standort-Ranking, und der nächste Termin wird
+automatisch gesetzt.</p>
 <p>Viele Grüße<br>Ihr Marketing-Team<br>
 Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
 <p style="color:#8a90a3;font-size:12px">Diese Erinnerung wird automatisch jeden Montag versendet.</p>
 </div>`;
 
-    const res = await sendMail({
+    const res = await deliverMail({
       to: emails,
-      subject: `Erinnerung: ${due.length === 1 ? "1 Ort wartet" : `${due.length} Orte warten`} auf Ihren Besuch — ${h.name}`,
+      subject:
+        faellig.length > 0
+          ? `Wochen-Plan ${h.name}: ${faellig.length === 1 ? "1 Follow-up fällig" : `${faellig.length} Follow-ups fällig`} + Empfehlungen`
+          : `Wochen-Plan ${h.name}: Ihre ${Math.min(shown.length, 6)} empfohlenen Orte`,
       html,
     });
     if (res.ok) result.sent.push(`${h.name} <${emails.join(", ")}>`);

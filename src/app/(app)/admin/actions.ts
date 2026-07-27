@@ -189,11 +189,12 @@ export async function triggerWeeklyMails(
   const session = await requireSession();
   if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
 
-  const { outlookConfigured } = await import("@/lib/outlook");
-  if (!outlookConfigured()) {
+  const { mailConfigured } = await import("@/lib/mailer");
+  if (!mailConfigured()) {
     return {
       ok: false,
-      message: "Outlook ist nicht konfiguriert (MS_CLIENT_ID fehlt).",
+      message:
+        "Kein Mail-Versandweg eingerichtet — Outlook verbinden oder SMTP-Zugangsdaten (Gmail-App-Passwort) setzen.",
     };
   }
 
