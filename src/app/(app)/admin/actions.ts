@@ -333,3 +333,32 @@ export async function triggerGroupReport(
   ].filter(Boolean);
   return { ok: r.errors.length === 0 && r.sent.length > 0, message: parts.join(" · ") };
 }
+
+/** Einen MD-Wochen-Update-Entwurf freigeben und senden (Kommunikations-Tab). */
+export async function sendMdDraft(
+  md: string,
+  note?: string,
+): Promise<{ ok: boolean; message: string }> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  const { mailConfigured } = await import("@/lib/mailer");
+  if (!mailConfigured()) {
+    return {
+      ok: false,
+      message: "Kein Mail-Versandweg eingerichtet (SMTP oder Outlook).",
+    };
+  }
+
+  const { sendMdUpdateFor } = await import("@/lib/weekly-mails");
+  const r = await sendMdUpdateFor((md ?? "").trim(), (note ?? "").slice(0, 1000));
+  const parts = [
+    r.sent.length > 0 ? `Gesendet: ${r.sent.join("; ")}` : "",
+    r.skipped.length > 0 ? r.skipped.join("; ") : "",
+    r.errors.length > 0 ? `Fehler: ${r.errors.join("; ")}` : "",
+  ].filter(Boolean);
+  return {
+    ok: r.errors.length === 0 && r.sent.length > 0,
+    message: parts.join(" · ") || "Nichts gesendet.",
+  };
+}

@@ -84,62 +84,45 @@ async function weeklyStats() {
   return { cutoff, contacts, boxContacts, placements, orderCounts };
 }
 
-/** Wochen-Update an alle MDs mit hinterlegter E-Mail. */
-export async function sendMdUpdates(): Promise<MailRunResult> {
-  const admin = createAdminClient();
-  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+// ── MD-Wochen-Updates: Entwürfe zuerst, Versand nach Freigabe ───────
 
-  // select("*"): tolerant, falls md_email (0028) noch fehlt.
-  const { data: hubRows, error } = await admin.from("hubs").select("*");
-  if (error || !hubRows) {
-    result.errors.push("Hubs konnten nicht geladen werden.");
-    return result;
-  }
-  const hubs = hubRows as Hub[];
-  const stats = await weeklyStats();
+export interface MdDraft {
+  md: string;
+  email: string | null;
+  subject: string;
+  html: string;
+  hubNames: string[];
+}
 
-  const byMd = new Map<string, Hub[]>();
-  for (const h of hubs) {
-    const md = (h.responsible_md ?? "").trim();
-    if (!md) continue;
-    const arr = byMd.get(md) ?? [];
-    arr.push(h);
-    byMd.set(md, arr);
-  }
+function buildMdHtml(
+  mdHubs: Hub[],
+  stats: Awaited<ReturnType<typeof weeklyStats>>,
+  from: string,
+  to: string,
+  note?: string,
+): string {
+  const rows = mdHubs
+    .sort((a, b) => a.name.localeCompare(b.name, "de"))
+    .map((h) => {
+      const kontakte = stats.contacts.get(h.id) ?? 0;
+      const boxen = stats.boxContacts.get(h.id) ?? 0;
+      const auslagen = stats.placements.get(h.id) ?? 0;
+      const bestellungen = stats.orderCounts.get(h.id) ?? 0;
+      return `<tr><td style="${TD}">${esc(h.name)}</td><td style="${TD}">${kontakte}${boxen ? ` (davon ${boxen} Box${boxen === 1 ? "" : "en"})` : ""}</td><td style="${TD}">${auslagen}</td><td style="${TD}">${bestellungen}</td></tr>`;
+    })
+    .join("");
+  const totals = mdHubs.reduce(
+    (acc, h) => ({
+      kontakte: acc.kontakte + (stats.contacts.get(h.id) ?? 0),
+      auslagen: acc.auslagen + (stats.placements.get(h.id) ?? 0),
+      bestellungen: acc.bestellungen + (stats.orderCounts.get(h.id) ?? 0),
+    }),
+    { kontakte: 0, auslagen: 0, bestellungen: 0 },
+  );
 
-  const from = formatIsoDate(stats.cutoff);
-  const to = formatIsoDate(todayIso());
-
-  for (const [md, mdHubs] of byMd) {
-    const email = mdHubs
-      .map((h) => (h.md_email ?? "").trim())
-      .find((e) => e.includes("@"));
-    if (!email) {
-      result.skipped.push(`${md}: keine MD-E-Mail hinterlegt`);
-      continue;
-    }
-
-    const rows = mdHubs
-      .sort((a, b) => a.name.localeCompare(b.name, "de"))
-      .map((h) => {
-        const kontakte = stats.contacts.get(h.id) ?? 0;
-        const boxen = stats.boxContacts.get(h.id) ?? 0;
-        const auslagen = stats.placements.get(h.id) ?? 0;
-        const bestellungen = stats.orderCounts.get(h.id) ?? 0;
-        return `<tr><td style="${TD}">${esc(h.name)}</td><td style="${TD}">${kontakte}${boxen ? ` (davon ${boxen} Box${boxen === 1 ? "" : "en"})` : ""}</td><td style="${TD}">${auslagen}</td><td style="${TD}">${bestellungen}</td></tr>`;
-      })
-      .join("");
-    const totals = mdHubs.reduce(
-      (acc, h) => ({
-        kontakte: acc.kontakte + (stats.contacts.get(h.id) ?? 0),
-        auslagen: acc.auslagen + (stats.placements.get(h.id) ?? 0),
-        bestellungen: acc.bestellungen + (stats.orderCounts.get(h.id) ?? 0),
-      }),
-      { kontakte: 0, auslagen: 0, bestellungen: 0 },
-    );
-
-    const html = `<div style="${MAIL_STYLE}">
+  return `<div style="${MAIL_STYLE}">
 <p>Guten Morgen,</p>
+${note?.trim() ? `<p>${esc(note.trim()).replace(/\n/g, "<br>")}</p>` : ""}
 <p>hier das wöchentliche Marketing-Update für Ihre Standorte
 (${esc(from)} – ${esc(to)}):</p>
 <table style="border-collapse:collapse">
@@ -150,19 +133,111 @@ ${rows}
 <p>Details im Dashboard: <a href="${appUrl()}/hubs">${appUrl()}/hubs</a></p>
 <p>Viele Grüße<br>Ihr Marketing-Team<br>
 Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
-<p style="color:#8a90a3;font-size:12px">Diese Mail wird automatisch jeden Montag versendet.</p>
 </div>`;
+}
 
+async function mdGroups(): Promise<{
+  byMd: Map<string, Hub[]>;
+  stats: Awaited<ReturnType<typeof weeklyStats>>;
+  from: string;
+  to: string;
+} | null> {
+  const admin = createAdminClient();
+  const { data: hubRows, error } = await admin.from("hubs").select("*");
+  if (error || !hubRows) return null;
+  const hubs = hubRows as Hub[];
+  const stats = await weeklyStats();
+  const byMd = new Map<string, Hub[]>();
+  for (const h of hubs) {
+    const md = (h.responsible_md ?? "").trim();
+    if (!md) continue;
+    const arr = byMd.get(md) ?? [];
+    arr.push(h);
+    byMd.set(md, arr);
+  }
+  return {
+    byMd,
+    stats,
+    from: formatIsoDate(stats.cutoff),
+    to: formatIsoDate(todayIso()),
+  };
+}
+
+/** Entwürfe für alle MDs — individuell mit den jeweiligen Standorten. */
+export async function buildMdDrafts(): Promise<MdDraft[]> {
+  const data = await mdGroups();
+  if (!data) return [];
+  const drafts: MdDraft[] = [];
+  for (const [md, mdHubs] of data.byMd) {
+    const email =
+      mdHubs
+        .map((h) => (h.md_email ?? "").trim())
+        .find((e) => e.includes("@")) ?? null;
+    drafts.push({
+      md,
+      email,
+      subject: `Marketing-Update Ihrer Standorte (${data.from} – ${data.to})`,
+      html: buildMdHtml(mdHubs, data.stats, data.from, data.to),
+      hubNames: mdHubs.map((h) => h.name).sort((a, b) => a.localeCompare(b, "de")),
+    });
+  }
+  return drafts.sort((a, b) => a.md.localeCompare(b.md, "de"));
+}
+
+/** Einen freigegebenen MD-Entwurf senden (optional mit persönlicher Anmerkung). */
+export async function sendMdUpdateFor(
+  md: string,
+  note?: string,
+): Promise<MailRunResult> {
+  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+  const data = await mdGroups();
+  const mdHubs = data?.byMd.get(md);
+  if (!data || !mdHubs) {
+    result.errors.push(`MD „${md}“ nicht gefunden.`);
+    return result;
+  }
+  const email = mdHubs
+    .map((h) => (h.md_email ?? "").trim())
+    .find((e) => e.includes("@"));
+  if (!email) {
+    result.skipped.push(`${md}: keine MD-E-Mail hinterlegt`);
+    return result;
+  }
+  const res = await deliverMail({
+    to: [email],
+    subject: `Marketing-Update Ihrer Standorte (${data.from} – ${data.to})`,
+    html: buildMdHtml(mdHubs, data.stats, data.from, data.to, note),
+  });
+  if (res.ok) result.sent.push(`${md} <${email}>`);
+  else result.errors.push(`${md} <${email}>: ${res.error}`);
+  return result;
+}
+
+/** Alle MD-Updates auf einmal senden (nur nach Freigabe im Kommunikations-Tab). */
+export async function sendMdUpdates(): Promise<MailRunResult> {
+  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+  const data = await mdGroups();
+  if (!data) {
+    result.errors.push("Hubs konnten nicht geladen werden.");
+    return result;
+  }
+  for (const [md, mdHubs] of data.byMd) {
+    const email = mdHubs
+      .map((h) => (h.md_email ?? "").trim())
+      .find((e) => e.includes("@"));
+    if (!email) {
+      result.skipped.push(`${md}: keine MD-E-Mail hinterlegt`);
+      continue;
+    }
     const res = await deliverMail({
       to: [email],
-      subject: `Marketing-Update Ihrer Standorte (${from} – ${to})`,
-      html,
+      subject: `Marketing-Update Ihrer Standorte (${data.from} – ${data.to})`,
+      html: buildMdHtml(mdHubs, data.stats, data.from, data.to),
     });
     if (res.ok) result.sent.push(`${md} <${email}>`);
     else result.errors.push(`${md} <${email}>: ${res.error}`);
   }
-
-  if (byMd.size === 0) result.skipped.push("Keine Hubs mit MD gefunden.");
+  if (data.byMd.size === 0) result.skipped.push("Keine Hubs mit MD gefunden.");
   return result;
 }
 

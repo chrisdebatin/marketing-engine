@@ -1,9 +1,11 @@
 import { Megaphone, Package, Phone, ShoppingCart, Trophy, Users } from "lucide-react";
 import { requireSession } from "@/lib/auth";
-import { collectGroupWeekly } from "@/lib/weekly-mails";
+import { buildMdDrafts, collectGroupWeekly } from "@/lib/weekly-mails";
 import { formatIsoDate } from "@/lib/crm";
 import { mailConfigured } from "@/lib/mailer";
 import { KommunikationSend } from "@/components/kommunikation-send";
+import { MdDraftList } from "@/components/md-draft-list";
+import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,10 @@ function Stat({
  */
 export default async function KommunikationPage() {
   await requireSession();
-  const g = await collectGroupWeekly();
+  const [g, mdDrafts] = await Promise.all([
+    collectGroupWeekly(),
+    buildMdDrafts(),
+  ]);
   const active = g.hubs.filter((h) => h.score > 0);
   const inactive = g.hubs.length - active.length;
   const medals = ["🥇", "🥈", "🥉"];
@@ -52,10 +57,10 @@ export default async function KommunikationPage() {
         <h1 className="text-2xl font-semibold">Kommunikation</h1>
         <p className="text-sm text-muted-foreground">
           Wochen-Report der Gruppe ({formatIsoDate(g.from)} –{" "}
-          {formatIsoDate(g.to)}) — geht automatisch jeden Montag an MDs
-          (eigene Standorte), PDLs (Wochen-Plan) und Geschäftsführung
-          (dieser Gesamt-Report). Demnächst zusätzlich: neue Patienten je
-          Standort.
+          {formatIsoDate(g.to)}). Automatisch jeden Montag: Wochen-Plan an die
+          PDLs und Gruppen-Report an die Geschäftsführung. Die MD-Updates
+          liegen unten als Entwürfe und gehen erst nach Ihrer Freigabe raus.
+          Demnächst zusätzlich: neue Patienten je Standort.
         </p>
       </div>
 
@@ -78,6 +83,29 @@ export default async function KommunikationPage() {
         <Stat icon={Megaphone} value={g.totals.auslagen} label="Auslagen (Flyer/Box)" />
         <Stat icon={ShoppingCart} value={g.totals.bestellungen} label="Bestellungen" />
       </div>
+
+      {/* MD-Wochen-Updates als Entwürfe (Versand nach Freigabe) */}
+      <section className="flex flex-col gap-2">
+        <p className="flex items-center gap-1.5 font-semibold">
+          <FileText className="size-4 text-primary" />
+          Entwürfe: MD-Wochen-Updates ({mdDrafts.length})
+        </p>
+        <p className="-mt-1 text-sm text-muted-foreground">
+          Pro MD eine individuelle Mail mit den Zahlen seiner Standorte —
+          aufklappen, prüfen, optional eine Anmerkung ergänzen und freigeben.
+          Ohne Freigabe wird nichts versendet.
+        </p>
+        <MdDraftList
+          drafts={mdDrafts.map((d) => ({
+            md: d.md,
+            email: d.email,
+            subject: d.subject,
+            html: d.html,
+            hubNames: d.hubNames,
+          }))}
+          canSend={mailConfigured()}
+        />
+      </section>
 
       {/* Aktivste Standorte */}
       <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">

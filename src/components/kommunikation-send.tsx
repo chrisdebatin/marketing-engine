@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Briefcase, Mail, Send } from "lucide-react";
+import { Briefcase, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,14 +19,12 @@ export function KommunikationSend({ gfConfigured }: { gfConfigured: boolean }) {
   const [gfAddress, setGfAddress] = useState("");
   const [result, setResult] = useState<string | null>(null);
 
-  function run(kind: "md" | "pdl" | "gf") {
+  function run(kind: "pdl" | "gf") {
     if (pending) return;
     const label =
-      kind === "md"
-        ? "Wochen-Update jetzt an alle MDs mit E-Mail senden?"
-        : kind === "pdl"
-          ? "Wochen-Plan jetzt an alle PDLs mit offenen Orten senden?"
-          : "Gruppen-Report jetzt an die Geschäftsführung senden?";
+      kind === "pdl"
+        ? "Wochen-Plan jetzt an alle PDLs mit offenen Orten senden?"
+        : "Gruppen-Report jetzt an die Geschäftsführung senden?";
     if (kind === "gf" && !gfConfigured && !gfAddress.includes("@")) {
       toast.error("Adresse der Geschäftsführung eingeben (oder GF_EMAIL setzen).");
       return;
@@ -36,7 +34,7 @@ export function KommunikationSend({ gfConfigured }: { gfConfigured: boolean }) {
       const r =
         kind === "gf"
           ? await triggerGroupReport(gfAddress)
-          : await triggerWeeklyMails(kind);
+          : await triggerWeeklyMails("pdl");
       setResult(r.message);
       if (r.ok) toast.success("Versand abgeschlossen");
       else toast.error("Versand mit Problemen — Details unten.");
@@ -47,16 +45,6 @@ export function KommunikationSend({ gfConfigured }: { gfConfigured: boolean }) {
     <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-5 shadow-sm">
       <p className="font-semibold">Jetzt senden (statt Montag zu warten)</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={pending}
-          onClick={() => run("md")}
-        >
-          <Send className="size-4" />
-          Wochen-Update an MDs
-        </Button>
         <Button
           type="button"
           variant="outline"
@@ -92,8 +80,8 @@ export function KommunikationSend({ gfConfigured }: { gfConfigured: boolean }) {
         {pending
           ? "Sende…"
           : gfConfigured
-            ? "Alle drei Mails gehen automatisch jeden Montag ~8:00 Uhr raus."
-            : "MD- und PDL-Mails gehen automatisch jeden Montag raus. Für den automatischen Gruppen-Report die Env-Variable GF_EMAIL in Vercel setzen — bis dahin hier manuell mit Adresse senden."}
+            ? "PDL-Plan und Gruppen-Report gehen automatisch jeden Montag ~8:00 Uhr raus. MD-Updates: nur nach Freigabe der Entwürfe unten."
+            : "PDL-Plan geht automatisch jeden Montag raus. Für den automatischen Gruppen-Report GF_EMAIL in Vercel setzen. MD-Updates: nur nach Freigabe der Entwürfe unten."}
       </p>
       {result && (
         <p className="text-xs break-words text-muted-foreground">{result}</p>

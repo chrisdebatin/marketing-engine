@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { mailConfigured } from "@/lib/mailer";
-import {
-  sendGroupReport,
-  sendMdUpdates,
-  sendPdlReminders,
-} from "@/lib/weekly-mails";
+import { sendGroupReport, sendPdlReminders } from "@/lib/weekly-mails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,8 +31,13 @@ export async function GET(req: Request) {
     );
   }
 
-  const md = await sendMdUpdates();
+  // MD-Updates werden NICHT automatisch versendet — sie liegen als Entwürfe
+  // im Kommunikations-Tab und gehen erst nach Freigabe raus.
   const pdl = await sendPdlReminders();
   const gruppe = await sendGroupReport();
-  return NextResponse.json({ md, pdl, gruppe });
+  return NextResponse.json({
+    md: "Entwürfe unter /kommunikation — Versand nur nach Freigabe.",
+    pdl,
+    gruppe,
+  });
 }
