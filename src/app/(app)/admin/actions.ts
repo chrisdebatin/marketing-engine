@@ -362,3 +362,29 @@ export async function sendMdDraft(
     message: parts.join(" · ") || "Nichts gesendet.",
   };
 }
+
+/** Kapazitäts-Erinnerung an PDLs ohne Meldung für die laufende Woche. */
+export async function triggerCapacityReminders(): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  const { mailConfigured } = await import("@/lib/mailer");
+  if (!mailConfigured()) {
+    return {
+      ok: false,
+      message: "Kein Mail-Versandweg eingerichtet (SMTP oder Outlook).",
+    };
+  }
+
+  const { sendCapacityReminders } = await import("@/lib/weekly-mails");
+  const r = await sendCapacityReminders();
+  const parts = [
+    r.sent.length > 0 ? `Gesendet: ${r.sent.join("; ")}` : "",
+    r.skipped.length > 0 ? r.skipped.join("; ") : "",
+    r.errors.length > 0 ? `Fehler: ${r.errors.join("; ")}` : "",
+  ].filter(Boolean);
+  return { ok: r.errors.length === 0, message: parts.join(" · ") || "Nichts zu senden." };
+}

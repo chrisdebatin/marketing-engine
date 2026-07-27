@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Briefcase, Mail } from "lucide-react";
+import { BedDouble, Briefcase, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  triggerCapacityReminders,
   triggerGroupReport,
   triggerWeeklyMails,
 } from "@/app/(app)/admin/actions";
@@ -20,12 +21,14 @@ export function KommunikationSend({ gfAddress }: { gfAddress: string }) {
   const [result, setResult] = useState<string | null>(null);
   const gfConfigured = gfAddress.includes("@");
 
-  function run(kind: "pdl" | "gf") {
+  function run(kind: "pdl" | "gf" | "kapazitaet") {
     if (pending) return;
     const label =
       kind === "pdl"
         ? "Wochen-Plan jetzt an alle PDLs mit offenen Orten senden?"
-        : `Gruppen-Report jetzt an die Geschäftsführung (${gfOverride.includes("@") ? gfOverride : gfAddress}) senden?`;
+        : kind === "kapazitaet"
+          ? "Kapazitäts-Erinnerung an alle PDLs senden, die diese Woche noch nicht gemeldet haben?"
+          : `Gruppen-Report jetzt an die Geschäftsführung (${gfOverride.includes("@") ? gfOverride : gfAddress}) senden?`;
     if (kind === "gf" && !gfConfigured && !gfOverride.includes("@")) {
       toast.error("Adresse der Geschäftsführung eingeben.");
       return;
@@ -35,7 +38,9 @@ export function KommunikationSend({ gfAddress }: { gfAddress: string }) {
       const r =
         kind === "gf"
           ? await triggerGroupReport(gfOverride)
-          : await triggerWeeklyMails("pdl");
+          : kind === "kapazitaet"
+            ? await triggerCapacityReminders()
+            : await triggerWeeklyMails("pdl");
       setResult(r.message);
       if (r.ok) toast.success("Versand abgeschlossen");
       else toast.error("Versand mit Problemen — Details unten.");
@@ -55,6 +60,16 @@ export function KommunikationSend({ gfAddress }: { gfAddress: string }) {
         >
           <Mail className="size-4" />
           Wochen-Plan an PDLs
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={pending}
+          onClick={() => run("kapazitaet")}
+        >
+          <BedDouble className="size-4" />
+          Kapazitäts-Erinnerung an PDLs
         </Button>
         <Button
           type="button"

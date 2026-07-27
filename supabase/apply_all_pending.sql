@@ -2,7 +2,8 @@
 -- einfügen und ausführen:
 -- https://supabase.com/dashboard/project/xbzcplpaalccjiyjhypr/sql/new
 --
--- Stand: nur noch 0030 offen — alles davor (bis inkl. 0029) ist eingespielt.
+-- Stand: offen sind 0030–0033 — alles davor ist eingespielt.
+-- (Bereits eingespielte Blöcke werden dank "if not exists" einfach übersprungen.)
 
 -- ── 0030: Relevanz-Kategorie (1–3) für CRM-Ziel-Orte ────────────────
 alter table public.crm_targets add column if not exists relevanz smallint
@@ -39,5 +40,24 @@ create table if not exists public.phone_calls (
 );
 create index if not exists phone_calls_time_idx on public.phone_calls (call_time desc);
 alter table public.phone_calls disable row level security;
+
+notify pgrst, 'reload schema';
+
+-- ── 0033: Wöchentliche Kapazitäts-Meldung je Hub ────────────────────
+create table if not exists public.capacity_reports (
+  id                uuid primary key default gen_random_uuid(),
+  hub_id            uuid not null references public.hubs (id) on delete cascade,
+  week_start        date not null,
+  freie_plaetze     integer not null default 0 check (freie_plaetze between 0 and 99),
+  beatmung_plaetze  integer not null default 0 check (beatmung_plaetze between 0 and 99),
+  wg_plaetze        integer not null default 0 check (wg_plaetze between 0 and 99),
+  kinder_moeglich   boolean not null default false,
+  aufnahme_ab       date,
+  notiz             text,
+  created_at        timestamptz default now(),
+  updated_at        timestamptz default now(),
+  unique (hub_id, week_start)
+);
+alter table public.capacity_reports disable row level security;
 
 notify pgrst, 'reload schema';

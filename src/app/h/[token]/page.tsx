@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { CalendarDays, ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFollowupWeeks } from "@/lib/settings";
+import { capacityWeekStart, type CapacityReport } from "@/lib/capacity";
+import { CapacityForm } from "@/components/capacity-form";
 import {
   CrmVisitList,
   type CrmLogEntry,
@@ -129,6 +131,18 @@ export default async function HubShareLinkPage({
   const otherGroups = [...otherByHub.entries()]
     .map(([hubId, list]) => ({ hubName: hubNameOf(hubId), list }))
     .sort((a, b) => a.hubName.localeCompare(b.hubName, "de"));
+
+  // Kapazitäts-Meldung: laufende Woche + letzte frühere als Vorbelegung.
+  const capWeek = capacityWeekStart();
+  const { data: capRows } = await admin
+    .from("capacity_reports")
+    .select("*")
+    .eq("hub_id", hub.id)
+    .order("week_start", { ascending: false })
+    .limit(5);
+  const capReports = (capRows ?? []) as CapacityReport[];
+  const capCurrent = capReports.find((r) => r.week_start === capWeek) ?? null;
+  const capPrevious = capReports.find((r) => r.week_start !== capWeek) ?? null;
 
   const ownTargets = (crmTargets ?? []) as VisitTarget[];
   const dueCount = ownTargets.filter(
@@ -270,6 +284,11 @@ export default async function HubShareLinkPage({
             zur Liste hinzugefügt.
           </li>
           <li>
+            <strong className="text-foreground">Kapazität:</strong> Einmal pro
+            Woche melden, wie viele Patienten Sie aufnehmen können — Grundlage
+            für schnelle Antworten auf Klinik-Anfragen.
+          </li>
+          <li>
             <strong className="text-foreground">Material:</strong> Nachschub
             an Flyern, Boxen &amp; Co. bestellen — bitte nur bei Bedarf.
           </li>
@@ -375,6 +394,19 @@ export default async function HubShareLinkPage({
                   </div>
                 )}
               </div>
+            ),
+          },
+          {
+            id: "kapazitaet",
+            label: "Kapazität",
+            badge: capCurrent ? undefined : 1,
+            content: (
+              <CapacityForm
+                token={token}
+                weekStart={capWeek}
+                current={capCurrent}
+                previous={capPrevious}
+              />
             ),
           },
           {

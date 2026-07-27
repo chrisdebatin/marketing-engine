@@ -467,6 +467,38 @@ export interface Database {
         >;
         Relationships: [];
       };
+      capacity_reports: {
+        Row: {
+          id: string;
+          hub_id: string;
+          week_start: string;
+          freie_plaetze: number;
+          beatmung_plaetze: number;
+          wg_plaetze: number;
+          kinder_moeglich: boolean;
+          aufnahme_ab: string | null;
+          notiz: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          week_start: string;
+          freie_plaetze?: number;
+          beatmung_plaetze?: number;
+          wg_plaetze?: number;
+          kinder_moeglich?: boolean;
+          aufnahme_ab?: string | null;
+          notiz?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["capacity_reports"]["Insert"]
+        >;
+        Relationships: [];
+      };
       phone_calls: {
         Row: {
           id: string;

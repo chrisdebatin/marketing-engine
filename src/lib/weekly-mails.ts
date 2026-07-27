@@ -533,3 +533,66 @@ export async function sendGroupReport(
   else result.errors.push(`Geschäftsführung: ${res.error}`);
   return result;
 }
+
+// ── Kapazitäts-Erinnerung: PDLs ohne Meldung für die laufende Woche ──
+
+/** Erinnerung an alle PDLs, die diese Woche noch keine Kapazität gemeldet haben. */
+export async function sendCapacityReminders(): Promise<MailRunResult> {
+  const { capacityWeekStart } = await import("@/lib/capacity");
+  const { splitPdlNames } = await import("@/lib/pdl");
+  const admin = createAdminClient();
+  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+
+  const week = capacityWeekStart();
+  const [{ data: hubRows, error }, { data: reported }] = await Promise.all([
+    admin.from("hubs").select("*"),
+    admin.from("capacity_reports").select("hub_id").eq("week_start", week),
+  ]);
+  if (error || !hubRows) {
+    result.errors.push("Hubs konnten nicht geladen werden.");
+    return result;
+  }
+  const done = new Set((reported ?? []).map((r) => r.hub_id));
+
+  for (const h of (hubRows as Hub[]).sort((a, b) =>
+    a.name.localeCompare(b.name, "de"),
+  )) {
+    if (done.has(h.id)) continue;
+    const emails = splitPdlEmails(h.pdl_email);
+    if (emails.length === 0) {
+      result.skipped.push(`${h.name}: keine PDL-E-Mail`);
+      continue;
+    }
+    const anrede = splitPdlNames(h.pdl_name)[0] ?? "";
+    const link = `${appUrl()}/h/${h.share_token}`;
+    const html = `<div style="${MAIL_STYLE}">
+<p>Guten Morgen${anrede ? ` ${esc(anrede)}` : ""},</p>
+<p>kurze Erinnerung: Für <strong>${esc(h.name)}</strong> fehlt diese Woche
+noch die <strong>Kapazitäts-Meldung</strong> — wie viele Patienten Sie
+aktuell aufnehmen können (gesamt, Beatmung, WG, Kinder, frühester Termin).</p>
+<p>Dauert keine Minute — Reiter „Kapazität&rdquo; auf Ihrer Standort-Seite:</p>
+<p><a href="${link}" style="display:inline-block;background:#5b5bd6;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Kapazität jetzt melden</a></p>
+<p>Warum das wichtig ist: Mit aktuellen Zahlen können wir Klinik- und
+Recare-Anfragen für Ihren Standort sofort beantworten — das bringt
+Patienten.</p>
+<p>Viele Grüße<br>Ihr Marketing-Team<br>
+Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
+</div>`;
+    const res = await deliverMail({
+      to: emails,
+      subject: `Bitte Kapazität melden — ${h.name} (Woche ab ${formatIsoDate(week)})`,
+      html,
+    });
+    if (res.ok) result.sent.push(`${h.name} <${emails.join(", ")}>`);
+    else result.errors.push(`${h.name}: ${res.error}`);
+  }
+
+  if (result.sent.length === 0 && result.errors.length === 0) {
+    result.skipped.push(
+      result.skipped.length > 0
+        ? "Alle übrigen Standorte haben bereits gemeldet."
+        : "Alle Standorte haben diese Woche bereits gemeldet.",
+    );
+  }
+  return result;
+}
