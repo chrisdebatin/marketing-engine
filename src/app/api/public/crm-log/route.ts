@@ -20,6 +20,8 @@ export async function POST(req: Request) {
     target_id?: string;
     aktion?: string;
     kategorie?: string;
+    adresse?: string;
+    ort?: string;
     ansprechpartner?: string;
     notiz?: string;
     recare?: string;
@@ -95,6 +97,8 @@ export async function POST(req: Request) {
         hub_id: hub.id,
         name: ortName.slice(0, 200),
         kategorie: kategorie && isPlaceKind(kategorie) ? kategorie : null,
+        adresse: (body.adresse ?? "").trim().slice(0, 200) || null,
+        ort: (body.ort ?? "").trim().slice(0, 120) || null,
         intervall_wochen: 4,
         note: "Von der PDL selbst hinzugefügt",
       })

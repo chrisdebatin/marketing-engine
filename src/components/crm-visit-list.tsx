@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -255,6 +255,42 @@ export function CrmVisitList({
   }
   // Schnell-Log: EIN Formular für alles (Ort + Aktion, Rest optional)
   const [qOrt, setQOrt] = useState("");
+  // Vom Karten-Vorschlag übernommene Details (Adresse/Ort/Kategorie)
+  const [qMeta, setQMeta] = useState<{
+    adresse: string | null;
+    ort: string | null;
+    kategorie: string | null;
+  } | null>(null);
+  const [mapSuggestions, setMapSuggestions] = useState<
+    { name: string; adresse: string | null; ort: string | null; kategorie: string | null }[]
+  >([]);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function onOrtInput(value: string) {
+    setQOrt(value);
+    setQMeta(null);
+    setSuggestOpen(true);
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (value.trim().length < 3) {
+      setMapSuggestions([]);
+      return;
+    }
+    // Karten-Suche leicht verzögert, damit nicht jeder Tastendruck anfragt.
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/public/place-search?token=${encodeURIComponent(token)}&q=${encodeURIComponent(value.trim())}`,
+        );
+        const body = (await res.json().catch(() => ({}))) as {
+          places?: typeof mapSuggestions;
+        };
+        setMapSuggestions(body.places ?? []);
+      } catch {
+        setMapSuggestions([]);
+      }
+    }, 350);
+  }
   const [qArt, setQArt] = useState("");
   const [qAnsprech, setQAnsprech] = useState("");
   const [qNotiz, setQNotiz] = useState("");
@@ -272,6 +308,9 @@ export function CrmVisitList({
           token,
           ort_name: qOrt,
           aktion: qArt,
+          kategorie: qMeta?.kategorie ?? "",
+          adresse: qMeta?.adresse ?? "",
+          ort: qMeta?.ort ?? "",
           ansprechpartner: qAnsprech,
           notiz: qNotiz,
           recare: qRecare,
@@ -313,6 +352,8 @@ export function CrmVisitList({
           c + 1 + (body.result!.art === "box" || body.result!.art === "flyer" ? 1 : 0),
       );
       setQOrt("");
+      setQMeta(null);
+      setMapSuggestions([]);
       setQArt("");
       setQAnsprech("");
       setQNotiz("");
@@ -672,22 +713,105 @@ export function CrmVisitList({
           Schnell-Log — was haben Sie gemacht?
         </p>
         <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Wo? (bekannte Orte werden vorgeschlagen)</Label>
-          <Input
-            value={qOrt}
-            onChange={(e) => setQOrt(e.target.value)}
-            placeholder="z. B. Klinikum Musterstadt oder Apotheke am Markt"
-            list="crm-ort-suggestions"
-            autoComplete="off"
-            maxLength={200}
-            className="bg-background"
-            disabled={quickBusy}
-          />
-          <datalist id="crm-ort-suggestions">
-            {targets.map((t) => (
-              <option key={t.id} value={t.name} />
-            ))}
-          </datalist>
+          <Label className="text-xs">
+            Wo? (Ihre Liste und die Karte werden durchsucht)
+          </Label>
+          <div className="relative">
+            <Input
+              value={qOrt}
+              onChange={(e) => onOrtInput(e.target.value)}
+              onFocus={() => setSuggestOpen(true)}
+              onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+              placeholder="z. B. Klinikum Musterstadt oder Apotheke am Markt"
+              autoComplete="off"
+              maxLength={200}
+              className="bg-background"
+              disabled={quickBusy}
+            />
+            {suggestOpen &&
+              qOrt.trim().length >= 2 &&
+              (() => {
+                const q = qOrt.trim().toLowerCase();
+                const own = targets
+                  .filter((t) => t.name.toLowerCase().includes(q))
+                  .slice(0, 4);
+                const ownNames = new Set(own.map((t) => t.name.toLowerCase()));
+                const map = mapSuggestions
+                  .filter((m) => !ownNames.has(m.name.toLowerCase()))
+                  .slice(0, 5);
+                if (own.length === 0 && map.length === 0) return null;
+                return (
+                  <div className="absolute top-full right-0 left-0 z-20 mt-1 overflow-hidden rounded-lg border bg-popover shadow-md">
+                    {own.length > 0 && (
+                      <p className="px-3 pt-2 pb-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Aus Ihrer Liste
+                      </p>
+                    )}
+                    {own.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setQOrt(t.name);
+                          setQMeta(null);
+                          setSuggestOpen(false);
+                        }}
+                        className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-accent"
+                      >
+                        <span className="font-medium">{t.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {[t.kategorie ? placeKindLabel(t.kategorie) : null, t.ort]
+                            .filter(Boolean)
+                            .join(" · ") || "bereits in Ihrer Liste"}
+                        </span>
+                      </button>
+                    ))}
+                    {map.length > 0 && (
+                      <p className="border-t px-3 pt-2 pb-1 text-[0.65rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                        Aus der Karte
+                      </p>
+                    )}
+                    {map.map((m, i) => (
+                      <button
+                        key={`${m.name}-${i}`}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          setQOrt(m.name);
+                          setQMeta({
+                            adresse: m.adresse,
+                            ort: m.ort,
+                            kategorie: m.kategorie,
+                          });
+                          setSuggestOpen(false);
+                        }}
+                        className="flex w-full flex-col px-3 py-1.5 text-left text-sm hover:bg-accent"
+                      >
+                        <span className="font-medium">{m.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {[
+                            m.kategorie ? placeKindLabel(m.kategorie) : null,
+                            m.adresse,
+                            m.ort,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Karten-Treffer"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
+          </div>
+          {qMeta && (
+            <p className="text-xs text-muted-foreground">
+              Übernommen aus der Karte:{" "}
+              {[qMeta.adresse, qMeta.ort].filter(Boolean).join(", ") ||
+                "Details"}{" "}
+              — wird beim Anlegen gespeichert.
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Was? (Pflicht)</Label>
