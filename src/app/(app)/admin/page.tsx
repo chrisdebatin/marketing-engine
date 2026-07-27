@@ -33,7 +33,10 @@ import {
 } from "lucide-react";
 import { connectedAccount, outlookConfigured } from "@/lib/outlook";
 import { smtpConfigured } from "@/lib/mailer";
+import { splitPdlEmails } from "@/lib/pdl";
 import { WeeklyMailButtons } from "@/components/weekly-mail-buttons";
+import { MailComposer } from "@/components/mail-composer";
+import { Mail } from "lucide-react";
 import type { Hub } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -309,6 +312,41 @@ export default async function AdminPage() {
           </p>
         )}
       </div>
+
+      {/* Freie Update-Mail an PDLs / MDs / Geschäftsführung */}
+      <details className="group rounded-xl border bg-card shadow-sm" open>
+        <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold select-none">
+          <Mail className="size-4 text-primary" />
+          E-Mail senden
+          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+            aufklappen
+          </span>
+        </summary>
+        <div className="border-t p-5">
+          {outlookAccount || smtpReady ? (
+            <>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Update-Mail an ausgewählte Standorte (PDLs), alle MDs und
+                weitere Empfänger wie die Geschäftsführung.
+              </p>
+              <MailComposer
+                hubs={hubs.map((h) => ({
+                  id: h.id,
+                  name: h.name,
+                  pdlCount: splitPdlEmails(h.pdl_email).length,
+                  mdEmail: h.md_email ?? null,
+                  md: h.responsible_md ?? null,
+                }))}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Erst den Mail-Versand einrichten (Karte „E-Mail-Anbindung&rdquo;
+              oben), dann können hier Update-Mails verschickt werden.
+            </p>
+          )}
+        </div>
+      </details>
 
       <details className="group rounded-xl border bg-card shadow-sm">
         <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold select-none">

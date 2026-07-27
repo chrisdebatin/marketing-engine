@@ -209,3 +209,98 @@ export async function triggerWeeklyMails(
   ].filter(Boolean);
   return { ok: r.errors.length === 0, message: parts.join(" · ") };
 }
+
+/**
+ * Freie Update-Mail aus dem Admin an gewählte Empfänger:
+ * PDLs (je Standort), MDs (hinterlegte md_email) und zusätzliche Adressen
+ * (z. B. Geschäftsführung). Jeder Empfänger bekommt eine eigene Mail —
+ * keine sichtbare Empfängerliste.
+ */
+export async function sendAdminMail(input: {
+  subject?: string;
+  body?: string;
+  pdlHubIds?: string[];
+  includeMds?: boolean;
+  extra?: string;
+}): Promise<{ ok: boolean; message: string }> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  const subject = (input.subject ?? "").trim().slice(0, 200);
+  const bodyText = (input.body ?? "").trim().slice(0, 8000);
+  if (!subject) return { ok: false, message: "Betreff angeben." };
+  if (!bodyText) return { ok: false, message: "Nachricht angeben." };
+
+  const { mailConfigured, deliverMail } = await import("@/lib/mailer");
+  if (!mailConfigured()) {
+    return {
+      ok: false,
+      message:
+        "Kein Mail-Versandweg eingerichtet — SMTP-Zugangsdaten setzen oder Outlook verbinden.",
+    };
+  }
+
+  const { splitPdlEmails } = await import("@/lib/pdl");
+  const admin = createAdminClient();
+  const { data: hubRows } = await admin.from("hubs").select("*");
+  const hubs = (hubRows ?? []) as import("@/lib/types").Hub[];
+
+  // Empfänger einsammeln (dedupliziert, mit Anzeige-Label).
+  const recipients = new Map<string, string>();
+  const pdlHubIds = new Set(input.pdlHubIds ?? []);
+  for (const h of hubs) {
+    if (pdlHubIds.has(h.id)) {
+      for (const e of splitPdlEmails(h.pdl_email)) {
+        recipients.set(e.toLowerCase(), `${h.name} (PDL)`);
+      }
+    }
+  }
+  if (input.includeMds) {
+    for (const h of hubs) {
+      const e = (h.md_email ?? "").trim().toLowerCase();
+      if (e.includes("@") && !recipients.has(e)) {
+        recipients.set(e, `${h.responsible_md ?? "MD"} (MD)`);
+      }
+    }
+  }
+  for (const raw of (input.extra ?? "").split(/[,;\s]+/)) {
+    const e = raw.trim().toLowerCase();
+    if (e.includes("@")) recipients.set(e, "Weitere");
+  }
+  if (recipients.size === 0) {
+    return { ok: false, message: "Keine Empfänger ausgewählt/gefunden." };
+  }
+  if (recipients.size > 100) {
+    return { ok: false, message: "Mehr als 100 Empfänger — bitte eingrenzen." };
+  }
+
+  const esc = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1f2430;line-height:1.5">
+${bodyText
+  .split(/\n{2,}/)
+  .map((p) => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`)
+  .join("\n")}
+<p>Viele Grüße<br>Ihr Marketing-Team<br>
+Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
+</div>`;
+
+  const sent: string[] = [];
+  const errors: string[] = [];
+  for (const [email, label] of recipients) {
+    const res = await deliverMail({ to: [email], subject, html });
+    if (res.ok) sent.push(`${label} <${email}>`);
+    else errors.push(`${label} <${email}>: ${res.error}`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    message:
+      `Gesendet an ${sent.length} Empfänger.` +
+      (errors.length > 0 ? ` Fehler: ${errors.join("; ")}` : ""),
+  };
+}
