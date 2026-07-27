@@ -177,3 +177,74 @@ export async function deleteHubNote(id: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+/** Neues Thema direkt auf der Themen-Seite anlegen. */
+export async function createNoteTopic(title: string): Promise<Result> {
+  await requireSession();
+  const clean = (title ?? "").trim();
+  if (!clean) return { ok: false, error: "Titel eingeben." };
+  if (clean.length > 120) {
+    return { ok: false, error: "Titel zu lang (max. 120 Zeichen)." };
+  }
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("note_topics")
+    .select("id, title")
+    .ilike("title", clean)
+    .maybeSingle();
+  if (existing) return { ok: false, error: `Thema „${existing.title}“ gibt es schon.` };
+
+  const { error } = await admin.from("note_topics").insert({ title: clean });
+  if (error) {
+    return (
+      missingTableError(error.code) ?? {
+        ok: false,
+        error: "Speichern fehlgeschlagen.",
+      }
+    );
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/** Thema umbenennen. */
+export async function renameNoteTopic(
+  id: string,
+  title: string,
+): Promise<Result> {
+  await requireSession();
+  const cleanId = (id ?? "").trim();
+  const clean = (title ?? "").trim();
+  if (!cleanId) return { ok: false, error: "Thema fehlt." };
+  if (!clean) return { ok: false, error: "Titel eingeben." };
+  if (clean.length > 120) {
+    return { ok: false, error: "Titel zu lang (max. 120 Zeichen)." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("note_topics")
+    .update({ title: clean })
+    .eq("id", cleanId);
+  if (error) return { ok: false, error: "Speichern fehlgeschlagen." };
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Thema löschen. Zugehörige Notizen bleiben erhalten und werden zu
+ * allgemeinen Standort-Notizen (topic_id → null).
+ */
+export async function deleteNoteTopic(id: string): Promise<Result> {
+  await requireSession();
+  const cleanId = (id ?? "").trim();
+  if (!cleanId) return { ok: false, error: "Thema fehlt." };
+
+  const admin = createAdminClient();
+  await admin.from("hub_notes").update({ topic_id: null }).eq("topic_id", cleanId);
+  const { error } = await admin.from("note_topics").delete().eq("id", cleanId);
+  if (error) return { ok: false, error: "Löschen fehlgeschlagen." };
+  revalidate();
+  return { ok: true };
+}
