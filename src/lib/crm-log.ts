@@ -25,6 +25,74 @@ export const TARGET_COLS =
 export interface LoggedContact {
   target: Record<string, unknown>;
   placementCreated: boolean;
+  /** Id des Log-Eintrags (null, solange crm_contacts fehlt/alt ist). */
+  contactId: string | null;
+}
+
+/**
+ * Ziel-Ort nach Log-Änderung (Kontakt editiert/gelöscht) neu ableiten:
+ * letzter/nächster Termin, Notiz und Kontakt-Art kommen vom neuesten
+ * verbliebenen Log-Eintrag — ohne Einträge zurück auf "Erstkontakt".
+ */
+export async function resyncTargetFromLog(
+  hubId: string,
+  targetId: string,
+): Promise<Record<string, unknown> | null> {
+  const admin = createAdminClient();
+  const { data: target } = await admin
+    .from("crm_targets")
+    .select("id, hub_id, intervall_wochen")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!target || target.hub_id !== hubId) return null;
+
+  const { data: contacts } = await admin
+    .from("crm_contacts")
+    .select("kontakt_art, ansprechpartner, note, contact_date")
+    .eq("target_id", targetId)
+    .order("contact_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const newest = (contacts ?? [])[0];
+
+  let base: {
+    letzter_besuch: string | null;
+    naechster_besuch: string | null;
+    besuchs_notiz: string | null;
+  };
+  let extra: { letzte_kontakt_art: string | null; ansprechpartner?: string | null };
+  if (newest) {
+    const next = new Date(newest.contact_date + "T12:00:00");
+    next.setDate(next.getDate() + (target.intervall_wochen || 4) * 7);
+    base = {
+      letzter_besuch: newest.contact_date,
+      naechster_besuch: next.toISOString().slice(0, 10),
+      besuchs_notiz: newest.note ?? null,
+    };
+    extra = {
+      letzte_kontakt_art: newest.kontakt_art ?? null,
+      ansprechpartner: newest.ansprechpartner ?? null,
+    };
+  } else {
+    base = { letzter_besuch: null, naechster_besuch: null, besuchs_notiz: null };
+    extra = { letzte_kontakt_art: null };
+  }
+
+  let { data: updated } = await admin
+    .from("crm_targets")
+    .update({ ...base, ...extra })
+    .eq("id", targetId)
+    .select(`${TARGET_COLS}, ansprechpartner, letzte_kontakt_art, recare_partner, plan`)
+    .single();
+  if (!updated) {
+    ({ data: updated } = await admin
+      .from("crm_targets")
+      .update(base)
+      .eq("id", targetId)
+      .select(TARGET_COLS)
+      .single());
+  }
+  return (updated as Record<string, unknown>) ?? null;
 }
 
 export async function logContactOnTarget(input: {
@@ -90,14 +158,18 @@ export async function logContactOnTarget(input: {
   }
 
   // Kontakt-Log; tolerant, falls Tabelle/Constraint noch alt ist (0027/0029).
-  await admin.from("crm_contacts").insert({
-    target_id: target.id,
-    hub_id: input.hubId,
-    kontakt_art: input.kontaktArt,
-    ansprechpartner: ansprechpartner || null,
-    note: note || null,
-    contact_date: today,
-  });
+  const { data: contactRow } = await admin
+    .from("crm_contacts")
+    .insert({
+      target_id: target.id,
+      hub_id: input.hubId,
+      kontakt_art: input.kontaktArt,
+      ansprechpartner: ansprechpartner || null,
+      note: note || null,
+      contact_date: today,
+    })
+    .select("id")
+    .single();
 
   // Box/Flyer zählen automatisch als Auslage-Ort.
   let placementCreated = false;
@@ -124,6 +196,10 @@ export async function logContactOnTarget(input: {
 
   return {
     ok: true,
-    data: { target: updated as Record<string, unknown>, placementCreated },
+    data: {
+      target: updated as Record<string, unknown>,
+      placementCreated,
+      contactId: contactRow?.id ?? null,
+    },
   };
 }

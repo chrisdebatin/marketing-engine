@@ -68,6 +68,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     target: result.data.target,
     placementCreated: result.data.placementCreated,
+    contactId: result.data.contactId,
   });
 }
 

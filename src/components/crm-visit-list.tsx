@@ -83,6 +83,22 @@ function recareOf(t: VisitTarget): boolean | null {
   return null;
 }
 
+/** Interne Import-Marker aus der Notiz filtern — die PDL sieht nur Nützliches. */
+function displayNote(note: string | null | undefined): string {
+  if (!note) return "";
+  return note
+    .split("·")
+    .map((part) => part.trim())
+    .filter(
+      (part) =>
+        part &&
+        !/Auto-|bitte verifizieren|Quelle:|Recare-Status|Von der PDL selbst|Relevanz [1-3]|nächster Standort/.test(
+          part,
+        ),
+    )
+    .join(" · ");
+}
+
 function RecareChip({ t }: { t: VisitTarget }) {
   const status = recareOf(t);
   return (
@@ -127,6 +143,113 @@ export function CrmVisitList({
   const [targets, setTargets] = useState<VisitTarget[]>(initial);
   const [score, setScore] = useState(initialScore);
   const [log, setLog] = useState<CrmLogEntry[]>(initialLog);
+  const [showAllVorschlaege, setShowAllVorschlaege] = useState(false);
+  // Log-Eintrag bearbeiten
+  const [logEditId, setLogEditId] = useState<string | null>(null);
+  const [leArt, setLeArt] = useState("");
+  const [leDate, setLeDate] = useState("");
+  const [leAnsprech, setLeAnsprech] = useState("");
+  const [leNotiz, setLeNotiz] = useState("");
+
+  function startLogEdit(e: CrmLogEntry) {
+    setLogEditId(e.id);
+    setLeArt(e.art);
+    setLeDate(e.date);
+    setLeAnsprech(e.ansprechpartner ?? "");
+    setLeNotiz(e.notiz ?? "");
+  }
+
+  async function saveLogEdit(e: CrmLogEntry) {
+    if (saving || !leArt || !leDate) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/public/crm-contact", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          id: e.id,
+          kontakt_art: leArt,
+          contact_date: leDate,
+          ansprechpartner: leAnsprech,
+          note: leNotiz,
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        entry?: Omit<CrmLogEntry, "ort">;
+        target?: VisitTarget;
+      };
+      if (!res.ok || !body.entry) {
+        toast.error(body.error ?? "Speichern fehlgeschlagen.");
+        return;
+      }
+      setLog((prev) =>
+        prev.map((x) => (x.id === e.id ? { ...body.entry!, ort: x.ort } : x)),
+      );
+      if (body.target) {
+        setTargets((prev) =>
+          prev.map((x) => (x.id === body.target!.id ? body.target! : x)),
+        );
+      }
+      setLogEditId(null);
+      toast.success("Log-Eintrag aktualisiert");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteLogEntry(e: CrmLogEntry) {
+    if (saving) return;
+    if (
+      !window.confirm(
+        `Log-Eintrag „${kontaktArtLabel(e.art) || e.art} — ${e.ort}“ vom ${formatIsoDate(e.date)} löschen?`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const isPlacement = e.id.startsWith("pl-");
+      const res = await fetch(
+        isPlacement ? "/api/public/hub-placement" : "/api/public/crm-contact",
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token,
+            id: isPlacement ? e.id.slice(3) : e.id,
+          }),
+        },
+      );
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        target?: VisitTarget | null;
+      };
+      if (!res.ok) {
+        toast.error(body.error ?? "Löschen fehlgeschlagen.");
+        return;
+      }
+      setLog((prev) => prev.filter((x) => x.id !== e.id));
+      if (body.target) {
+        setTargets((prev) =>
+          prev.map((x) => (x.id === body.target!.id ? body.target! : x)),
+        );
+      }
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 28);
+      if (e.date >= cutoff.toISOString().slice(0, 10)) {
+        setScore((c) => Math.max(0, c - 1));
+      }
+      toast.success("Log-Eintrag gelöscht");
+    } catch {
+      toast.error("Netzwerkfehler. Bitte erneut versuchen.");
+    } finally {
+      setSaving(false);
+    }
+  }
   // Schnell-Log: EIN Formular für alles (Ort + Aktion, Rest optional)
   const [qOrt, setQOrt] = useState("");
   const [qArt, setQArt] = useState("");
@@ -153,7 +276,13 @@ export function CrmVisitList({
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
-        result?: { ort: string; aktion: string; art: string; neu: boolean };
+        result?: {
+          ort: string;
+          aktion: string;
+          art: string;
+          neu: boolean;
+          contactId?: string | null;
+        };
         targets?: VisitTarget[];
       };
       if (!res.ok || !body.result) {
@@ -164,7 +293,9 @@ export function CrmVisitList({
       const today = todayIso();
       setLog((prev) => [
         {
-          id: `quick-${today}-${prev.length}-${body.result!.ort}`,
+          id:
+            body.result!.contactId ??
+            `quick-${today}-${prev.length}-${body.result!.ort}`,
           date: today,
           art: body.result!.art,
           ort: body.result!.ort,
@@ -370,7 +501,16 @@ export function CrmVisitList({
   const nextBetter =
     place > 1 ? Math.min(...otherScores.filter((s) => s > score)) : null;
 
-  type Row = VisitTarget | { header: string; hint?: string; count: number };
+  // Vorschläge in Wochen-Häppchen: 5 für diese Woche, 5 für nächste,
+  // der Rest wartet eingeklappt unter "Später".
+  const dieseWoche = vorgeschlagenList.slice(0, 5);
+  const naechsteWoche = vorgeschlagenList.slice(5, 10);
+  const spaeter = vorgeschlagenList.slice(10);
+
+  type Row =
+    | VisitTarget
+    | { header: string; hint?: string; count: number }
+    | { more: number };
   const rows: Row[] = [
     ...(offenList.length > 0
       ? [
@@ -381,14 +521,31 @@ export function CrmVisitList({
           ...offenList,
         ]
       : []),
-    ...(vorgeschlagenList.length > 0
+    ...(dieseWoche.length > 0
       ? [
           {
-            header: "Vorgeschlagene Orte — abhaken, sobald erledigt",
-            hint: "Nach Priorität sortiert. Eigene Orte einfach oben im Schnell-Log oder über „Ort hinzufügen“ eintragen.",
-            count: vorgeschlagenList.length,
+            header: "Vorgeschlagen für diese Woche",
+            hint: "Die wichtigsten zuerst — Box vorbeibringen, Besuch oder Anruf, danach abhaken (loggen).",
+            count: dieseWoche.length,
           } as Row,
-          ...vorgeschlagenList,
+          ...dieseWoche,
+        ]
+      : []),
+    ...(naechsteWoche.length > 0
+      ? [
+          {
+            header: "Nächste Woche",
+            count: naechsteWoche.length,
+          } as Row,
+          ...naechsteWoche,
+        ]
+      : []),
+    ...(spaeter.length > 0
+      ? [
+          { header: "Später", count: spaeter.length } as Row,
+          ...(showAllVorschlaege
+            ? spaeter
+            : [{ more: spaeter.length } as Row]),
         ]
       : []),
     ...(doneList.length > 0
@@ -422,12 +579,25 @@ export function CrmVisitList({
         error?: string;
         target?: VisitTarget;
         placementCreated?: boolean;
+        contactId?: string | null;
       };
       if (!res.ok || !body.target) {
         toast.error(body.error ?? "Speichern fehlgeschlagen.");
         return;
       }
       setTargets((prev) => prev.map((x) => (x.id === t.id ? body.target! : x)));
+      const heute = todayIso();
+      setLog((prev) => [
+        {
+          id: body.contactId ?? `quick-${heute}-${prev.length}-${t.name}`,
+          date: heute,
+          art,
+          ort: t.name,
+          notiz: note.trim() || null,
+          ansprechpartner: ansprechpartner.trim() || null,
+        },
+        ...prev,
+      ]);
       // Box-Kontakt erzeugt zusätzlich einen Liefer-Ort → 2 Ranking-Punkte.
       setScore((c) => c + 1 + (body.placementCreated ? 1 : 0));
       setLogFor(null);
@@ -701,6 +871,19 @@ export function CrmVisitList({
         <>
           <ul className="flex flex-col gap-2">
             {rows.map((row, idx) => {
+              if ("more" in row) {
+                return (
+                  <li key={`more-${idx}`}>
+                    <button
+                      type="button"
+                      className="w-full rounded-xl border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                      onClick={() => setShowAllVorschlaege(true)}
+                    >
+                      {row.more} weitere Orte anzeigen
+                    </button>
+                  </li>
+                );
+              }
               if ("header" in row) {
                 return (
                   <li key={`h-${idx}`} className={cn(idx > 0 && "mt-3")}>
@@ -765,9 +948,9 @@ export function CrmVisitList({
                           ? ` · Ansprechpartner: ${t.ansprechpartner}`
                           : ""}
                       </p>
-                      {t.note && (
+                      {displayNote(t.note) && (
                         <p className="mt-0.5 text-xs text-muted-foreground/80">
-                          {t.note}
+                          {displayNote(t.note)}
                         </p>
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1059,28 +1242,131 @@ export function CrmVisitList({
             {log.slice(0, 15).map((e) => {
               const Icon =
                 ART_ICON[e.art as keyof typeof ART_ICON] ?? Check;
+              const isPlacement = e.id.startsWith("pl-");
+              const editable = !isPlacement && !e.id.startsWith("quick-");
               return (
                 <li
                   key={e.id}
-                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
+                  className="flex flex-col gap-1 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
                 >
-                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {formatIsoDate(e.date)}
-                  </span>
-                  <span className="flex items-center gap-1 font-medium">
-                    <Icon className="size-3.5 text-primary" />
-                    {kontaktArtLabel(e.art) || e.art}
-                  </span>
-                  <span className="min-w-0">— {e.ort}</span>
-                  {e.ansprechpartner && (
-                    <span className="text-xs text-muted-foreground">
-                      ({e.ansprechpartner})
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {formatIsoDate(e.date)}
                     </span>
-                  )}
-                  {e.notiz && (
-                    <span className="w-full pl-5 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 font-medium">
+                      <Icon className="size-3.5 text-primary" />
+                      {kontaktArtLabel(e.art) || e.art}
+                    </span>
+                    <span className="min-w-0">— {e.ort}</span>
+                    {e.ansprechpartner && (
+                      <span className="text-xs text-muted-foreground">
+                        ({e.ansprechpartner})
+                      </span>
+                    )}
+                    <span className="ml-auto flex shrink-0 items-center">
+                      {editable && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground"
+                          disabled={saving}
+                          onClick={() =>
+                            logEditId === e.id
+                              ? setLogEditId(null)
+                              : startLogEdit(e)
+                          }
+                          aria-label="Log-Eintrag bearbeiten"
+                          title="Bearbeiten"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground hover:text-destructive"
+                        disabled={saving || e.id.startsWith("quick-")}
+                        onClick={() => void deleteLogEntry(e)}
+                        aria-label="Log-Eintrag löschen"
+                        title="Löschen"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </span>
+                  </div>
+                  {e.notiz && logEditId !== e.id && (
+                    <span className="pl-5 text-xs text-muted-foreground">
                       „{e.notiz}“
                     </span>
+                  )}
+
+                  {logEditId === e.id && (
+                    <div className="flex flex-col gap-2 border-t pt-2">
+                      <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-4">
+                        {KONTAKT_ARTEN.map((k) => {
+                          const KIcon = ART_ICON[k.key];
+                          return (
+                            <button
+                              key={k.key}
+                              type="button"
+                              onClick={() => setLeArt(k.key)}
+                              className={cn(
+                                "flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                                leArt === k.key
+                                  ? "bg-background text-foreground shadow-sm"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                            >
+                              <KIcon className="size-3.5" />
+                              {k.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          type="date"
+                          value={leDate}
+                          onChange={(ev) => setLeDate(ev.target.value)}
+                          className="bg-background sm:w-40"
+                        />
+                        <Input
+                          value={leAnsprech}
+                          onChange={(ev) => setLeAnsprech(ev.target.value)}
+                          placeholder="Ansprechpartner (optional)"
+                          maxLength={200}
+                          className="bg-background sm:flex-1"
+                        />
+                      </div>
+                      <Input
+                        value={leNotiz}
+                        onChange={(ev) => setLeNotiz(ev.target.value)}
+                        placeholder="Notiz (optional)"
+                        maxLength={1000}
+                        className="bg-background"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={saving || !leArt || !leDate}
+                          onClick={() => void saveLogEdit(e)}
+                        >
+                          {saving ? "Speichere…" : "Speichern"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() => setLogEditId(null)}
+                        >
+                          Abbrechen
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </li>
               );

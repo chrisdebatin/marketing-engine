@@ -208,7 +208,7 @@ export default async function HubShareLinkPage({
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8">
       {/* Hero mit Standort und Liefer-Kennzahlen */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-chart-5 p-6 text-primary-foreground shadow-lg">
         <div
@@ -250,45 +250,45 @@ export default async function HubShareLinkPage({
         )}
       </div>
 
-      {/* Kurz-Überblick: was auf dieser Seite zu tun ist */}
-      <StepBox
-        title="So nutzen Sie diese Seite — 2 Reiter oben:"
-        steps={[
-          <>
+      {/* Kurz-Überblick: eingeklappt, damit die Seite ruhig bleibt */}
+      <details className="group rounded-xl border border-primary/20 bg-primary/[0.04]">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold select-none">
+          <ListChecks className="size-4 text-primary" />
+          So nutzen Sie diese Seite
+          <span className="ml-auto text-xs font-normal text-muted-foreground group-open:hidden">
+            aufklappen
+          </span>
+        </summary>
+        <ol className="mx-4 mb-3 ml-9 flex list-decimal flex-col gap-1 text-sm text-muted-foreground">
+          <li>
             <strong className="text-foreground">Meine Orte:</strong> Ihre
             To-do-Liste — Kliniken, Praxen, Apotheken &amp; Co. Nach jeder
             Aktion (Box, Flyer, Besuch, Anruf) kurz ins Schnell-Log eintragen:
             Ort tippen, Aktion wählen, fertig. Neue Orte werden automatisch
             zur Liste hinzugefügt.
-          </>,
-          <>
+          </li>
+          <li>
             <strong className="text-foreground">Material:</strong> Nachschub
             an Flyern, Boxen &amp; Co. bestellen — bitte nur bei Bedarf.
-          </>,
-        ]}
-      />
+          </li>
+        </ol>
+      </details>
 
       {/* Monatliches Abstimmungs-Meeting mit dem Marketing-Team */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <CalendarDays className="size-5 text-primary" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">
-            Meeting mit dem Marketing-Team
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Buchen Sie sich einen 30-Minuten-Termin — empfohlen: einmal im
-            Monat.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border bg-card px-4 py-2.5 shadow-sm">
+        <CalendarDays className="size-4 shrink-0 text-primary" />
+        <p className="min-w-0 flex-1 text-sm">
+          <span className="font-medium">Meeting mit dem Marketing-Team</span>{" "}
+          <span className="text-muted-foreground">
+            — 30 Minuten, empfohlen einmal im Monat.
+          </span>
+        </p>
         <a
           href="https://calendly.com/christopher-debatin-tern-group/30min"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
         >
-          <CalendarDays className="size-4" />
           Termin buchen
         </a>
       </div>

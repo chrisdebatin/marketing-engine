@@ -136,6 +136,7 @@ export async function POST(req: Request) {
       aktion: kontaktArtLabel(aktion),
       art: aktion,
       neu,
+      contactId: logged.data.contactId,
     },
     targets: freshRows ?? [],
   });
