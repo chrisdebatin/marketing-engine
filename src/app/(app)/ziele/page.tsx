@@ -2,10 +2,8 @@ import { CalendarClock, ListTodo, MapPin, UserPlus, Users } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { crmStatus, formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
-import {
-  CrmTargetsManager,
-  type CrmTargetRow,
-} from "@/components/crm-targets-manager";
+import { type CrmTargetRow } from "@/components/crm-targets-manager";
+import { ZieleView } from "@/components/ziele-view";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +102,7 @@ export default async function ZielePage() {
         <Stat icon={Users} value={kontakte7} label="Kontakte (7 Tage)" />
       </div>
 
-      <CrmTargetsManager
+      <ZieleView
         targets={targets}
         hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
       />
