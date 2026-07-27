@@ -257,9 +257,9 @@ export default async function HubShareLinkPage({
           <>
             <strong className="text-foreground">Meine Orte:</strong> Ihre
             To-do-Liste — Kliniken, Praxen, Apotheken &amp; Co. Nach jeder
-            Aktion (Box, Flyer, Besuch, Anruf) kurz loggen: am einfachsten
-            oben ins Schnell-Log schreiben, die KI erledigt den Rest. Neue
-            Orte werden automatisch angelegt.
+            Aktion (Box, Flyer, Besuch, Anruf) kurz ins Schnell-Log eintragen:
+            Ort tippen, Aktion wählen, fertig. Neue Orte werden automatisch
+            zur Liste hinzugefügt.
           </>,
           <>
             <strong className="text-foreground">Material:</strong> Nachschub

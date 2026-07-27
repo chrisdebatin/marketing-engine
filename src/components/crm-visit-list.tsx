@@ -125,48 +125,64 @@ export function CrmVisitList({
   const [targets, setTargets] = useState<VisitTarget[]>(initial);
   const [score, setScore] = useState(initialScore);
   const [log, setLog] = useState<CrmLogEntry[]>(initialLog);
-  // KI-Schnell-Log (Freitext)
-  const [quickText, setQuickText] = useState("");
+  // Schnell-Log: EIN Formular für alles (Ort + Aktion, Rest optional)
+  const [qOrt, setQOrt] = useState("");
+  const [qArt, setQArt] = useState("");
+  const [qAnsprech, setQAnsprech] = useState("");
+  const [qNotiz, setQNotiz] = useState("");
+  const [qRecare, setQRecare] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
 
   async function quickLog() {
-    const text = quickText.trim();
-    if (quickBusy || text.length < 5) return;
+    if (quickBusy || !qOrt.trim() || !qArt) return;
     setQuickBusy(true);
     try {
       const res = await fetch("/api/public/crm-log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, text }),
+        body: JSON.stringify({
+          token,
+          ort_name: qOrt,
+          aktion: qArt,
+          ansprechpartner: qAnsprech,
+          notiz: qNotiz,
+          recare: qRecare,
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
-        results?: { ort: string; aktion: string; neu: boolean }[];
+        result?: { ort: string; aktion: string; art: string; neu: boolean };
         targets?: VisitTarget[];
       };
-      if (!res.ok || !body.results) {
+      if (!res.ok || !body.result) {
         toast.error(body.error ?? "Loggen fehlgeschlagen.");
         return;
       }
       if (body.targets) setTargets(body.targets);
       const today = todayIso();
       setLog((prev) => [
-        ...body.results!.map((r, i) => ({
-          id: `quick-${today}-${i}-${r.ort}`,
+        {
+          id: `quick-${today}-${prev.length}-${body.result!.ort}`,
           date: today,
-          art: r.aktion,
-          ort: r.ort,
-          notiz: null,
-          ansprechpartner: null,
-        })),
+          art: body.result!.art,
+          ort: body.result!.ort,
+          notiz: qNotiz.trim() || null,
+          ansprechpartner: qAnsprech.trim() || null,
+        },
         ...prev,
       ]);
-      setScore((c) => c + body.results!.length);
-      setQuickText("");
+      // Box/Flyer erzeugen zusätzlich einen Auslage-Ort → 2 Ranking-Punkte.
+      setScore(
+        (c) =>
+          c + 1 + (body.result!.art === "box" || body.result!.art === "flyer" ? 1 : 0),
+      );
+      setQOrt("");
+      setQArt("");
+      setQAnsprech("");
+      setQNotiz("");
+      setQRecare("");
       toast.success(
-        `Geloggt: ${body.results
-          .map((r) => `${r.aktion} — ${r.ort}${r.neu ? " (neu angelegt)" : ""}`)
-          .join(" · ")}`,
+        `Geloggt: ${body.result.aktion} — ${body.result.ort}${body.result.neu ? " (neu zur Liste hinzugefügt)" : ""}`,
       );
     } catch {
       toast.error("Netzwerkfehler. Bitte erneut versuchen.");
@@ -450,35 +466,109 @@ export function CrmVisitList({
         </span>
       </div>
 
-      {/* KI-Schnell-Log: Freitext → strukturierte Log-Einträge */}
-      <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+      {/* Schnell-Log: ein Formular für alles */}
+      <div className="flex flex-col gap-2.5 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
           <Sparkles className="size-4 text-primary" />
-          Schnell-Log — einfach schreiben, was Sie gemacht haben
+          Schnell-Log — was haben Sie gemacht?
         </p>
-        <Textarea
-          value={quickText}
-          onChange={(e) => setQuickText(e.target.value)}
-          placeholder={
-            'z. B. "War heute im Klinikum und habe eine Box bei Frau Weber vom Sozialdienst abgegeben, die arbeiten mit Recare. Danach Flyer in der Apotheke am Markt ausgelegt."'
-          }
-          maxLength={2000}
-          className="min-h-20 bg-background"
-          disabled={quickBusy}
-        />
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Wo? (bekannte Orte werden vorgeschlagen)</Label>
+          <Input
+            value={qOrt}
+            onChange={(e) => setQOrt(e.target.value)}
+            placeholder="z. B. Klinikum Musterstadt oder Apotheke am Markt"
+            list="crm-ort-suggestions"
+            autoComplete="off"
+            maxLength={200}
+            className="bg-background"
+            disabled={quickBusy}
+          />
+          <datalist id="crm-ort-suggestions">
+            {targets.map((t) => (
+              <option key={t.id} value={t.name} />
+            ))}
+          </datalist>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Was? (Pflicht)</Label>
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1 sm:grid-cols-4">
+            {KONTAKT_ARTEN.map((k) => {
+              const Icon = ART_ICON[k.key];
+              return (
+                <button
+                  key={k.key}
+                  type="button"
+                  onClick={() => setQArt(k.key)}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-xs font-medium transition-colors sm:text-sm",
+                    qArt === k.key
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {k.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={qAnsprech}
+            onChange={(e) => setQAnsprech(e.target.value)}
+            placeholder="Ansprechpartner (optional), z. B. Frau Weber, Sozialdienst"
+            autoComplete="off"
+            maxLength={200}
+            className="bg-background sm:flex-1"
+            disabled={quickBusy}
+          />
+          <Input
+            value={qNotiz}
+            onChange={(e) => setQNotiz(e.target.value)}
+            placeholder="Notiz (optional)"
+            autoComplete="off"
+            maxLength={1000}
+            className="bg-background sm:flex-1"
+            disabled={quickBusy}
+          />
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             size="sm"
-            disabled={quickBusy || quickText.trim().length < 5}
+            disabled={quickBusy || !qOrt.trim() || !qArt}
             onClick={() => void quickLog()}
           >
-            <Sparkles className="size-4" />
-            {quickBusy ? "KI liest mit…" : "Loggen — KI erkennt den Rest"}
+            <Check className="size-4" />
+            {quickBusy ? "Speichere…" : "Loggen"}
           </Button>
+          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+            {(
+              [
+                ["ja", "Recare: ja"],
+                ["nein", "Recare: nein"],
+                ["", "Recare: ?"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setQRecare(value)}
+                className={cn(
+                  "rounded-md px-2 py-1 text-xs transition-colors",
+                  qRecare === value
+                    ? "bg-background font-medium shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <span className="text-xs text-muted-foreground">
-            Orte, Aktion (Box/Flyer/Besuch/Anruf), Ansprechpartner und Recare
-            werden automatisch erkannt und in Liste und Log eingetragen.
+            Neue Orte werden automatisch zur Liste hinzugefügt.
           </span>
         </div>
       </div>
