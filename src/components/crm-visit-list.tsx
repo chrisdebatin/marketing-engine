@@ -130,6 +130,7 @@ export function CrmVisitList({
   initialScore,
   otherScores,
   initialLog = [],
+  followup = { box: 8, flyer: 8, besuch: 4, anruf: 4 },
 }: {
   token: string;
   initial: VisitTarget[];
@@ -139,6 +140,8 @@ export function CrmVisitList({
   otherScores: number[];
   /** Vereintes Log (Kontakte + Auslagen), neueste zuerst. */
   initialLog?: CrmLogEntry[];
+  /** Follow-up-Rhythmus in Wochen je Kontakt-Art (zentral eingestellt). */
+  followup?: { box: number; flyer: number; besuch: number; anruf: number };
 }) {
   const [targets, setTargets] = useState<VisitTarget[]>(initial);
   const [score, setScore] = useState(initialScore);
@@ -1218,8 +1221,9 @@ export function CrmVisitList({
                           {saving ? "Speichere…" : "Kontakt speichern"}
                         </Button>
                         <span className="text-xs text-muted-foreground">
-                          Nächstes Gespräch automatisch in{" "}
-                          {t.intervall_wochen} Wochen.
+                          {art
+                            ? `Nächster Termin automatisch in ${followup[art as keyof typeof followup] ?? 4} Wochen.`
+                            : "Nächster Termin wird automatisch geplant (Box/Flyer und Besuch/Anruf haben eigene Rhythmen)."}
                         </span>
                       </div>
                     </div>

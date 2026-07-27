@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayIso } from "@/lib/crm";
+import { getFollowupWeeks } from "@/lib/settings";
 
 /**
  * Gemeinsame Log-Logik für das PDL-CRM: Kontakt auf einen Ziel-Ort buchen.
@@ -62,8 +63,13 @@ export async function resyncTargetFromLog(
   };
   let extra: { letzte_kontakt_art: string | null; ansprechpartner?: string | null };
   if (newest) {
+    const followup = await getFollowupWeeks();
+    const weeks =
+      followup[newest.kontakt_art as keyof typeof followup] ??
+      target.intervall_wochen ??
+      4;
     const next = new Date(newest.contact_date + "T12:00:00");
-    next.setDate(next.getDate() + (target.intervall_wochen || 4) * 7);
+    next.setDate(next.getDate() + weeks * 7);
     base = {
       letzter_besuch: newest.contact_date,
       naechster_besuch: next.toISOString().slice(0, 10),
@@ -115,8 +121,13 @@ export async function logContactOnTarget(input: {
   }
 
   const today = todayIso();
+  const followup = await getFollowupWeeks();
+  const weeks =
+    followup[input.kontaktArt as keyof typeof followup] ??
+    target.intervall_wochen ??
+    4;
   const next = new Date();
-  next.setDate(next.getDate() + (target.intervall_wochen || 4) * 7);
+  next.setDate(next.getDate() + weeks * 7);
   const naechster = next.toISOString().slice(0, 10);
   const ansprechpartner = (input.ansprechpartner ?? "").trim().slice(0, 200);
   const note = (input.note ?? "").trim().slice(0, 1000);

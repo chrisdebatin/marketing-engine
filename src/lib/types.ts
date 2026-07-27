@@ -459,6 +459,14 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;
         Relationships: [];
       };
+      app_settings: {
+        Row: { key: string; value: unknown; updated_at: string | null };
+        Insert: { key: string; value: unknown; updated_at?: string | null };
+        Update: Partial<
+          Database["public"]["Tables"]["app_settings"]["Insert"]
+        >;
+        Relationships: [];
+      };
       crm_contacts: {
         Row: {
           id: string;

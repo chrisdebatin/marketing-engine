@@ -26,14 +26,14 @@ import type { CrmTargetRow } from "@/components/crm-targets-manager";
 const HUB_ALL = "__all__";
 const CARD_CAP = 50;
 
-type Stage = "neu" | "faellig" | "kontakt" | "partner";
+type Stage = "neu" | "faellig" | "kontakt";
 
 const STAGES: { key: Stage; title: string; hint: string; accent: string }[] = [
   {
     key: "neu",
     title: "Erstkontakt offen",
     hint: "Noch nie besucht — nach Prio sortiert",
-    accent: "border-t-primary",
+    accent: "border-t-slate-400",
   },
   {
     key: "faellig",
@@ -45,15 +45,29 @@ const STAGES: { key: Stage; title: string; hint: string; accent: string }[] = [
     key: "kontakt",
     title: "In Kontakt",
     hint: "Kontakt geloggt — nächster Termin steht",
-    accent: "border-t-chart-5",
-  },
-  {
-    key: "partner",
-    title: "Recare-Partner",
-    hint: "Bestätigt: arbeitet mit Recare",
-    accent: "border-t-chart-4",
+    accent: "border-t-emerald-500",
   },
 ];
+
+/** Farbcode je Orts-Kategorie (Kartenrand + Legende). */
+const KAT_COLORS: Record<string, { border: string; dot: string; label: string }> = {
+  krankenhaus: { border: "border-l-sky-500", dot: "bg-sky-500", label: "Krankenhaus" },
+  praxis: { border: "border-l-emerald-500", dot: "bg-emerald-500", label: "Praxis" },
+  pflegeeinrichtung: {
+    border: "border-l-violet-500",
+    dot: "bg-violet-500",
+    label: "Pflege/Sozialstation",
+  },
+  apotheke: { border: "border-l-rose-500", dot: "bg-rose-500", label: "Apotheke" },
+  sanitaetshaus: {
+    border: "border-l-amber-500",
+    dot: "bg-amber-500",
+    label: "Sanitätshaus",
+  },
+  sonstiges: { border: "border-l-slate-400", dot: "bg-slate-400", label: "Sonstiges" },
+};
+const katColor = (kategorie: string | null | undefined) =>
+  KAT_COLORS[kategorie ?? "sonstiges"] ?? KAT_COLORS.sonstiges;
 
 function recareOf(t: CrmTargetRow): boolean | null {
   if (t.recare_partner != null) return t.recare_partner;
@@ -62,7 +76,6 @@ function recareOf(t: CrmTargetRow): boolean | null {
 }
 
 function stageOf(t: CrmTargetRow, today: string): Stage {
-  if (recareOf(t) === true) return "partner";
   const s = crmStatus(t, today);
   return s === "erstbesuch" ? "neu" : s === "faellig" ? "faellig" : "kontakt";
 }
@@ -143,7 +156,17 @@ export function CrmKanban({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+      {/* Farb-Legende der Kategorien */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {Object.values(KAT_COLORS).map((k) => (
+          <span key={k.label} className="flex items-center gap-1.5">
+            <span className={cn("size-2.5 rounded-full", k.dot)} />
+            {k.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {STAGES.map((stage) => {
           const list = byStage.get(stage.key) ?? [];
           return (
@@ -177,7 +200,10 @@ export function CrmKanban({
                       key={t.id}
                       type="button"
                       onClick={() => setOpenCard(open ? null : t.id)}
-                      className="flex flex-col gap-0.5 rounded-lg border bg-card p-2.5 text-left text-sm shadow-sm transition-colors hover:bg-accent/40"
+                      className={cn(
+                        "flex flex-col gap-0.5 rounded-lg border border-l-4 bg-card p-2.5 text-left text-sm shadow-sm transition-colors hover:bg-accent/40",
+                        katColor(t.kategorie).border,
+                      )}
                     >
                       <span className="flex items-start justify-between gap-1.5">
                         <span className="min-w-0 leading-tight font-medium">
@@ -237,6 +263,11 @@ export function CrmKanban({
                             </span>
                           )}
                           {t.besuchs_notiz && <span>„{t.besuchs_notiz}“</span>}
+                          {recareOf(t) === true && (
+                            <span className="text-chart-4">
+                              ✓ Recare-Partner
+                            </span>
+                          )}
                           {recareOf(t) === false && (
                             <span className="text-destructive">
                               arbeitet nicht mit Recare

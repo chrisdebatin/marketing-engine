@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { CalendarDays, ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getFollowupWeeks } from "@/lib/settings";
 import {
   CrmVisitList,
   type CrmLogEntry,
@@ -28,6 +29,7 @@ export default async function HubShareLinkPage({
 }) {
   const { token } = await params;
   const admin = createAdminClient();
+  const followup = await getFollowupWeeks();
 
   const { data: hub } = await admin
     .from("hubs")
@@ -318,6 +320,7 @@ export default async function HubShareLinkPage({
                   initialScore={ownScore}
                   otherScores={otherScores}
                   initialLog={logEntries}
+                  followup={followup}
                 />
 
                 {otherGroups.length > 0 && (

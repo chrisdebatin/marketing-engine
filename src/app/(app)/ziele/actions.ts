@@ -222,3 +222,25 @@ export async function deleteCrmTarget(id: string): Promise<Result> {
   revalidate();
   return { ok: true };
 }
+
+/** Follow-up-Rhythmus je Kontakt-Art speichern (global, app_settings). */
+export async function updateFollowupWeeks(input: {
+  box?: number | string;
+  flyer?: number | string;
+  besuch?: number | string;
+  anruf?: number | string;
+}): Promise<Result> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, error: "Nur für Admins." };
+
+  const { saveFollowupWeeks } = await import("@/lib/settings");
+  const res = await saveFollowupWeeks({
+    box: Number(input.box),
+    flyer: Number(input.flyer),
+    besuch: Number(input.besuch),
+    anruf: Number(input.anruf),
+  });
+  if (!res.ok) return res;
+  revalidate();
+  return { ok: true };
+}

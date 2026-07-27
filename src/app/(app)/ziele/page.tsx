@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { crmStatus, formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
 import { type CrmTargetRow } from "@/components/crm-targets-manager";
 import { ZieleView } from "@/components/ziele-view";
+import { FollowupSettings } from "@/components/followup-settings";
+import { getFollowupWeeks } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +43,7 @@ function Stat({
 export default async function ZielePage() {
   const session = await requireSession();
   const admin = createAdminClient();
+  const followup = await getFollowupWeeks();
 
   // Fallback ?? [] — fehlt Migration 0026, darf die Seite nicht crashen.
   const [{ data }, { data: contactRows }] = await Promise.all([
@@ -101,6 +104,8 @@ export default async function ZielePage() {
         <Stat icon={UserPlus} value={vonPdl} label="Von PDLs eingetragen" />
         <Stat icon={Users} value={kontakte7} label="Kontakte (7 Tage)" />
       </div>
+
+      <FollowupSettings initial={followup} />
 
       <ZieleView
         targets={targets}
