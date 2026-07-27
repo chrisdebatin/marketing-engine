@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { Phone, TrendingUp } from "lucide-react";
+import { Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, TrendingUp } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { kontaktArtLabel } from "@/lib/crm";
+import { CallUpload } from "@/components/call-upload";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -21,21 +21,20 @@ function shortDate(iso: string): string {
 }
 
 /**
- * Tracking-Dashboard: geloggte Anrufe pro Woche (Trend) und je Standort —
- * plus Kontext über die übrigen Kontakt-Arten. Zeitraum wählbar.
+ * Anruf-Tracking auf Basis der Telefonanlagen-Exporte (CSV-Upload):
+ * eingehende Anrufe pro Woche und je Standort, inkl. verpasster Anrufe.
  */
 export default async function StatistikPage({
   searchParams,
 }: {
   searchParams: Promise<{ wochen?: string }>;
 }) {
-  const session = await requireSession();
+  await requireSession();
   const params = await searchParams;
   const weeks = [4, 8, 12].includes(Number(params.wochen))
     ? Number(params.wochen)
     : 8;
 
-  // Wochen-Raster: die letzten `weeks` Wochen inkl. laufender Woche.
   const thisMonday = mondayOf(new Date().toISOString().slice(0, 10));
   const weekStarts: string[] = [];
   for (let i = weeks - 1; i >= 0; i--) {
@@ -46,60 +45,62 @@ export default async function StatistikPage({
   const cutoff = weekStarts[0];
 
   const admin = createAdminClient();
-  const { data: contactRows } = await admin
-    .from("crm_contacts")
-    .select("hub_id, kontakt_art, contact_date")
-    .gte("contact_date", cutoff);
-  const contacts = contactRows ?? [];
+  const { data: callRows, error: callErr } = await admin
+    .from("phone_calls")
+    .select("call_time, hub_name, direction, answered")
+    .gte("call_time", `${cutoff}T00:00:00`);
+  const tableMissing =
+    callErr?.code === "PGRST205" || callErr?.code === "42P01";
+  const calls = callRows ?? [];
 
-  // Anrufe je Woche (Chart) + alle Arten je Hub (Tabelle).
-  const anrufeByWeek = new Map<string, number>(weekStarts.map((w) => [w, 0]));
+  // Wochen-Reihe: eingehende Anrufe (Chart) + verpasste je Woche.
+  const byWeek = new Map<string, { inbound: number; missed: number }>(
+    weekStarts.map((w) => [w, { inbound: 0, missed: 0 }]),
+  );
   const byHub = new Map<
     string,
-    { anruf: number; box: number; besuch: number; flyer: number }
+    { inbound: number; answered: number; missed: number; outbound: number }
   >();
-  for (const c of contacts) {
-    if (c.kontakt_art === "anruf") {
-      const w = mondayOf(c.contact_date);
-      if (anrufeByWeek.has(w)) {
-        anrufeByWeek.set(w, (anrufeByWeek.get(w) ?? 0) + 1);
+  for (const c of calls) {
+    const day = c.call_time.slice(0, 10);
+    const hubKey = c.hub_name ?? "Nicht zugeordnet";
+    const h =
+      byHub.get(hubKey) ?? { inbound: 0, answered: 0, missed: 0, outbound: 0 };
+    if (c.direction === "inbound") {
+      const w = byWeek.get(mondayOf(day));
+      if (w) {
+        w.inbound++;
+        if (!c.answered) w.missed++;
       }
+      h.inbound++;
+      if (c.answered) h.answered++;
+      else h.missed++;
+    } else if (c.direction === "outbound") {
+      h.outbound++;
     }
-    if (c.hub_id) {
-      const s =
-        byHub.get(c.hub_id) ?? { anruf: 0, box: 0, besuch: 0, flyer: 0 };
-      if (c.kontakt_art === "anruf") s.anruf++;
-      else if (c.kontakt_art === "box") s.box++;
-      else if (c.kontakt_art === "flyer") s.flyer++;
-      else s.besuch++;
-      byHub.set(c.hub_id, s);
-    }
+    byHub.set(hubKey, h);
   }
 
   const series = weekStarts.map((w) => ({
     week: w,
     label: shortDate(w),
-    value: anrufeByWeek.get(w) ?? 0,
+    value: byWeek.get(w)?.inbound ?? 0,
   }));
   const maxValue = Math.max(1, ...series.map((s) => s.value));
-  const total = series.reduce((sum, s) => sum + s.value, 0);
-  const dieseWoche = series[series.length - 1]?.value ?? 0;
-  const letzteWoche = series[series.length - 2]?.value ?? 0;
-  const schnitt = Math.round((total / weeks) * 10) / 10;
   const maxIdx = series.reduce(
     (best, s, i) => (s.value > series[best].value ? i : best),
     0,
   );
+  const totalIn = calls.filter((c) => c.direction === "inbound").length;
+  const totalMissed = calls.filter(
+    (c) => c.direction === "inbound" && !c.answered,
+  ).length;
+  const totalOut = calls.filter((c) => c.direction === "outbound").length;
+  const dieseWoche = series[series.length - 1]?.value ?? 0;
 
-  const hubRows = session.hubs
-    .map((h) => ({
-      name: h.name,
-      ...(byHub.get(h.id) ?? { anruf: 0, box: 0, besuch: 0, flyer: 0 }),
-    }))
-    .map((r) => ({ ...r, gesamt: r.anruf + r.box + r.besuch + r.flyer }))
-    .filter((r) => r.gesamt > 0)
-    .sort((a, b) => b.anruf - a.anruf || b.gesamt - a.gesamt);
-  const ohneAktivitaet = session.hubs.length - hubRows.length;
+  const hubRows = [...byHub.entries()]
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => b.inbound - a.inbound || a.name.localeCompare(b.name, "de"));
 
   return (
     <div className="flex flex-col gap-6">
@@ -114,171 +115,185 @@ export default async function StatistikPage({
       <div>
         <h1 className="text-2xl font-semibold">Statistik · Anrufe</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Von den PDLs geloggte Anrufe — Trend pro Woche und je Standort.
-          Datenbasis ist das Kontakt-Log (Schnell-Log &amp; Kontakt-Formular).
+          Alle Anrufe der Standorte — Datenbasis ist der CSV-Export der
+          Telefonanlage, den du unten hochlädst. Zuordnung zum Standort über
+          den Telefon-Trunk; interne Gespräche zählen nicht.
         </p>
       </div>
 
-      {/* Zeitraum */}
-      <div className="flex items-center gap-1.5">
-        {[4, 8, 12].map((w) => (
-          <Link
-            key={w}
-            href={`/statistik?wochen=${w}`}
-            className={cn(
-              "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
-              weeks === w
-                ? "border-primary bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {w} Wochen
-          </Link>
-        ))}
-      </div>
+      <CallUpload />
 
-      {/* Kennzahlen */}
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {(
-          [
-            [dieseWoche, "Anrufe diese Woche"],
-            [letzteWoche, "Anrufe letzte Woche"],
-            [total, `Anrufe gesamt (${weeks} Wochen)`],
-            [schnitt, "Ø pro Woche"],
-          ] as const
-        ).map(([value, label]) => (
-          <div
-            key={label}
-            className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5"
-          >
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Phone className="size-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="text-lg leading-none font-semibold tabular-nums">
-                {value}
-              </div>
-              <div className="mt-1 truncate text-xs text-muted-foreground">
-                {label}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Säulen-Chart: Anrufe pro Woche (eine Serie → keine Legende) */}
-      <section className="viz-root flex flex-col gap-3 rounded-xl border bg-card p-5 shadow-sm">
-        <p className="flex items-center gap-1.5 font-semibold">
-          <TrendingUp className="size-4 text-primary" />
-          Anrufe pro Woche
+      {tableMissing ? (
+        <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+          Die Tabelle <code>phone_calls</code> fehlt noch — bitte einmal{" "}
+          <code>supabase/apply_all_pending.sql</code> im Supabase SQL-Editor
+          ausführen, dann die CSV hochladen.
         </p>
-        <div
-          className="grid items-end gap-2"
-          style={{
-            gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))`,
-            height: "11rem",
-          }}
-          role="img"
-          aria-label={`Anrufe pro Woche, letzte ${weeks} Wochen`}
-        >
-          {series.map((s, i) => {
-            const isLatest = i === series.length - 1;
-            const showLabel = s.value > 0 && (isLatest || i === maxIdx);
-            return (
-              <div
-                key={s.week}
-                className="flex h-full flex-col items-center justify-end gap-1"
-                title={`Woche ab ${shortDate(s.week)}: ${s.value} Anruf${s.value === 1 ? "" : "e"}`}
-              >
-                {showLabel && (
-                  <span className="text-xs font-semibold tabular-nums">
-                    {s.value}
-                  </span>
+      ) : calls.length === 0 ? (
+        <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+          Noch keine Anruf-Daten im Zeitraum — oben den CSV-Export hochladen.
+        </p>
+      ) : (
+        <>
+          {/* Zeitraum */}
+          <div className="flex items-center gap-1.5">
+            {[4, 8, 12].map((w) => (
+              <Link
+                key={w}
+                href={`/statistik?wochen=${w}`}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
+                  weeks === w
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
-                <div
-                  className="w-full max-w-6 rounded-t-[4px]"
-                  style={{
-                    height: `${Math.max(s.value === 0 ? 2 : 6, (s.value / maxValue) * 100)}%`,
-                    backgroundColor:
-                      s.value === 0 ? "transparent" : "var(--series-1)",
-                    borderBottom:
-                      s.value === 0 ? "2px solid var(--border)" : undefined,
-                    opacity: isLatest ? 1 : 0.85,
-                  }}
-                />
-              </div>
-            );
-          })}
-        </div>
-        <div
-          className="grid gap-2 border-t pt-1.5"
-          style={{
-            gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))`,
-          }}
-        >
-          {series.map((s) => (
-            <span
-              key={s.week}
-              className="text-center text-[0.65rem] text-muted-foreground tabular-nums"
-            >
-              {s.label}
-            </span>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Laufende Woche ist die letzte Säule. Werte an höchster und aktueller
-          Säule; alle Werte per Mouse-over und in der Tabelle unten.
-        </p>
-      </section>
-
-      {/* Tabellen-Ansicht: je Standort, Anrufe zuerst */}
-      <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
-        <p className="font-semibold">
-          Je Standort (letzte {weeks} Wochen)
-        </p>
-        {hubRows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Im Zeitraum wurden noch keine Kontakte geloggt.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
-              <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-1.5 pr-2 font-medium">Standort</th>
-                  <th className="px-2 py-1.5 font-medium">
-                    {kontaktArtLabel("anruf")}e
-                  </th>
-                  <th className="px-2 py-1.5 font-medium">Boxen</th>
-                  <th className="px-2 py-1.5 font-medium">Besuche</th>
-                  <th className="px-2 py-1.5 font-medium">Flyer</th>
-                  <th className="px-2 py-1.5 font-medium">Gesamt</th>
-                </tr>
-              </thead>
-              <tbody>
-                {hubRows.map((r) => (
-                  <tr key={r.name} className="border-b last:border-b-0">
-                    <td className="py-1.5 pr-2 font-medium">{r.name}</td>
-                    <td className="px-2 py-1.5 font-semibold tabular-nums">
-                      {r.anruf}
-                    </td>
-                    <td className="px-2 py-1.5 tabular-nums">{r.box}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{r.besuch}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{r.flyer}</td>
-                    <td className="px-2 py-1.5 tabular-nums">{r.gesamt}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              >
+                {w} Wochen
+              </Link>
+            ))}
           </div>
-        )}
-        {ohneAktivitaet > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {ohneAktivitaet} Standort{ohneAktivitaet === 1 ? "" : "e"} ohne
-            geloggte Kontakte im Zeitraum.
-          </p>
-        )}
-      </section>
+
+          {/* Kennzahlen */}
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+            {(
+              [
+                [PhoneIncoming, dieseWoche, "Eingehend diese Woche"],
+                [PhoneIncoming, totalIn, `Eingehend gesamt (${weeks} Wo.)`],
+                [
+                  PhoneMissed,
+                  totalMissed,
+                  `Verpasst (${totalIn > 0 ? Math.round((totalMissed / totalIn) * 100) : 0} %)`,
+                ],
+                [PhoneOutgoing, totalOut, "Ausgehend gesamt"],
+              ] as const
+            ).map(([Icon, value, label]) => (
+              <div
+                key={label}
+                className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Icon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-lg leading-none font-semibold tabular-nums">
+                    {value}
+                  </div>
+                  <div className="mt-1 truncate text-xs text-muted-foreground">
+                    {label}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Säulen-Chart: eingehende Anrufe pro Woche (eine Serie) */}
+          <section className="viz-root flex flex-col gap-3 rounded-xl border bg-card p-5 shadow-sm">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <TrendingUp className="size-4 text-primary" />
+              Eingehende Anrufe pro Woche
+            </p>
+            <div
+              className="grid items-end gap-2"
+              style={{
+                gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))`,
+                height: "11rem",
+              }}
+              role="img"
+              aria-label={`Eingehende Anrufe pro Woche, letzte ${weeks} Wochen`}
+            >
+              {series.map((s, i) => {
+                const isLatest = i === series.length - 1;
+                const showLabel = s.value > 0 && (isLatest || i === maxIdx);
+                return (
+                  <div
+                    key={s.week}
+                    className="flex h-full flex-col items-center justify-end gap-1"
+                    title={`Woche ab ${shortDate(s.week)}: ${s.value} Anruf${s.value === 1 ? "" : "e"}`}
+                  >
+                    {showLabel && (
+                      <span className="text-xs font-semibold tabular-nums">
+                        {s.value}
+                      </span>
+                    )}
+                    <div
+                      className="w-full max-w-6 rounded-t-[4px]"
+                      style={{
+                        height: `${Math.max(s.value === 0 ? 2 : 6, (s.value / maxValue) * 100)}%`,
+                        backgroundColor:
+                          s.value === 0 ? "transparent" : "var(--series-1)",
+                        borderBottom:
+                          s.value === 0 ? "2px solid var(--border)" : undefined,
+                        opacity: isLatest ? 1 : 0.85,
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <div
+              className="grid gap-2 border-t pt-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${series.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {series.map((s) => (
+                <span
+                  key={s.week}
+                  className="text-center text-[0.65rem] text-muted-foreground tabular-nums"
+                >
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Laufende Woche ist die letzte Säule. Werte an höchster und
+              aktueller Säule; alle Werte per Mouse-over und in der Tabelle
+              unten.
+            </p>
+          </section>
+
+          {/* Tabellen-Ansicht: je Standort */}
+          <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <Phone className="size-4 text-primary" />
+              Je Standort (letzte {weeks} Wochen)
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-2 font-medium">Standort</th>
+                    <th className="px-2 py-1.5 font-medium">Eingehend</th>
+                    <th className="px-2 py-1.5 font-medium">Angenommen</th>
+                    <th className="px-2 py-1.5 font-medium">Verpasst</th>
+                    <th className="px-2 py-1.5 font-medium">Ausgehend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {hubRows.map((r) => (
+                    <tr key={r.name} className="border-b last:border-b-0">
+                      <td className="py-1.5 pr-2 font-medium">{r.name}</td>
+                      <td className="px-2 py-1.5 font-semibold tabular-nums">
+                        {r.inbound}
+                      </td>
+                      <td className="px-2 py-1.5 tabular-nums">{r.answered}</td>
+                      <td
+                        className={cn(
+                          "px-2 py-1.5 tabular-nums",
+                          r.missed > 0 && "font-medium text-destructive",
+                        )}
+                      >
+                        {r.missed}
+                      </td>
+                      <td className="px-2 py-1.5 tabular-nums">{r.outbound}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }

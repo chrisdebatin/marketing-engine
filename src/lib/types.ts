@@ -467,6 +467,32 @@ export interface Database {
         >;
         Relationships: [];
       };
+      phone_calls: {
+        Row: {
+          id: string;
+          call_id: string;
+          call_time: string;
+          hub_name: string | null;
+          direction: string;
+          answered: boolean;
+          talking_seconds: number;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          call_id: string;
+          call_time: string;
+          hub_name?: string | null;
+          direction: string;
+          answered?: boolean;
+          talking_seconds?: number;
+          created_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["phone_calls"]["Insert"]
+        >;
+        Relationships: [];
+      };
       crm_contacts: {
         Row: {
           id: string;
