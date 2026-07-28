@@ -17,3 +17,36 @@ export function leadQuelleLabel(key: string | null | undefined): string {
   if (!key) return "";
   return LEAD_QUELLEN.find((q) => q.key === key)?.label ?? key;
 }
+
+/** Interessenten-Bereiche (je Callcenter-Team ein eigener Link). */
+export const LEAD_BEREICHE = [
+  { key: "alltagshilfe", label: "Alltagshilfe" },
+  { key: "ambulant", label: "Ambulant" },
+  { key: "intensiv", label: "Intensiv" },
+] as const;
+
+export type LeadBereich = (typeof LEAD_BEREICHE)[number]["key"];
+
+export function leadBereichLabel(key: string | null | undefined): string {
+  if (!key) return "";
+  return LEAD_BEREICHE.find((b) => b.key === key)?.label ?? key;
+}
+
+/** Passende Standorte je Bereich (für das Weiterleitungs-Select). */
+export function hubsForBereich<T extends { name: string }>(
+  hubs: T[],
+  bereich: string | null,
+): T[] {
+  if (bereich === "alltagshilfe") {
+    return hubs.filter((h) => h.name.startsWith("Alltagshilfe"));
+  }
+  if (bereich === "intensiv") {
+    return hubs.filter((h) => /intensiv/i.test(h.name));
+  }
+  if (bereich === "ambulant") {
+    return hubs.filter(
+      (h) => !h.name.startsWith("Alltagshilfe") && !/intensiv/i.test(h.name),
+    );
+  }
+  return hubs;
+}

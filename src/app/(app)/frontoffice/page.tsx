@@ -2,7 +2,9 @@ import { Headset, TrendingUp, Users } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LeadBoard, type LeadRow } from "@/components/lead-board";
-import { leadQuelleLabel } from "@/lib/leads";
+import { LEAD_BEREICHE, leadQuelleLabel } from "@/lib/leads";
+import { getFrontofficeTokens } from "@/lib/frontoffice-token";
+import { CopyLink } from "@/components/copy-link";
 import { capacityWeekStart } from "@/lib/capacity";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +51,15 @@ export default async function FrontofficePage() {
   })();
   const weekStart = capacityWeekStart();
 
+  const tokens = await getFrontofficeTokens();
+  const { data: klinikRows } = await admin
+    .from("crm_targets")
+    .select("name")
+    .eq("kategorie", "krankenhaus")
+    .order("name")
+    .limit(400);
+  const klinikNamen = [...new Set((klinikRows ?? []).map((k) => k.name))].slice(0, 250);
+
   const { data: rows, error } = await admin
     .from("lead_calls")
     .select("*")
@@ -62,6 +73,12 @@ export default async function FrontofficePage() {
   const heute = leads.filter(
     (l) => l.call_date === new Date().toISOString().slice(0, 10),
   ).length;
+
+  const byBereich = new Map<string, number>();
+  for (const l of leads) {
+    const b = (l.bereich ?? "") || "ohne";
+    byBereich.set(b, (byBereich.get(b) ?? 0) + 1);
+  }
 
   const byQuelle = new Map<string, number>();
   const byHub = new Map<string, number>();
@@ -104,10 +121,53 @@ export default async function FrontofficePage() {
             <Stat icon={TrendingUp} value={dieseWoche} label="Leads diese Woche" />
             <Stat icon={Users} value={leads.length} label="Leads letzte 4 Wochen" />
           </div>
+          <div className="grid grid-cols-3 gap-2">
+            {LEAD_BEREICHE.map((b) => (
+              <Stat
+                key={b.key}
+                icon={Headset}
+                value={byBereich.get(b.key) ?? 0}
+                label={`${b.label} (4 Wochen)`}
+              />
+            ))}
+          </div>
+
+          {/* Callcenter-Links je Bereich */}
+          <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
+            <p className="font-semibold">Links für das Callcenter</p>
+            <p className="text-sm text-muted-foreground">
+              Jedes Team bekommt seinen Link und sieht dort nur den eigenen
+              Bereich — ohne das übrige Dashboard. Kein Login nötig.
+            </p>
+            {tokens ? (
+              <ul className="flex flex-col gap-1.5">
+                {LEAD_BEREICHE.map((b) => (
+                  <li
+                    key={b.key}
+                    className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm"
+                  >
+                    <span className="w-40 font-medium">
+                      Interessent {b.label}
+                    </span>
+                    <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                      /f/{tokens[b.key]}
+                    </code>
+                    <CopyLink token={tokens[b.key]} prefix="/f" />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Die Links erscheinen, sobald die Tabelle app_settings existiert
+                (supabase/apply_all_pending.sql ausführen).
+              </p>
+            )}
+          </section>
 
           <LeadBoard
             hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
             recent={leads.slice(0, 30)}
+            klinikNamen={klinikNamen}
           />
 
           {/* Auswertung: Quellen (letzte 4 Wochen) */}
