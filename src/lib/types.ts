@@ -467,6 +467,36 @@ export interface Database {
         >;
         Relationships: [];
       };
+      meta_ads: {
+        Row: {
+          id: string;
+          name: string;
+          typ: string;
+          hub_id: string | null;
+          start_date: string;
+          end_date: string | null;
+          budget: string | null;
+          ziel: string | null;
+          link: string | null;
+          notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          typ: string;
+          hub_id?: string | null;
+          start_date?: string;
+          end_date?: string | null;
+          budget?: string | null;
+          ziel?: string | null;
+          link?: string | null;
+          notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["meta_ads"]["Insert"]>;
+        Relationships: [];
+      };
       lead_calls: {
         Row: {
           id: string;

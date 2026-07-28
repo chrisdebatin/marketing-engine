@@ -46,6 +46,7 @@ export default async function HubDetailPage({
     { data: checkRows },
     { data: noteRows },
     { data: topicRows },
+    { data: metaAdRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -64,6 +65,11 @@ export default async function HubDetailPage({
       .eq("hub_id", id)
       .order("created_at", { ascending: false }),
     admin.from("note_topics").select("id, title").order("title"),
+    admin
+      .from("meta_ads")
+      .select("*")
+      .or(`hub_id.eq.${id},typ.eq.allgemein`)
+      .order("start_date", { ascending: false }),
   ]);
 
   const tasks = taskRows ?? [];
@@ -83,6 +89,20 @@ export default async function HubDetailPage({
   );
   const boxes = (deliveries ?? []).reduce((s, d) => s + (d.box_count ?? 0), 0);
   const placementCount = (placements ?? []).length;
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const aktiveAds = ((metaAdRows ?? []) as {
+    id: string;
+    name: string;
+    typ: string;
+    start_date: string;
+    end_date: string | null;
+    budget: string | null;
+    ziel: string | null;
+    link: string | null;
+  }[]).filter(
+    (a) => a.start_date <= heute && (!a.end_date || a.end_date >= heute),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -187,6 +207,59 @@ export default async function HubDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Meta Ads: läuft gerade etwas für diesen Hub? */}
+      {aktiveAds.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-5">
+            <p className="flex items-center gap-2 font-semibold">
+              <span
+                className="size-2 shrink-0 animate-pulse rounded-full bg-chart-4"
+                aria-hidden
+              />
+              Meta Ads — läuft gerade
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {aktiveAds.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
+                >
+                  <span className="font-medium">{a.name}</span>
+                  <Badge
+                    variant="outline"
+                    className={
+                      a.typ === "allgemein"
+                        ? "border-primary/40 bg-primary/10 text-primary"
+                        : "border-chart-5/40 bg-chart-5/10 text-chart-5"
+                    }
+                  >
+                    {a.typ === "allgemein" ? "Allgemeine Kampagne" : "Lokal"}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    seit {new Date(`${a.start_date}T00:00:00`).toLocaleDateString("de-DE")}
+                    {a.end_date
+                      ? ` · bis ${new Date(`${a.end_date}T00:00:00`).toLocaleDateString("de-DE")}`
+                      : ""}
+                    {a.budget ? ` · ${a.budget}` : ""}
+                    {a.ziel ? ` · ${a.ziel}` : ""}
+                  </span>
+                  {a.link && (
+                    <a
+                      href={a.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary underline"
+                    >
+                      Anzeige öffnen
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* E-Mail-Verlauf mit der PDL (Outlook-Anbindung) */}
       {mails !== null && (

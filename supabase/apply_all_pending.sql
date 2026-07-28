@@ -85,3 +85,21 @@ alter table public.lead_calls add column if not exists quelle_detail text;
 alter table public.lead_calls add column if not exists lead_name text;
 
 notify pgrst, 'reload schema';
+
+-- ── 0036: Meta-Ads-Kampagnen (allgemein + lokal je Hub) ─────────────
+create table if not exists public.meta_ads (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  typ         text not null check (typ in ('allgemein', 'lokal')),
+  hub_id      uuid references public.hubs (id) on delete cascade,
+  start_date  date not null default current_date,
+  end_date    date,
+  budget      text,
+  ziel        text,
+  link        text,
+  notiz       text,
+  created_at  timestamptz default now()
+);
+alter table public.meta_ads disable row level security;
+
+notify pgrst, 'reload schema';
