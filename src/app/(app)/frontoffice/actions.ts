@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { LEAD_BEREICHE, LEAD_QUELLEN } from "@/lib/leads";
+import { LEAD_QUELLEN } from "@/lib/leads";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -34,9 +34,10 @@ export async function createLeadCall(input: {
   if (!LEAD_QUELLEN.some((q) => q.key === quelle)) {
     return { ok: false, error: "Bitte Quelle auswählen." };
   }
-  const bereich = (input.bereich ?? "").trim();
-  if (!LEAD_BEREICHE.some((b) => b.key === bereich)) {
-    return { ok: false, error: "Bitte Bereich auswählen (Alltagshilfe/Ambulant/Intensiv)." };
+  // Einer der drei festen Bereiche — oder frei eingetragen ("Andere").
+  const bereich = (input.bereich ?? "").trim().slice(0, 100);
+  if (!bereich) {
+    return { ok: false, error: "Bitte Bereich auswählen oder eintragen." };
   }
   const leadName = (input.lead_name ?? "").trim().slice(0, 200);
   if (!leadName) {

@@ -53,6 +53,8 @@ export function LeadBoard({
 }) {
   const [pending, startTransition] = useTransition();
   const [bereich, setBereich] = useState("");
+  const [andereBereich, setAndereBereich] = useState(false);
+  const [customBereich, setCustomBereich] = useState("");
   const [quelle, setQuelle] = useState("");
   const [quelleDetail, setQuelleDetail] = useState("");
   const [leadName, setLeadName] = useState("");
@@ -60,16 +62,23 @@ export function LeadBoard({
   const [date, setDate] = useState(todayIso());
   const [notiz, setNotiz] = useState("");
 
-  // Standort-Auswahl passend zum gewählten Bereich einschränken.
-  const bereichHubs = bereich ? hubsForBereich(hubs, bereich) : hubs;
+  // Standort-Auswahl passend zum gewählten Bereich einschränken
+  // (bei "Andere" alle Standorte anbieten).
+  const effektiverBereich = andereBereich ? customBereich.trim() : bereich;
+  const bereichHubs =
+    !andereBereich && bereich ? hubsForBereich(hubs, bereich) : hubs;
   const hubItems = Object.fromEntries(bereichHubs.map((h) => [h.id, h.name]));
   const hubName = (id: string | null) =>
     hubs.find((h) => h.id === id)?.name ?? "—";
 
   function save() {
     if (pending) return;
-    if (!bereich) {
-      toast.error("Bitte Bereich auswählen.");
+    if (!effektiverBereich) {
+      toast.error(
+        andereBereich
+          ? "Bitte den Bereich eintragen."
+          : "Bitte Bereich auswählen.",
+      );
       return;
     }
     if (!quelle) {
@@ -83,7 +92,7 @@ export function LeadBoard({
     startTransition(async () => {
       const r = await createLeadCall({
         quelle,
-        bereich,
+        bereich: effektiverBereich,
         quelle_detail: DETAIL_QUELLEN.has(quelle) ? quelleDetail : "",
         lead_name: leadName,
         hub_id: hubId,
@@ -123,20 +132,43 @@ export function LeadBoard({
           <span className="text-xs font-medium text-muted-foreground">
             Bereich (Pflicht)
           </span>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {LEAD_BEREICHE.map((b) => (
               <button
                 key={b.key}
                 type="button"
                 onClick={() => {
                   setBereich(b.key);
+                  setAndereBereich(false);
                   setHubId("");
                 }}
-                className={chip(bereich === b.key)}
+                className={chip(!andereBereich && bereich === b.key)}
               >
                 Interessent {b.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setAndereBereich(true);
+                setBereich("");
+                setHubId("");
+              }}
+              className={chip(andereBereich)}
+            >
+              Andere / selbst eintragen
+            </button>
+            {andereBereich && (
+              <Input
+                value={customBereich}
+                onChange={(e) => setCustomBereich(e.target.value)}
+                placeholder="Bereich eintragen, z. B. Tagespflege"
+                autoComplete="off"
+                maxLength={100}
+                className="w-56 bg-background"
+                autoFocus
+              />
+            )}
           </div>
         </div>
 
