@@ -117,6 +117,12 @@ export default async function HubShareLinkPage({
   const otherScores = (allHubs ?? [])
     .filter((h) => h.id !== hub.id)
     .map((h) => scoreByHub.get(h.id) ?? 0);
+  // Leaderboard mit Standort-Namen — gamified, alle sehen alle.
+  const leaderboard = (allHubs ?? []).map((h) => ({
+    name: h.name,
+    score: scoreByHub.get(h.id) ?? 0,
+    isOwn: h.id === hub.id,
+  }));
 
   // Kliniken-Listen der anderen Standorte (nur lesend).
   const hubNameOf = (id: string | null) =>
@@ -338,6 +344,7 @@ export default async function HubShareLinkPage({
                   initial={ownTargets}
                   initialScore={ownScore}
                   otherScores={otherScores}
+                  leaderboard={leaderboard}
                   initialLog={logEntries}
                   followup={followup}
                 />
