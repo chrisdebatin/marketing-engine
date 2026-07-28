@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
+  hubsForBereich,
   LEAD_BEREICHE,
   LEAD_QUELLEN,
   leadBereichLabel,
@@ -28,6 +29,7 @@ export interface LeadRow {
   quelle: string;
   bereich?: string | null;
   quelle_detail?: string | null;
+  lead_name?: string | null;
   hub_id: string | null;
   notiz: string | null;
 }
@@ -42,31 +44,31 @@ const DETAIL_QUELLEN = new Set(["krankenhaus", "recare", "arzt"]);
 export function LeadBoard({
   hubs,
   recent,
-  fixedBereich,
   klinikNamen = [],
 }: {
   hubs: { id: string; name: string }[];
   recent: LeadRow[];
-  /** Fest vorgegebener Bereich (Callcenter-Link) — sonst wählbar. */
-  fixedBereich?: string;
   /** Bekannte Kliniken aus dem CRM als Vorschläge fürs Quelle-Detail. */
   klinikNamen?: string[];
 }) {
   const [pending, startTransition] = useTransition();
-  const [bereich, setBereich] = useState(fixedBereich ?? "");
+  const [bereich, setBereich] = useState("");
   const [quelle, setQuelle] = useState("");
   const [quelleDetail, setQuelleDetail] = useState("");
+  const [leadName, setLeadName] = useState("");
   const [hubId, setHubId] = useState("");
   const [date, setDate] = useState(todayIso());
   const [notiz, setNotiz] = useState("");
 
-  const hubItems = Object.fromEntries(hubs.map((h) => [h.id, h.name]));
+  // Standort-Auswahl passend zum gewählten Bereich einschränken.
+  const bereichHubs = bereich ? hubsForBereich(hubs, bereich) : hubs;
+  const hubItems = Object.fromEntries(bereichHubs.map((h) => [h.id, h.name]));
   const hubName = (id: string | null) =>
     hubs.find((h) => h.id === id)?.name ?? "—";
 
   function save() {
     if (pending) return;
-    if (!fixedBereich && !bereich) {
+    if (!bereich) {
       toast.error("Bitte Bereich auswählen.");
       return;
     }
@@ -74,17 +76,23 @@ export function LeadBoard({
       toast.error("Bitte Quelle auswählen.");
       return;
     }
+    if (!leadName.trim()) {
+      toast.error("Bitte den Namen des Interessenten eintragen.");
+      return;
+    }
     startTransition(async () => {
       const r = await createLeadCall({
         quelle,
-        bereich: fixedBereich ?? bereich,
+        bereich,
         quelle_detail: DETAIL_QUELLEN.has(quelle) ? quelleDetail : "",
+        lead_name: leadName,
         hub_id: hubId,
         call_date: date,
         notiz,
       });
       if (r.ok) {
         toast.success("Lead geloggt");
+        setLeadName("");
         setNotiz("");
         setQuelleDetail("");
         // Bereich/Quelle/Standort bleiben stehen — oft mehrere Anrufe in Folge.
@@ -109,28 +117,28 @@ export function LeadBoard({
         <p className="flex items-center gap-1.5 text-sm font-semibold">
           <Headset className="size-4 text-primary" />
           Anruf loggen — Interessent
-          {fixedBereich ? ` ${leadBereichLabel(fixedBereich)}` : ""}
         </p>
 
-        {!fixedBereich && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
-              Bereich (Pflicht)
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {LEAD_BEREICHE.map((b) => (
-                <button
-                  key={b.key}
-                  type="button"
-                  onClick={() => setBereich(b.key)}
-                  className={chip(bereich === b.key)}
-                >
-                  Interessent {b.label}
-                </button>
-              ))}
-            </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Bereich (Pflicht)
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {LEAD_BEREICHE.map((b) => (
+              <button
+                key={b.key}
+                type="button"
+                onClick={() => {
+                  setBereich(b.key);
+                  setHubId("");
+                }}
+                className={chip(bereich === b.key)}
+              >
+                Interessent {b.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">
@@ -175,6 +183,14 @@ export function LeadBoard({
         )}
 
         <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={leadName}
+            onChange={(e) => setLeadName(e.target.value)}
+            placeholder="Name des Interessenten (Pflicht)"
+            autoComplete="off"
+            maxLength={200}
+            className="min-w-56 flex-1 bg-background"
+          />
           <Select
             items={hubItems}
             value={hubId}
@@ -230,10 +246,13 @@ export function LeadBoard({
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                   {formatIsoDate(l.call_date)}
                 </span>
-                {!fixedBereich && l.bereich && (
+                {l.bereich && (
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold text-primary">
                     {leadBereichLabel(l.bereich)}
                   </span>
+                )}
+                {l.lead_name && (
+                  <span className="font-semibold">{l.lead_name}</span>
                 )}
                 <span className="font-medium">{leadQuelleLabel(l.quelle)}</span>
                 {l.quelle_detail && (

@@ -474,6 +474,7 @@ export interface Database {
           quelle: string;
           bereich: string | null;
           quelle_detail: string | null;
+          lead_name: string | null;
           hub_id: string | null;
           notiz: string | null;
           created_at: string | null;
@@ -484,6 +485,7 @@ export interface Database {
           quelle: string;
           bereich?: string | null;
           quelle_detail?: string | null;
+          lead_name?: string | null;
           hub_id?: string | null;
           notiz?: string | null;
           created_at?: string | null;

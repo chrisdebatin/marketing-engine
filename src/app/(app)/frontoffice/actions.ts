@@ -23,6 +23,7 @@ export async function createLeadCall(input: {
   quelle?: string;
   bereich?: string;
   quelle_detail?: string;
+  lead_name?: string;
   hub_id?: string;
   call_date?: string;
   notiz?: string;
@@ -37,6 +38,10 @@ export async function createLeadCall(input: {
   if (!LEAD_BEREICHE.some((b) => b.key === bereich)) {
     return { ok: false, error: "Bitte Bereich auswählen (Alltagshilfe/Ambulant/Intensiv)." };
   }
+  const leadName = (input.lead_name ?? "").trim().slice(0, 200);
+  if (!leadName) {
+    return { ok: false, error: "Bitte den Namen des Interessenten eintragen." };
+  }
   const date = (input.call_date ?? "").trim();
 
   const admin = createAdminClient();
@@ -45,6 +50,7 @@ export async function createLeadCall(input: {
     quelle,
     bereich,
     quelle_detail: quelleDetail,
+    lead_name: leadName,
     hub_id: (input.hub_id ?? "").trim() || null,
     call_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : undefined,
     notiz: (input.notiz ?? "").trim().slice(0, 500) || null,

@@ -3,7 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { LeadBoard, type LeadRow } from "@/components/lead-board";
 import { LEAD_BEREICHE, leadQuelleLabel } from "@/lib/leads";
-import { getFrontofficeTokens } from "@/lib/frontoffice-token";
+import { getFrontofficeToken } from "@/lib/frontoffice-token";
 import { CopyLink } from "@/components/copy-link";
 import { capacityWeekStart } from "@/lib/capacity";
 
@@ -51,7 +51,7 @@ export default async function FrontofficePage() {
   })();
   const weekStart = capacityWeekStart();
 
-  const tokens = await getFrontofficeTokens();
+  const foToken = await getFrontofficeToken();
   const { data: klinikRows } = await admin
     .from("crm_targets")
     .select("name")
@@ -132,33 +132,24 @@ export default async function FrontofficePage() {
             ))}
           </div>
 
-          {/* Callcenter-Links je Bereich */}
+          {/* Callcenter-Link (einer für das ganze Team) */}
           <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
-            <p className="font-semibold">Links für das Callcenter</p>
+            <p className="font-semibold">Link für das Callcenter</p>
             <p className="text-sm text-muted-foreground">
-              Jedes Team bekommt seinen Link und sieht dort nur den eigenen
-              Bereich — ohne das übrige Dashboard. Kein Login nötig.
+              Diesen einen Link dem Callcenter-Team schicken — dort gibt es
+              nur die Lead-Erfassung (Bereich wird pro Anruf gewählt), ohne
+              das übrige Dashboard. Kein Login nötig.
             </p>
-            {tokens ? (
-              <ul className="flex flex-col gap-1.5">
-                {LEAD_BEREICHE.map((b) => (
-                  <li
-                    key={b.key}
-                    className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm"
-                  >
-                    <span className="w-40 font-medium">
-                      Interessent {b.label}
-                    </span>
-                    <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                      /f/{tokens[b.key]}
-                    </code>
-                    <CopyLink token={tokens[b.key]} prefix="/f" />
-                  </li>
-                ))}
-              </ul>
+            {foToken ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                <code className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  /f/{foToken}
+                </code>
+                <CopyLink token={foToken} prefix="/f" />
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Die Links erscheinen, sobald die Tabelle app_settings existiert
+                Der Link erscheint, sobald die Tabelle app_settings existiert
                 (supabase/apply_all_pending.sql ausführen).
               </p>
             )}

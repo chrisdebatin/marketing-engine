@@ -69,6 +69,7 @@ create table if not exists public.lead_calls (
   quelle      text not null,
   bereich     text,
   quelle_detail text,
+  lead_name   text,
   hub_id      uuid references public.hubs (id) on delete set null,
   notiz       text,
   created_at  timestamptz default now()
@@ -78,8 +79,9 @@ alter table public.lead_calls disable row level security;
 
 notify pgrst, 'reload schema';
 
--- ── 0035: Bereich + Quelle-Detail für Lead-Calls ────────────────────
+-- ── 0035: Bereich, Quelle-Detail und Lead-Name für Lead-Calls ───────
 alter table public.lead_calls add column if not exists bereich text;
 alter table public.lead_calls add column if not exists quelle_detail text;
+alter table public.lead_calls add column if not exists lead_name text;
 
 notify pgrst, 'reload schema';
