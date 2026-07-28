@@ -21,6 +21,22 @@ import {
   leadQuelleLabel,
 } from "@/lib/leads";
 import { formatIsoDate, todayIso } from "@/lib/crm";
+
+/** Erfassungs-Zeitstempel: "28.07., 14:32" — plus Anruf-Datum, falls rückdatiert. */
+function leadStamp(l: { call_date: string; created_at?: string | null }): string {
+  if (!l.created_at) return formatIsoDate(l.call_date);
+  const d = new Date(l.created_at);
+  const stamp = d.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const erfasstAm = l.created_at.slice(0, 10);
+  return l.call_date && l.call_date !== erfasstAm
+    ? `${stamp} (Anruf am ${formatIsoDate(l.call_date)})`
+    : stamp;
+}
 import { createLeadCall, deleteLeadCall } from "@/app/(app)/frontoffice/actions";
 
 export interface LeadRow {
@@ -32,6 +48,7 @@ export interface LeadRow {
   lead_name?: string | null;
   hub_id: string | null;
   notiz: string | null;
+  created_at?: string | null;
 }
 
 /** Quellen, bei denen ein "Welches Krankenhaus?"-Detail sinnvoll ist. */
@@ -276,7 +293,7 @@ export function LeadBoard({
                 className="group/lead flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
               >
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {formatIsoDate(l.call_date)}
+                  {leadStamp(l)}
                 </span>
                 {l.bereich && (
                   <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold text-primary">
