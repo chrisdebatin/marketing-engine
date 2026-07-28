@@ -61,3 +61,17 @@ create table if not exists public.capacity_reports (
 alter table public.capacity_reports disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0034: Frontoffice — Lead-Calls (Quelle + weitergeleiteter Standort) ─
+create table if not exists public.lead_calls (
+  id          uuid primary key default gen_random_uuid(),
+  call_date   date not null default current_date,
+  quelle      text not null,
+  hub_id      uuid references public.hubs (id) on delete set null,
+  notiz       text,
+  created_at  timestamptz default now()
+);
+create index if not exists lead_calls_date_idx on public.lead_calls (call_date desc);
+alter table public.lead_calls disable row level security;
+
+notify pgrst, 'reload schema';

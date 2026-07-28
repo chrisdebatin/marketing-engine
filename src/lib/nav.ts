@@ -3,6 +3,7 @@ import {
   BookOpen,
   Building2,
   ChartColumn,
+  Headset,
   Home,
   Inbox,
   Map,
@@ -51,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Marketing",
     items: [
+      { href: "/frontoffice", label: "Frontoffice", Icon: Headset },
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
       { href: "/kommunikation", label: "Kommunikation", Icon: Send },

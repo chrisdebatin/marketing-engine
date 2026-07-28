@@ -467,6 +467,26 @@ export interface Database {
         >;
         Relationships: [];
       };
+      lead_calls: {
+        Row: {
+          id: string;
+          call_date: string;
+          quelle: string;
+          hub_id: string | null;
+          notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          call_date?: string;
+          quelle: string;
+          hub_id?: string | null;
+          notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_calls"]["Insert"]>;
+        Relationships: [];
+      };
       capacity_reports: {
         Row: {
           id: string;
