@@ -13,6 +13,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
+import { AnfragenCapture } from "@/components/anfragen-capture";
+import {
+  KampagnenAnfragen,
+  type AnfrageRow,
+} from "@/components/kampagnen-anfragen";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -226,6 +231,22 @@ export default async function HomePage() {
     return a.md.localeCompare(b.md, "de");
   });
 
+  // Anfragen-Kanban (Thema "Kampagnen-Anfragen") für den Schnell-Eingang.
+  const { data: anfrageTopic } = await admin
+    .from("note_topics")
+    .select("id")
+    .ilike("title", "Kampagnen-Anfragen")
+    .maybeSingle();
+  const { data: anfrageRows } = anfrageTopic
+    ? await admin
+        .from("hub_notes")
+        .select("*")
+        .eq("topic_id", anfrageTopic.id)
+        .eq("is_todo", true)
+        .order("created_at", { ascending: false })
+        .limit(100)
+    : { data: [] };
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-1">
@@ -266,6 +287,13 @@ export default async function HomePage() {
           sub="alle Auslagen & Box-Lieferorte"
         />
       </section>
+
+      {/* Anfragen-Eingang: Freitext → KI → Kanban */}
+      <AnfragenCapture />
+      <KampagnenAnfragen
+        hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
+        anfragen={(anfrageRows ?? []) as AnfrageRow[]}
+      />
 
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">

@@ -120,7 +120,7 @@ export async function extractSollTodos(
       messages: [
         {
           role: "user",
-          content: `Der Marketing-Leiter notiert frei, welche Online-Kampagnen/Anzeigen geplant sind. Zerlege den Text in einzelne Aufgaben und ordne sie den Standorten zu.
+          content: `Der Marketing-Leiter notiert frei, welche Anfragen der Standorte anstehen (Online-Anzeigen, Zeitungsanzeigen, Material-Wünsche, Flyer, Sonstiges). Zerlege den Text in einzelne Aufgaben und ordne sie den Standorten zu.
 
 Standorte (Index: Name):
 ${hubList}
@@ -130,7 +130,7 @@ Freitext:
 ${clean}
 """
 
-Jede geplante Kampagne/Anzeige = eine Aufgabe. Erfinde nichts dazu.`,
+Jede Anfrage/Aufgabe einzeln. Erfinde nichts dazu.`,
         },
       ],
     });
@@ -205,6 +205,7 @@ Jede geplante Kampagne/Anzeige = eine Aufgabe. Erfinde nichts dazu.`,
 
   revalidatePath("/online-anzeigen");
   revalidatePath("/hubs");
+  revalidatePath("/");
   const parts = [
     `${created} To-do${created === 1 ? "" : "s"} erstellt`,
     dup > 0 ? `${dup} schon vorhanden` : "",
