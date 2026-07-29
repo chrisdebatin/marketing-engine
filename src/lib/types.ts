@@ -403,6 +403,7 @@ export interface Database {
           is_todo: boolean;
           done_at: string | null;
           topic_id: string | null;
+          status: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -412,6 +413,7 @@ export interface Database {
           is_todo?: boolean;
           done_at?: string | null;
           topic_id?: string | null;
+          status?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["hub_notes"]["Insert"]>;

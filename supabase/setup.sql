@@ -998,6 +998,14 @@ alter table public.personal_ads disable row level security;
 notify pgrst, 'reload schema';
 
 -- ============================================================
+-- 0038_note_status.sql
+-- ============================================================
+-- 0038: Status für To-dos (Kanban): offen (null) / in_arbeit.
+alter table public.hub_notes add column if not exists status text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

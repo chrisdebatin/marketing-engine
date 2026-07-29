@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Circle, Inbox, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Inbox,
+  Plus,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -26,13 +33,28 @@ export interface AnfrageRow {
   hub_id: string;
   text: string;
   done_at: string | null;
+  status?: string | null;
   created_at: string | null;
 }
 
+type Spalte = "offen" | "in_arbeit" | "erledigt";
+
+function spalteOf(a: AnfrageRow): Spalte {
+  if (a.done_at) return "erledigt";
+  return a.status === "in_arbeit" ? "in_arbeit" : "offen";
+}
+
+const SPALTEN: { key: Spalte; title: string; accent: string }[] = [
+  { key: "offen", title: "Offen", accent: "border-t-amber-500" },
+  { key: "in_arbeit", title: "In Arbeit", accent: "border-t-primary" },
+  { key: "erledigt", title: "Erledigt", accent: "border-t-chart-4" },
+];
+
 /**
- * Kampagnen-Anfragen: "Attendorn will eine Stellenanzeige" — wird als
- * offenes To-do geloggt (Thema "Kampagnen-Anfragen") und erscheint damit
- * auch auf den Hub-Karten und im Themen-Board.
+ * Kampagnen-Anfragen als Kanban: Offen → In Arbeit → Erledigt. Einträge
+ * kommen aus dem Schnell-Formular oder der KI-Erfassung des
+ * "Was soll laufen?"-Freitexts; sie sind To-dos (Thema "Kampagnen-Anfragen")
+ * und erscheinen daher auch auf den Hub-Karten und im Themen-Board.
  */
 export function KampagnenAnfragen({
   hubs,
@@ -47,9 +69,6 @@ export function KampagnenAnfragen({
 
   const hubItems = Object.fromEntries(hubs.map((h) => [h.id, h.name]));
   const hubName = (id: string) => hubs.find((h) => h.id === id)?.name ?? "—";
-
-  const offene = anfragen.filter((a) => !a.done_at);
-  const erledigte = anfragen.filter((a) => a.done_at).slice(0, 5);
 
   function add() {
     if (pending) return;
@@ -77,6 +96,26 @@ export function KampagnenAnfragen({
     });
   }
 
+  function move(a: AnfrageRow, ziel: Spalte) {
+    startTransition(async () => {
+      const r = await updateHubNote(a.id, {
+        done: ziel === "erledigt",
+        status: ziel === "in_arbeit" ? "in_arbeit" : null,
+      });
+      if (r.ok) {
+        toast.success(
+          ziel === "erledigt"
+            ? "Erledigt ✓"
+            : ziel === "in_arbeit"
+              ? "In Arbeit"
+              : "Wieder offen",
+        );
+      } else {
+        toast.error(r.error);
+      }
+    });
+  }
+
   return (
     <section className="flex flex-col gap-3 rounded-xl border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-baseline gap-2">
@@ -85,8 +124,8 @@ export function KampagnenAnfragen({
           Kampagnen-Anfragen
         </p>
         <span className="text-xs text-muted-foreground">
-          z. B. „Attendorn will eine Stellenanzeige&rdquo; — landet als
-          offenes To-do hier, auf der Hub-Karte und im Themen-Board.
+          per Formular oder KI-Erfassung aus „Was soll laufen?&rdquo; — jede
+          Anfrage erscheint auch als To-do auf der Hub-Karte.
         </span>
       </div>
 
@@ -124,88 +163,119 @@ export function KampagnenAnfragen({
         </Button>
       </div>
 
-      {/* Offene Anfragen */}
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium">
-          Offen ({offene.length})
-        </p>
-        {offene.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Keine offenen Anfragen. 🎉
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-1">
-            {offene.map((a) => (
-              <li
-                key={a.id}
-                className="group/anfrage flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
-              >
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      const r = await updateHubNote(a.id, { done: true });
-                      if (r.ok) toast.success("Anfrage erledigt ✓");
-                      else toast.error(r.error);
-                    })
-                  }
-                  className="mt-0.5 shrink-0"
-                  aria-label="Als erledigt abhaken"
-                  title="Erledigt"
-                >
-                  <Circle className="size-4 text-muted-foreground hover:text-primary" />
-                </button>
-                <span className="min-w-0 flex-1">
-                  <span className="font-medium">{hubName(a.hub_id)}:</span>{" "}
-                  {a.text}
+      {/* Kanban */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        {SPALTEN.map((sp) => {
+          const list = anfragen
+            .filter((a) => spalteOf(a) === sp.key)
+            .slice(0, sp.key === "erledigt" ? 10 : 50);
+          return (
+            <div
+              key={sp.key}
+              className={cn(
+                "flex min-w-0 flex-col rounded-xl border border-t-4 bg-muted/30",
+                sp.accent,
+              )}
+            >
+              <p className="flex items-baseline gap-1.5 px-3 pt-2.5 pb-1.5 text-sm font-semibold">
+                {sp.title}
+                <span className="font-normal text-muted-foreground tabular-nums">
+                  {list.length}
                 </span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    if (window.confirm("Anfrage löschen?")) {
-                      startTransition(async () => {
-                        const r = await deleteHubNote(a.id);
-                        if (r.ok) toast.success("Anfrage gelöscht");
-                        else toast.error(r.error);
-                      });
-                    }
-                  }}
-                  className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/anfrage:opacity-100 hover:text-destructive"
-                  aria-label="Anfrage löschen"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Zuletzt erledigt */}
-      {erledigte.length > 0 && (
-        <div className="flex flex-col gap-1 border-t pt-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            Zuletzt erledigt
-          </p>
-          <ul className="flex flex-col gap-0.5">
-            {erledigte.map((a) => (
-              <li
-                key={a.id}
-                className={cn(
-                  "flex items-start gap-2 px-3 text-sm text-muted-foreground line-through",
+              </p>
+              <div className="flex flex-col gap-1.5 p-2">
+                {list.length === 0 && (
+                  <p className="px-1 py-2 text-center text-xs text-muted-foreground">
+                    {sp.key === "offen" ? "Keine offenen Anfragen 🎉" : "—"}
+                  </p>
                 )}
-              >
-                <Check className="mt-0.5 size-4 shrink-0 text-chart-4" />
-                <span className="min-w-0">
-                  {hubName(a.hub_id)}: {a.text}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+                {list.map((a) => (
+                  <div
+                    key={a.id}
+                    className={cn(
+                      "flex flex-col gap-1 rounded-lg border bg-card p-2.5 text-sm shadow-sm",
+                      sp.key === "erledigt" && "opacity-70",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "min-w-0",
+                        sp.key === "erledigt" &&
+                          "text-muted-foreground line-through",
+                      )}
+                    >
+                      <span className="font-semibold">
+                        {hubName(a.hub_id)}:
+                      </span>{" "}
+                      {a.text}
+                    </span>
+                    <span className="flex items-center gap-0.5">
+                      {sp.key === "offen" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                          disabled={pending}
+                          onClick={() => move(a, "in_arbeit")}
+                        >
+                          <ArrowRight className="size-3.5" />
+                          In Arbeit
+                        </Button>
+                      )}
+                      {sp.key !== "erledigt" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                          disabled={pending}
+                          onClick={() => move(a, "erledigt")}
+                        >
+                          <Check className="size-3.5" />
+                          Erledigt
+                        </Button>
+                      )}
+                      {sp.key !== "offen" && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                          disabled={pending}
+                          onClick={() => move(a, "offen")}
+                        >
+                          <RotateCcw className="size-3.5" />
+                          Zurück
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto size-7 text-muted-foreground hover:text-destructive"
+                        disabled={pending}
+                        aria-label="Anfrage löschen"
+                        onClick={() => {
+                          if (window.confirm("Anfrage löschen?")) {
+                            startTransition(async () => {
+                              const r = await deleteHubNote(a.id);
+                              if (r.ok) toast.success("Anfrage gelöscht");
+                              else toast.error(r.error);
+                            });
+                          }
+                        }}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </section>
   );
 }

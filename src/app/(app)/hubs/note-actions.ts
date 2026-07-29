@@ -121,7 +121,7 @@ async function loadNote(id: string) {
 
 export async function updateHubNote(
   id: string,
-  input: { text?: string; is_todo?: boolean; done?: boolean },
+  input: { text?: string; is_todo?: boolean; done?: boolean; status?: string | null },
 ): Promise<Result> {
   const cleanId = (id ?? "").trim();
   if (!cleanId) return { ok: false, error: "Notiz fehlt." };
@@ -151,13 +151,21 @@ export async function updateHubNote(
   if (input.done !== undefined) {
     patch.done_at = input.done ? new Date().toISOString() : null;
   }
-  if (Object.keys(patch).length === 0) return { ok: true };
+  const statusPatch =
+    input.status !== undefined ? { status: input.status || null } : {};
+  if (Object.keys(patch).length === 0 && input.status === undefined) {
+    return { ok: true };
+  }
 
   const admin = createAdminClient();
-  const { error } = await admin
+  let { error } = await admin
     .from("hub_notes")
-    .update(patch)
+    .update({ ...patch, ...statusPatch })
     .eq("id", cleanId);
+  // Spalte status fehlt bis Migration 0038 — dann ohne sie speichern.
+  if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    ({ error } = await admin.from("hub_notes").update(patch).eq("id", cleanId));
+  }
   if (error) return { ok: false, error: "Speichern fehlgeschlagen." };
   revalidate();
   return { ok: true };

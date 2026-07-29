@@ -2,10 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ClipboardList, NotebookPen } from "lucide-react";
+import { ClipboardList, NotebookPen, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  extractSollTodos,
   saveOnlineAdsFreitext,
   type FreitextKey,
 } from "@/app/(app)/online-anzeigen/actions";
@@ -76,7 +77,7 @@ export function OnlineAdsFreitext({
         className="min-h-28 flex-1 bg-background"
         disabled={pending}
       />
-      <div>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           size="sm"
@@ -85,6 +86,32 @@ export function OnlineAdsFreitext({
         >
           {pending ? "Speichere…" : "Speichern"}
         </Button>
+        {settingKey === "soll" && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={pending || text.trim().length < 5}
+              onClick={() =>
+                startTransition(async () => {
+                  // Erst speichern, dann von der KI in To-dos zerlegen.
+                  await saveOnlineAdsFreitext(settingKey, text);
+                  setDirty(false);
+                  const r = await extractSollTodos(text);
+                  if (r.ok) toast.success(r.message, { duration: 8000 });
+                  else toast.error(r.message);
+                })
+              }
+            >
+              <Sparkles className="size-4" />
+              {pending ? "KI liest…" : "Mit KI als To-dos erfassen"}
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Zerlegt den Text in Aufgaben je Standort → Kanban unten.
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

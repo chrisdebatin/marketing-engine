@@ -49,7 +49,7 @@ export default async function OnlineAnzeigenPage() {
   const { data: anfrageRows } = anfrageTopic
     ? await admin
         .from("hub_notes")
-        .select("id, hub_id, text, done_at, created_at")
+        .select("*")
         .eq("topic_id", anfrageTopic.id)
         .eq("is_todo", true)
         .order("created_at", { ascending: false })

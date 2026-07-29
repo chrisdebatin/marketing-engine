@@ -119,3 +119,8 @@ create table if not exists public.personal_ads (
 alter table public.personal_ads disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0038: To-do-Status für das Kampagnen-Kanban ─────────────────────
+alter table public.hub_notes add column if not exists status text;
+
+notify pgrst, 'reload schema';
