@@ -27,9 +27,10 @@ export default async function OnlineAnzeigenPage() {
   const session = await requireSession();
   const admin = createAdminClient();
 
-  const [freitext, { data: metaRows, error: metaErr }, { data: personalRows, error: persErr }] =
+  const [freitextLaeuft, freitextSoll, { data: metaRows, error: metaErr }, { data: personalRows, error: persErr }] =
     await Promise.all([
-      loadOnlineAdsFreitext(),
+      loadOnlineAdsFreitext("laeuft"),
+      loadOnlineAdsFreitext("soll"),
       admin.from("meta_ads").select("*").order("start_date", { ascending: false }),
       admin
         .from("personal_ads")
@@ -76,10 +77,26 @@ export default async function OnlineAnzeigenPage() {
         </p>
       </div>
 
-      <OnlineAdsFreitext
-        initialText={freitext.text}
-        initialUpdatedAt={freitext.updatedAt}
-      />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <OnlineAdsFreitext
+          settingKey="laeuft"
+          title="Was läuft gerade?"
+          placeholder={
+            "z. B.\n• Meta: Leadgen Intensivpflege NRW (20 €/Tag)\n• Join: Pflegefachkraft Attendorn seit 15.07."
+          }
+          initialText={freitextLaeuft.text}
+          initialUpdatedAt={freitextLaeuft.updatedAt}
+        />
+        <OnlineAdsFreitext
+          settingKey="soll"
+          title="Was soll laufen? (geplant)"
+          placeholder={
+            "z. B.\n• Stellenanzeige Velbert auf Indeed ab August\n• Meta-Kampagne Tagespflege Duisburg vorbereiten"
+          }
+          initialText={freitextSoll.text}
+          initialUpdatedAt={freitextSoll.updatedAt}
+        />
+      </div>
 
       <KampagnenAnfragen
         hubs={hubs}

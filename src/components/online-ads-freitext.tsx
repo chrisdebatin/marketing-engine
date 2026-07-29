@@ -2,19 +2,28 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { NotebookPen } from "lucide-react";
+import { ClipboardList, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { saveOnlineAdsFreitext } from "@/app/(app)/online-anzeigen/actions";
+import {
+  saveOnlineAdsFreitext,
+  type FreitextKey,
+} from "@/app/(app)/online-anzeigen/actions";
 
 /**
- * Freitext-Status ganz oben: "Was läuft gerade?" — schnelle Übersicht in
- * eigenen Worten, ergänzend zu den strukturierten Kampagnen-Listen.
+ * Freitext-Status: "Was läuft gerade?" bzw. "Was soll laufen?" — schnelle
+ * Übersicht in eigenen Worten, ergänzend zu den strukturierten Listen.
  */
 export function OnlineAdsFreitext({
+  settingKey,
+  title,
+  placeholder,
   initialText,
   initialUpdatedAt,
 }: {
+  settingKey: FreitextKey;
+  title: string;
+  placeholder: string;
   initialText: string;
   initialUpdatedAt: string | null;
 }) {
@@ -22,12 +31,13 @@ export function OnlineAdsFreitext({
   const [text, setText] = useState(initialText);
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt);
   const [dirty, setDirty] = useState(false);
+  const Icon = settingKey === "soll" ? ClipboardList : NotebookPen;
 
   function save() {
     startTransition(async () => {
-      const r = await saveOnlineAdsFreitext(text);
+      const r = await saveOnlineAdsFreitext(settingKey, text);
       if (r.ok) {
-        toast.success("Status gespeichert");
+        toast.success("Gespeichert");
         setDirty(false);
         if (r.updatedAt) setUpdatedAt(r.updatedAt);
       } else {
@@ -40,8 +50,8 @@ export function OnlineAdsFreitext({
     <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
       <div className="flex flex-wrap items-baseline gap-2">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <NotebookPen className="size-4 text-primary" />
-          Was läuft gerade? (Freitext)
+          <Icon className="size-4 text-primary" />
+          {title}
         </p>
         {updatedAt && (
           <span className="text-xs text-muted-foreground">
@@ -61,11 +71,9 @@ export function OnlineAdsFreitext({
           setText(e.target.value);
           setDirty(true);
         }}
-        placeholder={
-          "z. B.\n• Meta: Leadgen Intensivpflege NRW läuft (20 €/Tag)\n• Join: Pflegefachkraft Attendorn seit 15.07.\n• Indeed pausiert bis August"
-        }
+        placeholder={placeholder}
         maxLength={5000}
-        className="min-h-28 bg-background"
+        className="min-h-28 flex-1 bg-background"
         disabled={pending}
       />
       <div>
