@@ -1,7 +1,6 @@
 import {
   BedDouble,
   BookOpen,
-  BriefcaseBusiness,
   Building2,
   ChartColumn,
   Rocket,
@@ -57,8 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/frontoffice", label: "Frontoffice", Icon: Headset },
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
-      { href: "/meta-ads", label: "Meta Ads", Icon: Rocket },
-      { href: "/personal-anzeigen", label: "Personal-Anzeigen", Icon: BriefcaseBusiness },
+      { href: "/online-anzeigen", label: "Online Anzeigen", Icon: Rocket },
       { href: "/kommunikation", label: "Kommunikation", Icon: Send },
       { href: "/postfach", label: "Postfach", Icon: Inbox },
     ],
