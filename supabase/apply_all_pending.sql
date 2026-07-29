@@ -129,3 +129,6 @@ notify pgrst, 'reload schema';
 alter table public.hub_notes add column if not exists tag text;
 
 notify pgrst, 'reload schema';
+
+-- ── 0040: Screenshots/Bilder an Anfragen-To-dos ─────────────────────
+alter table public.hub_notes add column if not exists images jsonb;

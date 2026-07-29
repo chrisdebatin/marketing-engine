@@ -6,6 +6,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { extractSollTodos } from "@/app/(app)/online-anzeigen/actions";
+import { ImageAttachRow, useImageAttach } from "@/components/image-attach";
 
 /**
  * Schnell-Eingang auf dem Start-Bildschirm: Anfragen der Hubs frei
@@ -15,14 +16,16 @@ import { extractSollTodos } from "@/app/(app)/online-anzeigen/actions";
 export function AnfragenCapture() {
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState("");
+  const attach = useImageAttach();
 
   function erfassen() {
     if (pending || text.trim().length < 5) return;
     startTransition(async () => {
-      const r = await extractSollTodos(text);
+      const r = await extractSollTodos(text, attach.images);
       if (r.ok) {
         toast.success(r.message, { duration: 8000 });
         setText("");
+        attach.reset();
       } else {
         toast.error(r.message);
       }
@@ -44,7 +47,9 @@ export function AnfragenCapture() {
         maxLength={5000}
         className="min-h-24 bg-background"
         disabled={pending}
+        onPaste={attach.onPaste}
       />
+      <ImageAttachRow attach={attach} disabled={pending} />
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"

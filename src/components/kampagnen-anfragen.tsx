@@ -20,7 +20,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ANFRAGE_TAGS, anfrageTag } from "@/lib/anfrage-tags";
+import { ANFRAGE_TAGS, anfrageTag, hubChip } from "@/lib/anfrage-tags";
+import { noteImages } from "@/lib/note-images";
+import {
+  ImageAttachRow,
+  NoteImageStrip,
+  useImageAttach,
+} from "@/components/image-attach";
 import {
   createHubNote,
   deleteHubNote,
@@ -36,6 +42,7 @@ export interface AnfrageRow {
   done_at: string | null;
   status?: string | null;
   tag?: string | null;
+  images?: unknown;
   created_at: string | null;
 }
 
@@ -69,6 +76,7 @@ export function KampagnenAnfragen({
   const [hubId, setHubId] = useState("");
   const [text, setText] = useState("");
   const [tag, setTag] = useState("");
+  const attach = useImageAttach();
 
   const tagItems = {
     "": "Tag (optional)",
@@ -95,10 +103,12 @@ export function KampagnenAnfragen({
         is_todo: true,
         topic_title: KAMPAGNEN_TOPIC,
         tag: tag || undefined,
+        images: attach.images,
       });
       if (r.ok) {
         toast.success("Anfrage als To-do geloggt");
         setText("");
+        attach.reset();
       } else {
         toast.error(r.error);
       }
@@ -165,6 +175,7 @@ export function KampagnenAnfragen({
           onKeyDown={(e) => {
             if (e.key === "Enter") add();
           }}
+          onPaste={attach.onPaste}
         />
         <Select
           items={tagItems}
@@ -187,6 +198,7 @@ export function KampagnenAnfragen({
           {pending ? "Speichere…" : "Anfrage loggen"}
         </Button>
       </div>
+      <ImageAttachRow attach={attach} disabled={pending} />
 
       {/* Kanban */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -223,6 +235,14 @@ export function KampagnenAnfragen({
                     )}
                   >
                     <span className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
+                          hubChip(a.hub_id),
+                        )}
+                      >
+                        {hubName(a.hub_id)}
+                      </span>
                       {anfrageTag(a.tag) && (
                         <span
                           className={cn(
@@ -233,9 +253,6 @@ export function KampagnenAnfragen({
                           {anfrageTag(a.tag)!.label}
                         </span>
                       )}
-                      <span className="text-xs font-semibold">
-                        {hubName(a.hub_id)}
-                      </span>
                     </span>
                     <span
                       className={cn(
@@ -246,6 +263,7 @@ export function KampagnenAnfragen({
                     >
                       {a.text}
                     </span>
+                    <NoteImageStrip urls={noteImages(a.images)} />
                     <span className="flex items-center gap-0.5">
                       {sp.key === "offen" && (
                         <Button

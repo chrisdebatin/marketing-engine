@@ -61,9 +61,19 @@ export async function loadOnlineAdsFreitext(
  */
 export async function extractSollTodos(
   text: string,
+  images?: string[],
 ): Promise<{ ok: boolean; message: string }> {
   const session = await requireSession();
   if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+
+  // Angehängte Screenshots (aus /api/note-image) — kommen an jedes erzeugte To-do.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const cleanImages = (images ?? [])
+    .filter(
+      (u) =>
+        typeof u === "string" && supabaseUrl && u.startsWith(supabaseUrl) && u.length < 500,
+    )
+    .slice(0, 6);
 
   const clean = (text ?? "").trim().slice(0, 5000);
   if (clean.length < 5) {
@@ -211,11 +221,19 @@ Jede Anfrage/Aufgabe einzeln. Erfinde nichts dazu.`,
       is_todo: true,
       topic_id: topic.id,
     };
-    let { error } = await admin
-      .from("hub_notes")
-      .insert({ ...row, tag: item.tag ?? null });
-    // Spalte tag fehlt bis Migration 0039 — dann ohne sie speichern.
-    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+    const missingCol = (code?: string) => code === "PGRST204" || code === "42703";
+    let { error } = await admin.from("hub_notes").insert({
+      ...row,
+      tag: item.tag ?? null,
+      images: cleanImages.length ? cleanImages : null,
+    });
+    // Spalten tag/images fehlen bis Migration 0039/0040 — dann schrittweise ohne sie.
+    if (error && missingCol(error.code)) {
+      ({ error } = await admin
+        .from("hub_notes")
+        .insert({ ...row, tag: item.tag ?? null }));
+    }
+    if (error && missingCol(error.code)) {
       ({ error } = await admin.from("hub_notes").insert(row));
     }
     if (!error) {

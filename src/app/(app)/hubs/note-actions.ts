@@ -71,12 +71,22 @@ async function resolveTopicId(
   return { ok: true, topicId: created.id };
 }
 
+/** Nur eigene Storage-URLs zulassen (kommen aus /api/note-image). */
+function cleanImages(images: string[] | undefined): string[] {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  if (!base) return [];
+  return (images ?? [])
+    .filter((u) => typeof u === "string" && u.startsWith(base) && u.length < 500)
+    .slice(0, 6);
+}
+
 export async function createHubNote(input: {
   hub_id: string;
   text: string;
   is_todo: boolean;
   topic_title?: string;
   tag?: string;
+  images?: string[];
 }): Promise<Result> {
   const hubId = (input.hub_id ?? "").trim();
   const text = (input.text ?? "").trim();
@@ -99,9 +109,16 @@ export async function createHubNote(input: {
     topic_id: topic.topicId,
   };
   const tag = (input.tag ?? "").trim() || null;
-  let { error } = await admin.from("hub_notes").insert({ ...base, tag });
-  // Spalte tag fehlt bis Migration 0039 — dann ohne sie speichern.
-  if (tag && error && (error.code === "PGRST204" || error.code === "42703")) {
+  const images = cleanImages(input.images);
+  const missingCol = (code?: string) => code === "PGRST204" || code === "42703";
+  let { error } = await admin
+    .from("hub_notes")
+    .insert({ ...base, tag, images: images.length ? images : null });
+  // Spalten tag/images fehlen bis Migration 0039/0040 — dann schrittweise ohne sie.
+  if (error && missingCol(error.code)) {
+    ({ error } = await admin.from("hub_notes").insert({ ...base, tag }));
+  }
+  if (error && missingCol(error.code)) {
     ({ error } = await admin.from("hub_notes").insert(base));
   }
   if (error) {
