@@ -467,6 +467,34 @@ export interface Database {
         >;
         Relationships: [];
       };
+      personal_ads: {
+        Row: {
+          id: string;
+          titel: string;
+          plattform: string;
+          hub_id: string | null;
+          start_date: string;
+          end_date: string | null;
+          link: string | null;
+          notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          titel: string;
+          plattform: string;
+          hub_id?: string | null;
+          start_date?: string;
+          end_date?: string | null;
+          link?: string | null;
+          notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["personal_ads"]["Insert"]
+        >;
+        Relationships: [];
+      };
       meta_ads: {
         Row: {
           id: string;

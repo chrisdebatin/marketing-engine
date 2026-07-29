@@ -103,3 +103,19 @@ create table if not exists public.meta_ads (
 alter table public.meta_ads disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0037: Personal-Anzeigen (Recruiting) je Hub ─────────────────────
+create table if not exists public.personal_ads (
+  id          uuid primary key default gen_random_uuid(),
+  titel       text not null,
+  plattform   text not null,
+  hub_id      uuid references public.hubs (id) on delete cascade,
+  start_date  date not null default current_date,
+  end_date    date,
+  link        text,
+  notiz       text,
+  created_at  timestamptz default now()
+);
+alter table public.personal_ads disable row level security;
+
+notify pgrst, 'reload schema';

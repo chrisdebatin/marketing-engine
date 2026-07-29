@@ -23,6 +23,7 @@ import { pdlRoleLabel, pdlRoleShort } from "@/lib/leistungen";
 import { splitPdlEmails, splitPdlNames, splitPdlPhones } from "@/lib/pdl";
 import { mailsWith, outlookConfigured } from "@/lib/outlook";
 import { cn } from "@/lib/utils";
+import { plattformLabel } from "@/lib/personal";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function HubDetailPage({
     { data: noteRows },
     { data: topicRows },
     { data: metaAdRows },
+    { data: personalAdRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -70,6 +72,11 @@ export default async function HubDetailPage({
       .select("*")
       .or(`hub_id.eq.${id},typ.eq.allgemein`)
       .order("start_date", { ascending: false }),
+    admin
+      .from("personal_ads")
+      .select("*")
+      .or(`hub_id.eq.${id},hub_id.is.null`)
+      .order("start_date", { ascending: false }),
   ]);
 
   const tasks = taskRows ?? [];
@@ -91,6 +98,17 @@ export default async function HubDetailPage({
   const placementCount = (placements ?? []).length;
 
   const heute = new Date().toISOString().slice(0, 10);
+  const aktivePersonalAds = ((personalAdRows ?? []) as {
+    id: string;
+    titel: string;
+    plattform: string;
+    hub_id: string | null;
+    start_date: string;
+    end_date: string | null;
+    link: string | null;
+  }[]).filter(
+    (a) => a.start_date <= heute && (!a.end_date || a.end_date >= heute),
+  );
   const aktiveAds = ((metaAdRows ?? []) as {
     id: string;
     name: string;
@@ -243,6 +261,58 @@ export default async function HubDetailPage({
                       : ""}
                     {a.budget ? ` · ${a.budget}` : ""}
                     {a.ziel ? ` · ${a.ziel}` : ""}
+                  </span>
+                  {a.link && (
+                    <a
+                      href={a.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary underline"
+                    >
+                      Anzeige öffnen
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Personal-Anzeigen: läuft gerade Recruiting für diesen Hub? */}
+      {aktivePersonalAds.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-col gap-2 p-5">
+            <p className="flex items-center gap-2 font-semibold">
+              <span
+                className="size-2 shrink-0 animate-pulse rounded-full bg-chart-5"
+                aria-hidden
+              />
+              Personal-Anzeigen — läuft gerade
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {aktivePersonalAds.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 rounded-lg bg-muted/50 px-3 py-1.5 text-sm"
+                >
+                  <span className="font-medium">{a.titel}</span>
+                  <Badge
+                    variant="outline"
+                    className="border-chart-5/40 bg-chart-5/10 text-chart-5"
+                  >
+                    {plattformLabel(a.plattform)}
+                  </Badge>
+                  {!a.hub_id && (
+                    <Badge variant="outline" className="text-muted-foreground">
+                      alle Standorte
+                    </Badge>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    seit {new Date(`${a.start_date}T00:00:00`).toLocaleDateString("de-DE")}
+                    {a.end_date
+                      ? ` · bis ${new Date(`${a.end_date}T00:00:00`).toLocaleDateString("de-DE")}`
+                      : ""}
                   </span>
                   {a.link && (
                     <a

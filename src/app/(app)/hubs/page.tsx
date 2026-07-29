@@ -6,6 +6,7 @@ import { mdColor } from "@/lib/hub-coords";
 import { pdlRoleShort } from "@/lib/leistungen";
 import { splitPdlEmails, splitPdlPhones } from "@/lib/pdl";
 import { cn } from "@/lib/utils";
+import { plattformLabel } from "@/lib/personal";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
 import { HubTags } from "@/components/md-tag";
@@ -38,6 +39,7 @@ export default async function HubsPage({
     { data: taskRows },
     { data: checkRows },
     { data: noteRows },
+    { data: personalAdRows },
   ] = await Promise.all([
     admin
       .from("deliveries")
@@ -47,7 +49,20 @@ export default async function HubsPage({
     admin.from("hub_task_checks").select("task_id, hub_id"),
     // Fallback ?? [] — fehlt Migration 0021, darf die Seite nicht crashen.
     admin.from("hub_notes").select("hub_id, is_todo, done_at"),
+    admin.from("personal_ads").select("hub_id, plattform, start_date, end_date"),
   ]);
+
+  // Laufende Personal-Anzeigen je Hub (Plattform-Namen für den Karten-Chip).
+  const heuteIso = new Date().toISOString().slice(0, 10);
+  const personalByHub = new Map<string, Set<string>>();
+  for (const ad of personalAdRows ?? []) {
+    if (!ad.hub_id) continue;
+    if (ad.start_date > heuteIso) continue;
+    if (ad.end_date && ad.end_date < heuteIso) continue;
+    const set = personalByHub.get(ad.hub_id) ?? new Set<string>();
+    set.add(ad.plattform);
+    personalByHub.set(ad.hub_id, set);
+  }
 
   const hubs = [...session.hubs].sort(
     (a, b) =>
@@ -243,6 +258,14 @@ export default async function HubsPage({
                       pdl={h.pdl_name}
                       pdlRole={pdlRoleShort(h.name)}
                     />
+                    {personalByHub.has(h.id) && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-chart-5/40 bg-chart-5/10 px-2 py-0.5 text-xs font-medium text-chart-5">
+                        Personal-Anzeige:{" "}
+                        {[...personalByHub.get(h.id)!]
+                          .map((k) => plattformLabel(k))
+                          .join(", ")}
+                      </span>
+                    )}
                     {(openTodos.get(h.id) ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
                         {openTodos.get(h.id)} To-do
