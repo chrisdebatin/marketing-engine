@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { ANFRAGE_TAGS, anfrageTag } from "@/lib/anfrage-tags";
 import {
   createHubNote,
   deleteHubNote,
@@ -34,6 +35,7 @@ export interface AnfrageRow {
   text: string;
   done_at: string | null;
   status?: string | null;
+  tag?: string | null;
   created_at: string | null;
 }
 
@@ -66,6 +68,12 @@ export function KampagnenAnfragen({
   const [pending, startTransition] = useTransition();
   const [hubId, setHubId] = useState("");
   const [text, setText] = useState("");
+  const [tag, setTag] = useState("");
+
+  const tagItems = {
+    "": "Tag (optional)",
+    ...Object.fromEntries(ANFRAGE_TAGS.map((t) => [t.key, t.label])),
+  };
 
   const hubItems = Object.fromEntries(hubs.map((h) => [h.id, h.name]));
   const hubName = (id: string) => hubs.find((h) => h.id === id)?.name ?? "—";
@@ -86,6 +94,7 @@ export function KampagnenAnfragen({
         text: text.trim(),
         is_todo: true,
         topic_title: KAMPAGNEN_TOPIC,
+        tag: tag || undefined,
       });
       if (r.ok) {
         toast.success("Anfrage als To-do geloggt");
@@ -157,6 +166,22 @@ export function KampagnenAnfragen({
             if (e.key === "Enter") add();
           }}
         />
+        <Select
+          items={tagItems}
+          value={tag}
+          onValueChange={(v) => setTag(v ?? "")}
+        >
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Tag (optional)" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(tagItems).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button type="button" disabled={pending} onClick={add}>
           <Plus className="size-4" />
           {pending ? "Speichere…" : "Anfrage loggen"}
@@ -197,6 +222,21 @@ export function KampagnenAnfragen({
                       sp.key === "erledigt" && "opacity-70",
                     )}
                   >
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {anfrageTag(a.tag) && (
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
+                            anfrageTag(a.tag)!.chip,
+                          )}
+                        >
+                          {anfrageTag(a.tag)!.label}
+                        </span>
+                      )}
+                      <span className="text-xs font-semibold">
+                        {hubName(a.hub_id)}
+                      </span>
+                    </span>
                     <span
                       className={cn(
                         "min-w-0",
@@ -204,9 +244,6 @@ export function KampagnenAnfragen({
                           "text-muted-foreground line-through",
                       )}
                     >
-                      <span className="font-semibold">
-                        {hubName(a.hub_id)}:
-                      </span>{" "}
                       {a.text}
                     </span>
                     <span className="flex items-center gap-0.5">

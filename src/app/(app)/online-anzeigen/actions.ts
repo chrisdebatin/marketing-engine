@@ -80,7 +80,7 @@ export async function extractSollTodos(
   // KI: Freitext → strukturierte Aufgaben (erzwungener Tool-Call)
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic();
-  let items: { standort_index: number; aufgabe: string }[] = [];
+  let items: { standort_index: number; aufgabe: string; tag?: string }[] = [];
   try {
     const msg = await client.messages.create({
       model: process.env.ANTHROPIC_MODEL || "claude-opus-4-8",
@@ -108,8 +108,22 @@ export async function extractSollTodos(
                       description:
                         "Die Aufgabe als kurzer, vollständiger Satz (inkl. Plattform/Details aus dem Text).",
                     },
+                    tag: {
+                      type: "string",
+                      enum: [
+                        "meta",
+                        "zeitung",
+                        "stellenanzeige",
+                        "material",
+                        "flyer",
+                        "online",
+                        "sonstiges",
+                      ],
+                      description:
+                        "Kategorie: meta (Meta/Facebook/Instagram-Anzeige), zeitung (Print/Zeitungsanzeige), stellenanzeige (Personal/Recruiting), material (Flyer-/Material-Nachschub, Boxen), flyer (Flyer-Aktion/Auslage), online (sonstige Online-Anzeige, z. B. Google), sonstiges.",
+                    },
                   },
-                  required: ["standort_index", "aufgabe"],
+                  required: ["standort_index", "aufgabe", "tag"],
                 },
               },
             },
@@ -191,12 +205,19 @@ Jede Anfrage/Aufgabe einzeln. Erfinde nichts dazu.`,
       dup++;
       continue;
     }
-    const { error } = await admin.from("hub_notes").insert({
+    const row = {
       hub_id: hub.id,
       text: item.aufgabe.trim().slice(0, 2000),
       is_todo: true,
       topic_id: topic.id,
-    });
+    };
+    let { error } = await admin
+      .from("hub_notes")
+      .insert({ ...row, tag: item.tag ?? null });
+    // Spalte tag fehlt bis Migration 0039 — dann ohne sie speichern.
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      ({ error } = await admin.from("hub_notes").insert(row));
+    }
     if (!error) {
       created++;
       seen.add(key);

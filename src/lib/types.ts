@@ -404,6 +404,7 @@ export interface Database {
           done_at: string | null;
           topic_id: string | null;
           status: string | null;
+          tag: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -414,6 +415,7 @@ export interface Database {
           done_at?: string | null;
           topic_id?: string | null;
           status?: string | null;
+          tag?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["hub_notes"]["Insert"]>;

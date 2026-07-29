@@ -76,6 +76,7 @@ export async function createHubNote(input: {
   text: string;
   is_todo: boolean;
   topic_title?: string;
+  tag?: string;
 }): Promise<Result> {
   const hubId = (input.hub_id ?? "").trim();
   const text = (input.text ?? "").trim();
@@ -91,12 +92,18 @@ export async function createHubNote(input: {
   if (!topic.ok) return topic;
 
   const admin = createAdminClient();
-  const { error } = await admin.from("hub_notes").insert({
+  const base = {
     hub_id: hubId,
     text,
     is_todo: Boolean(input.is_todo),
     topic_id: topic.topicId,
-  });
+  };
+  const tag = (input.tag ?? "").trim() || null;
+  let { error } = await admin.from("hub_notes").insert({ ...base, tag });
+  // Spalte tag fehlt bis Migration 0039 — dann ohne sie speichern.
+  if (tag && error && (error.code === "PGRST204" || error.code === "42703")) {
+    ({ error } = await admin.from("hub_notes").insert(base));
+  }
   if (error) {
     return (
       missingTableError(error.code) ?? {

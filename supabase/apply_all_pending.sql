@@ -124,3 +124,8 @@ notify pgrst, 'reload schema';
 alter table public.hub_notes add column if not exists status text;
 
 notify pgrst, 'reload schema';
+
+-- ── 0039: Kategorie-Tag für Anfragen-To-dos ─────────────────────────
+alter table public.hub_notes add column if not exists tag text;
+
+notify pgrst, 'reload schema';
