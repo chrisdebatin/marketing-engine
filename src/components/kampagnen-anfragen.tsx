@@ -20,7 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { ANFRAGE_TAGS, anfrageTag, hubChip } from "@/lib/anfrage-tags";
+import { ANFRAGE_TAGS, anfrageTag, guessTag, hubChip } from "@/lib/anfrage-tags";
 import { noteImages } from "@/lib/note-images";
 import {
   ImageAttachRow,
@@ -226,7 +226,9 @@ export function KampagnenAnfragen({
                     {sp.key === "offen" ? "Keine offenen Anfragen 🎉" : "—"}
                   </p>
                 )}
-                {list.map((a) => (
+                {list.map((a) => {
+                  const kategorie = anfrageTag(a.tag) ?? guessTag(a.text);
+                  return (
                   <div
                     key={a.id}
                     className={cn(
@@ -243,14 +245,14 @@ export function KampagnenAnfragen({
                       >
                         {hubName(a.hub_id)}
                       </span>
-                      {anfrageTag(a.tag) && (
+                      {kategorie && (
                         <span
                           className={cn(
                             "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
-                            anfrageTag(a.tag)!.chip,
+                            kategorie.chip,
                           )}
                         >
-                          {anfrageTag(a.tag)!.label}
+                          {kategorie.label}
                         </span>
                       )}
                     </span>
@@ -325,7 +327,8 @@ export function KampagnenAnfragen({
                       </Button>
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );

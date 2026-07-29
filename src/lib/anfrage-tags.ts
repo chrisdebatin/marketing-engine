@@ -40,3 +40,22 @@ export function anfrageTag(key: string | null | undefined) {
   if (!key) return null;
   return ANFRAGE_TAGS.find((t) => t.key === key) ?? null;
 }
+
+/**
+ * Kategorie aus dem Aufgabentext raten — Fallback für Einträge ohne
+ * gespeicherten Tag (Bestand vor Migration 0039). Reihenfolge wichtig:
+ * Spezifisches vor Generischem ("Zeitungsanzeige" vor "Anzeige").
+ */
+const TAG_GUESSES: { key: string; re: RegExp }[] = [
+  { key: "zeitung", re: /zeitung|print|kurier|anzeiger|wochenblatt/i },
+  { key: "stellenanzeige", re: /stellenanzeige|personal|recruit|pflegefachkraft|examiniert|\bjoin\b|indeed|stepstone/i },
+  { key: "flyer", re: /flyer|auslage|aufsteller/i },
+  { key: "material", re: /material|kugelschreiber|\bbox(en)?\b|nachschub|bestell|giveaway|werbemittel/i },
+  { key: "meta", re: /\bmeta\b|facebook|instagram|\bads?\b/i },
+  { key: "online", re: /online|google|kampagne|anzeige/i },
+];
+
+export function guessTag(text: string) {
+  const hit = TAG_GUESSES.find((g) => g.re.test(text));
+  return hit ? anfrageTag(hit.key) : null;
+}
