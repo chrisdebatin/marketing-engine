@@ -149,16 +149,13 @@ export async function createLeadCall(input: {
 /**
  * Call-Center: aktiven Anruf bei einer Institution loggen. Schreibt ins
  * Kontakt-Log und terminiert das Follow-up — bei "nicht erreicht" schon
- * in 3 Tagen wieder. Optional werden Recare-Status und ein neuer
- * Ansprechpartner gespeichert.
+ * in 3 Tagen wieder. Optional wird ein neuer Ansprechpartner gespeichert.
  */
 export async function logCallcenterCall(input: {
   target_id?: string;
   ansprechpartner?: string;
   note?: string;
   erreicht?: boolean;
-  /** "ja" | "nein" | "" — Recare-Status, falls im Gespräch geklärt. */
-  recare?: string;
   neue_person?: {
     name?: string;
     funktion?: string;
@@ -200,18 +197,10 @@ export async function logCallcenterCall(input: {
     naechster_besuch: next.toISOString().slice(0, 10),
     besuchs_notiz: logNote || null,
   };
-  const recare = (input.recare ?? "").trim();
-  const recarePatch =
-    recare === "ja"
-      ? { recare_partner: true }
-      : recare === "nein"
-        ? { recare_partner: false }
-        : {};
   let { error: updErr } = await admin
     .from("crm_targets")
     .update({
       ...base,
-      ...recarePatch,
       letzte_kontakt_art: "anruf",
       ...(ansprechpartner ? { ansprechpartner } : {}),
     })

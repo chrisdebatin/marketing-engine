@@ -77,16 +77,12 @@ export function CallcenterCrm({
   const [statusFilter, setStatusFilter] = useState<
     "faellig" | "erstbesuch" | "alle"
   >("faellig");
-  const [recareFilter, setRecareFilter] = useState<
-    "" | "partner" | "kein" | "unbekannt"
-  >("");
 
   // Anruf-Log-Formular (je aufgeklapptem Ziel)
   const [openId, setOpenId] = useState<string | null>(null);
   const [erreicht, setErreicht] = useState(true);
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [note, setNote] = useState("");
-  const [recare, setRecare] = useState("");
   const [savePerson, setSavePerson] = useState(false);
   const [pFunktion, setPFunktion] = useState("");
   const [pTelefon, setPTelefon] = useState("");
@@ -96,7 +92,6 @@ export function CallcenterCrm({
     setErreicht(true);
     setAnsprechpartner("");
     setNote("");
-    setRecare("");
     setSavePerson(false);
     setPFunktion("");
     setPTelefon("");
@@ -109,7 +104,6 @@ export function CallcenterCrm({
         ansprechpartner,
         note,
         erreicht,
-        recare: erreicht ? recare : "",
         neue_person:
           savePerson && ansprechpartner.trim()
             ? {
@@ -145,12 +139,6 @@ export function CallcenterCrm({
     if (katFilter && (t.kategorie ?? "sonstiges") !== katFilter) return false;
     if (statusFilter !== "alle" && crmStatus(t, today) !== statusFilter) {
       return false;
-    }
-    if (recareFilter) {
-      const r = t.recare_partner ?? null;
-      if (recareFilter === "partner" && r !== true) return false;
-      if (recareFilter === "kein" && r !== false) return false;
-      if (recareFilter === "unbekannt" && r !== null) return false;
     }
     return true;
   });
@@ -232,24 +220,6 @@ export function CallcenterCrm({
               {p.label}
             </button>
           ))}
-          <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-          {(
-            [
-              ["", "Recare: alle"],
-              ["partner", "Recare-Partner"],
-              ["kein", "kein Recare"],
-              ["unbekannt", "Recare unklar"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value || "alle"}
-              type="button"
-              onClick={() => setRecareFilter(value)}
-              className={chip(recareFilter === value)}
-            >
-              {label}
-            </button>
-          ))}
         </div>
         {geoTags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -315,16 +285,6 @@ export function CallcenterCrm({
                       {status === "erstbesuch" && (
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-semibold text-primary">
                           noch nie kontaktiert
-                        </span>
-                      )}
-                      {(t.recare_partner ?? null) === true && (
-                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] font-semibold text-emerald-700 dark:text-emerald-300">
-                          Recare-Partner
-                        </span>
-                      )}
-                      {(t.recare_partner ?? null) === false && (
-                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[0.65rem] font-semibold text-destructive">
-                          kein Recare
                         </span>
                       )}
                     </p>
@@ -413,29 +373,6 @@ export function CallcenterCrm({
                         </button>
                       ))}
                     </div>
-                    {erreicht && (
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Recare-Partner?
-                        </span>
-                        {(
-                          [
-                            ["", "Nicht besprochen"],
-                            ["ja", "Ja, Partner"],
-                            ["nein", "Nein"],
-                          ] as const
-                        ).map(([value, label]) => (
-                          <button
-                            key={value || "offen"}
-                            type="button"
-                            onClick={() => setRecare(value)}
-                            className={chip(recare === value)}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                     <div className="flex flex-wrap items-center gap-1.5">
                       {targetPersons.map((p) => (
                         <button

@@ -94,8 +94,8 @@ export default async function CallcenterPage() {
       <div>
         <h1 className="text-2xl font-semibold">Call-Center · Klinik-Kontakte</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Die Anruf-Liste der Kliniken &amp; Co. abarbeiten, Recare-Status
-          erfragen, jeden Anruf loggen. Das Call-Center arbeitet auf dem
+          Die Anruf-Liste der Kliniken &amp; Co. abarbeiten und jeden Anruf
+          loggen. Das Call-Center arbeitet auf dem
           zentralen CRM („Ziele“) — denselben Institutionen, Ansprechpartnern
           und Kontakt-Historien wie die PDLs auf ihren Dashboards.
         </p>
@@ -121,7 +121,7 @@ export default async function CallcenterPage() {
         </p>
         <p className="text-sm text-muted-foreground">
           Diesen Link dem Team schicken — dort gibt es genau diese
-          Anruf-Liste (Ansprechpartner, Historie, Recare, Anruf-Log) ohne das
+          Anruf-Liste (Ansprechpartner, Historie, Anruf-Log) ohne das
           übrige Dashboard. Kein Login nötig.
         </p>
         {ccToken ? (

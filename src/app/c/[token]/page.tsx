@@ -15,9 +15,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Call-Center-Link (token-gated, ohne Login): die Anruf-Liste der
- * Institutionen (Krankenhäuser & Co.) abarbeiten und den Recare-Status
- * pflegen — auf demselben CRM wie das interne „Ziele“ und die
- * PDL-Dashboards.
+ * Institutionen (Krankenhäuser & Co.) abarbeiten — auf demselben CRM wie
+ * das interne „Ziele“ und die PDL-Dashboards.
  */
 export default async function CallcenterTokenPage({
   params,
@@ -51,10 +50,9 @@ export default async function CallcenterTokenPage({
             Call-Center · Klinik-Kontakte
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Die Anruf-Liste der Kliniken abarbeiten: fällige zuerst,
-            Recare-Status erfragen, jeden Anruf loggen. Jeder Kontakt landet
-            im zentralen CRM — in derselben Institutions-Historie, mit der
-            auch die PDLs arbeiten.
+            Die Anruf-Liste der Kliniken abarbeiten: fällige zuerst, jeden
+            Anruf loggen. Jeder Kontakt landet im zentralen CRM — in
+            derselben Institutions-Historie, mit der auch die PDLs arbeiten.
           </p>
         </div>
       </div>

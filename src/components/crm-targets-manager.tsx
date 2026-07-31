@@ -716,28 +716,6 @@ export function CrmTargetsManager({
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                          <Badge
-                            variant="outline"
-                            className={
-                              (t.recare_partner ??
-                                (t.note?.includes("Recare-Partner")
-                                  ? true
-                                  : null)) === true
-                                ? "border-chart-4/40 bg-chart-4/10 text-chart-4"
-                                : (t.recare_partner ?? null) === false
-                                  ? "border-destructive/40 bg-destructive/10 text-destructive"
-                                  : "text-muted-foreground"
-                            }
-                          >
-                            {(t.recare_partner ??
-                              (t.note?.includes("Recare-Partner")
-                                ? true
-                                : null)) === true
-                              ? "Recare-Partner"
-                              : (t.recare_partner ?? null) === false
-                                ? "kein Recare"
-                                : "Recare?"}
-                          </Badge>
                           {isPdlAdded(t) && (
                             <Badge
                               variant="outline"

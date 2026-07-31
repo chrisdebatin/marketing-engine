@@ -76,13 +76,6 @@ const ART_ICON = {
   anruf: Phone,
 } as const;
 
-/** Recare-Status: Spalte, mit Fallback auf die Notiz-Markierung. */
-function recareOf(t: VisitTarget): boolean | null {
-  if (t.recare_partner != null) return t.recare_partner;
-  if (t.note?.includes("Recare-Partner")) return true;
-  return null;
-}
-
 /** Interne Import-Marker aus der Notiz filtern — die PDL sieht nur Nützliches. */
 function displayNote(note: string | null | undefined): string {
   if (!note) return "";
@@ -97,26 +90,6 @@ function displayNote(note: string | null | undefined): string {
         ),
     )
     .join(" · ");
-}
-
-function RecareChip({ t }: { t: VisitTarget }) {
-  const status = recareOf(t);
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
-        status === true && "bg-chart-4/15 text-chart-4",
-        status === false && "bg-destructive/10 text-destructive",
-        status === null && "bg-muted text-muted-foreground",
-      )}
-    >
-      {status === true
-        ? "Recare-Partner"
-        : status === false
-          ? "kein Recare"
-          : "Recare? erfragen"}
-    </span>
-  );
 }
 
 /**
@@ -297,7 +270,6 @@ export function CrmVisitList({
   const [qArt, setQArt] = useState("");
   const [qAnsprech, setQAnsprech] = useState("");
   const [qNotiz, setQNotiz] = useState("");
-  const [qRecare, setQRecare] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
 
   async function quickLog() {
@@ -316,7 +288,6 @@ export function CrmVisitList({
           ort: qMeta?.ort ?? "",
           ansprechpartner: qAnsprech,
           notiz: qNotiz,
-          recare: qRecare,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -361,7 +332,6 @@ export function CrmVisitList({
       setQArt("");
       setQAnsprech("");
       setQNotiz("");
-      setQRecare("");
       toast.success(
         `Geloggt: ${body.result.aktion} — ${body.result.ort}${body.result.neu ? " (neu zur Liste hinzugefügt)" : ""}`,
       );
@@ -378,7 +348,6 @@ export function CrmVisitList({
   const [art, setArt] = useState<string>("");
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [note, setNote] = useState("");
-  const [recare, setRecare] = useState<string>("");
   const [saving, setSaving] = useState(false);
   // Eigenen Ort hinzufügen
   const [addOpen, setAddOpen] = useState(false);
@@ -434,7 +403,6 @@ export function CrmVisitList({
   const [eAdresse, setEAdresse] = useState("");
   const [eOrt, setEOrt] = useState("");
   const [eAnsprech, setEAnsprech] = useState("");
-  const [eRecare, setERecare] = useState("");
   const [eInfo, setEInfo] = useState("");
 
   function startEdit(t: VisitTarget) {
@@ -444,9 +412,6 @@ export function CrmVisitList({
     setEAdresse(t.adresse ?? "");
     setEOrt(t.ort ?? "");
     setEAnsprech(t.ansprechpartner ?? "");
-    setERecare(
-      t.recare_partner === true ? "ja" : t.recare_partner === false ? "nein" : "",
-    );
     setEInfo(t.note ?? "");
   }
 
@@ -464,7 +429,6 @@ export function CrmVisitList({
           adresse: eAdresse,
           ort: eOrt,
           ansprechpartner: eAnsprech,
-          recare: eRecare,
           info: eInfo,
         }),
       });
@@ -624,7 +588,6 @@ export function CrmVisitList({
           kontakt_art: art,
           ansprechpartner,
           note,
-          recare,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
@@ -656,7 +619,6 @@ export function CrmVisitList({
       setArt("");
       setAnsprechpartner("");
       setNote("");
-      setRecare("");
       toast.success(
         body.placementCreated
           ? `Kontakt gespeichert — Box-Lieferung automatisch als Ort eingetragen. Nächstes Gespräch ab ${formatIsoDate(body.target.naechster_besuch)}`
@@ -919,29 +881,6 @@ export function CrmVisitList({
             <Check className="size-4" />
             {quickBusy ? "Speichere…" : "Loggen"}
           </Button>
-          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
-            {(
-              [
-                ["ja", "Recare: ja"],
-                ["nein", "Recare: nein"],
-                ["", "Recare: ?"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setQRecare(value)}
-                className={cn(
-                  "rounded-md px-2 py-1 text-xs transition-colors",
-                  qRecare === value
-                    ? "bg-background font-medium shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           <span className="text-xs text-muted-foreground">
             Neue Orte werden automatisch zur Liste hinzugefügt.
           </span>
@@ -1112,7 +1051,6 @@ export function CrmVisitList({
                             Prio {relevanzOf(t)}
                           </span>
                         )}
-                        <RecareChip t={t} />
                       </p>
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <MapPin className="size-3 shrink-0" />
@@ -1262,34 +1200,6 @@ export function CrmVisitList({
                         placeholder="Info zur Klinik (optional)"
                         maxLength={1000}
                       />
-                      <div className="flex flex-col gap-1.5">
-                        <Label className="text-xs">
-                          Arbeitet die Klinik mit Recare?
-                        </Label>
-                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-                          {(
-                            [
-                              ["ja", "Ja"],
-                              ["nein", "Nein"],
-                              ["", "Unbekannt"],
-                            ] as const
-                          ).map(([value, label]) => (
-                            <button
-                              key={label}
-                              type="button"
-                              onClick={() => setERecare(value)}
-                              className={cn(
-                                "rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
-                                eRecare === value
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground",
-                              )}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                       <div className="flex items-center gap-2">
                         <Button
                           type="button"
@@ -1351,34 +1261,6 @@ export function CrmVisitList({
                           autoComplete="off"
                           maxLength={200}
                         />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label className="text-xs">
-                          Arbeitet die Klinik mit Recare?
-                        </Label>
-                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
-                          {(
-                            [
-                              ["ja", "Ja"],
-                              ["nein", "Nein"],
-                              ["", "Weiß nicht"],
-                            ] as const
-                          ).map(([value, label]) => (
-                            <button
-                              key={label}
-                              type="button"
-                              onClick={() => setRecare(value)}
-                              className={cn(
-                                "rounded-md px-2 py-1.5 text-xs font-medium transition-colors sm:text-sm",
-                                recare === value
-                                  ? "bg-background text-foreground shadow-sm"
-                                  : "text-muted-foreground hover:text-foreground",
-                              )}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
                       </div>
                       <Textarea
                         value={note}

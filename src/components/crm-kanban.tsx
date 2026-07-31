@@ -69,12 +69,6 @@ const KAT_COLORS: Record<string, { border: string; dot: string; label: string }>
 const katColor = (kategorie: string | null | undefined) =>
   KAT_COLORS[kategorie ?? "sonstiges"] ?? KAT_COLORS.sonstiges;
 
-function recareOf(t: CrmTargetRow): boolean | null {
-  if (t.recare_partner != null) return t.recare_partner;
-  if (t.note?.includes("Recare-Partner")) return true;
-  return null;
-}
-
 function stageOf(t: CrmTargetRow, today: string): Stage {
   const s = crmStatus(t, today);
   return s === "erstbesuch" ? "neu" : s === "faellig" ? "faellig" : "kontakt";
@@ -82,8 +76,8 @@ function stageOf(t: CrmTargetRow, today: string): Stage {
 
 /**
  * CRM-Pipeline als Kanban: Karten wandern automatisch, sobald die PDLs
- * Kontakte loggen (Erstkontakt → In Kontakt, Fälligkeit per Datum) oder
- * Recare bestätigt wird — die Spalten spiegeln echte Aktivität wider.
+ * Kontakte loggen (Erstkontakt → In Kontakt, Fälligkeit per Datum) —
+ * die Spalten spiegeln echte Aktivität wider.
  */
 export function CrmKanban({
   targets,
@@ -263,16 +257,6 @@ export function CrmKanban({
                             </span>
                           )}
                           {t.besuchs_notiz && <span>„{t.besuchs_notiz}“</span>}
-                          {recareOf(t) === true && (
-                            <span className="text-chart-4">
-                              ✓ Recare-Partner
-                            </span>
-                          )}
-                          {recareOf(t) === false && (
-                            <span className="text-destructive">
-                              arbeitet nicht mit Recare
-                            </span>
-                          )}
                           <span className="flex items-center gap-1">
                             <Phone className="size-3" />
                             Follow-up alle {t.intervall_wochen} Wochen
