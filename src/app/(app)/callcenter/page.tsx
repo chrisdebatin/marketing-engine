@@ -57,17 +57,22 @@ export default async function CallcenterPage() {
     return d.toISOString().slice(0, 10);
   })();
 
-  const [{ data: targetRows }, { data: personRows }, { data: contactRows }] =
-    await Promise.all([
-      admin.from("crm_targets").select("*").order("name").limit(2000),
-      admin.from("crm_persons").select("*").order("name").limit(4000),
-      admin
-        .from("crm_contacts")
-        .select("id, target_id, kontakt_art, ansprechpartner, note, contact_date")
-        .order("contact_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(500),
-    ]);
+  const [
+    { data: targetRows },
+    { data: personRows },
+    { data: contactRows },
+    { data: hubRows },
+  ] = await Promise.all([
+    admin.from("crm_targets").select("*").order("name").limit(2000),
+    admin.from("crm_persons").select("*").order("name").limit(4000),
+    admin
+      .from("crm_contacts")
+      .select("id, target_id, kontakt_art, ansprechpartner, note, contact_date")
+      .order("contact_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(500),
+    admin.from("hubs").select("id, name, pdl_name, pdl_phone").order("name"),
+  ]);
 
   const targets = (targetRows ?? []) as CrmTargetRow[];
   const contacts = (contactRows ?? []) as CallcenterContactRow[];
@@ -143,6 +148,7 @@ export default async function CallcenterPage() {
         targets={targets}
         persons={(personRows ?? []) as CrmPersonRow[]}
         contacts={contacts}
+        hubs={hubRows ?? []}
       />
     </div>
   );

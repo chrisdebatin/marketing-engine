@@ -27,17 +27,22 @@ export default async function CallcenterTokenPage({
   if (!(await isCallcenterToken(token))) notFound();
 
   const admin = createAdminClient();
-  const [{ data: targetRows }, { data: personRows }, { data: contactRows }] =
-    await Promise.all([
-      admin.from("crm_targets").select("*").order("name").limit(2000),
-      admin.from("crm_persons").select("*").order("name").limit(4000),
-      admin
-        .from("crm_contacts")
-        .select("id, target_id, kontakt_art, ansprechpartner, note, contact_date")
-        .order("contact_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(500),
-    ]);
+  const [
+    { data: targetRows },
+    { data: personRows },
+    { data: contactRows },
+    { data: hubRows },
+  ] = await Promise.all([
+    admin.from("crm_targets").select("*").order("name").limit(2000),
+    admin.from("crm_persons").select("*").order("name").limit(4000),
+    admin
+      .from("crm_contacts")
+      .select("id, target_id, kontakt_art, ansprechpartner, note, contact_date")
+      .order("contact_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(500),
+    admin.from("hubs").select("id, name, pdl_name, pdl_phone").order("name"),
+  ]);
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">
@@ -61,6 +66,7 @@ export default async function CallcenterTokenPage({
         targets={(targetRows ?? []) as CrmTargetRow[]}
         persons={(personRows ?? []) as CrmPersonRow[]}
         contacts={(contactRows ?? []) as CallcenterContactRow[]}
+        hubs={hubRows ?? []}
       />
     </main>
   );

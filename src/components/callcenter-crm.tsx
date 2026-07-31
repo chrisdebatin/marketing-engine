@@ -3,9 +3,12 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
+  BookOpen,
+  Building2,
   CalendarClock,
   ChevronDown,
   ChevronUp,
+  ListChecks,
   Mail,
   MapPin,
   Phone,
@@ -24,6 +27,7 @@ import {
   todayIso,
 } from "@/lib/crm";
 import { collectGeoTags, geoChip } from "@/lib/geo-tags";
+import { splitPdlNames, splitPdlPhones } from "@/lib/pdl";
 import { logCallcenterCall } from "@/app/(app)/frontoffice/actions";
 import type {
   CrmPersonRow,
@@ -39,19 +43,31 @@ export interface CallcenterContactRow {
   contact_date: string;
 }
 
+export interface CallcenterHub {
+  id: string;
+  name: string;
+  pdl_name: string | null;
+  pdl_phone: string | null;
+}
+
+/** Nur Ziffern/+ für tel:-Links. */
+const telHref = (nummer: string) => `tel:${nummer.replace(/[^\d+]/g, "")}`;
+
 /**
- * Call-Center-Ansicht des CRM: Anruf-Liste aller Institutionen mit
- * Geo-Tag-/Kategorie-Filter, Ansprechpartnern (klickbare Rufnummern),
- * Kontakt-Historie und direktem Anruf-Log.
+ * Call-Center-Ansicht des CRM, bewusst einfach gehalten: kurze Anleitung,
+ * ausklappbarer Gesprächsleitfaden, Anruf-Liste mit klickbaren Nummern,
+ * zuständigem Standort (PDL + Telefon) und direktem Anruf-Log.
  */
 export function CallcenterCrm({
   targets,
   persons,
   contacts,
+  hubs = [],
 }: {
   targets: CrmTargetRow[];
   persons: CrmPersonRow[];
   contacts: CallcenterContactRow[];
+  hubs?: CallcenterHub[];
 }) {
   const [pending, startTransition] = useTransition();
   const today = todayIso();
@@ -69,14 +85,35 @@ export function CallcenterCrm({
     contactsByTarget.set(c.target_id, arr);
   }
 
+  /**
+   * Zuständiger Standort einer Klinik: die Hub-Zuteilung aus dem CRM;
+   * fehlt sie, der Standort, dessen Name zum Ort/Geo-Tag passt.
+   */
+  function hubFor(t: CrmTargetRow): CallcenterHub | null {
+    if (t.hub_id) {
+      const direct = hubs.find((h) => h.id === t.hub_id);
+      if (direct) return direct;
+    }
+    const city = `${t.geo_tag ?? ""} ${t.ort ?? ""}`.toLowerCase();
+    if (!city.trim()) return null;
+    return (
+      hubs.find((h) => {
+        const hubCity = h.name
+          .replace(/^(Alltagshilfe|Tagespflege|Tagespflgege)\s+/i, "")
+          .toLowerCase();
+        return hubCity.length >= 4 && city.includes(hubCity);
+      }) ?? null
+    );
+  }
+
   // Filter
   const [query, setQuery] = useState("");
   const [geoFilter, setGeoFilter] = useState("");
-  // Das Call-Center macht primär Klinik-Kontakte — Start-Filter Krankenhaus.
   const [katFilter, setKatFilter] = useState("krankenhaus");
   const [statusFilter, setStatusFilter] = useState<
     "faellig" | "erstbesuch" | "alle"
   >("faellig");
+  const [skriptOpen, setSkriptOpen] = useState(false);
 
   // Anruf-Log-Formular (je aufgeklapptem Ziel)
   const [openId, setOpenId] = useState<string | null>(null);
@@ -154,13 +191,6 @@ export function CallcenterCrm({
       a.name.localeCompare(b.name, "de"),
   );
 
-  const faelligGesamt = targets.filter(
-    (t) => crmStatus(t, today) === "faellig",
-  ).length;
-  const offenGesamt = targets.filter(
-    (t) => crmStatus(t, today) === "erstbesuch",
-  ).length;
-
   const chip = (active: boolean) =>
     cn(
       "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors select-none",
@@ -171,26 +201,141 @@ export function CallcenterCrm({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter */}
+      {/* So funktioniert's */}
+      <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <ListChecks className="size-4 text-primary" />
+          So funktioniert&apos;s — in 3 Schritten
+        </p>
+        <ol className="flex list-decimal flex-col gap-1 pl-5 text-sm text-muted-foreground">
+          <li>
+            <span className="font-medium text-foreground">Oben anfangen:</span>{" "}
+            Die Liste ist automatisch sortiert — was oben steht, ist jetzt
+            dran. Auf die Telefonnummer tippen, um zu wählen.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">
+              Nach dem Leitfaden sprechen:
+            </span>{" "}
+            Den Gesprächsleitfaden unten aufklappen. Ziel: den Sozialdienst
+            erreichen, uns vorstellen, Ansprechpartner mit Durchwahl notieren.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">
+              Sofort loggen:
+            </span>{" "}
+            Direkt nach jedem Gespräch auf „Anruf loggen“ — auch wenn niemand
+            erreicht wurde. Der nächste Anruf-Termin wird automatisch gesetzt.
+          </li>
+        </ol>
+      </div>
+
+      {/* Gesprächsleitfaden */}
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Suchen: Institution, Ort, Ansprechpartner, Telefon…"
-            className="min-w-56 flex-1"
-            autoComplete="off"
-          />
-          <span className="text-xs text-muted-foreground">
-            {faelligGesamt} fällig · {offenGesamt} nie kontaktiert
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSkriptOpen((v) => !v)}
+          className="flex cursor-pointer items-center gap-1.5 text-sm font-semibold"
+        >
+          <BookOpen className="size-4 text-primary" />
+          Gesprächsleitfaden (Skript)
+          {skriptOpen ? (
+            <ChevronUp className="size-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="size-4 text-muted-foreground" />
+          )}
+        </button>
+        {skriptOpen && (
+          <div className="flex flex-col gap-3 text-sm">
+            <div>
+              <p className="font-medium">1. Begrüßung &amp; durchstellen lassen</p>
+              <p className="mt-0.5 rounded-lg bg-muted/50 p-2.5 text-muted-foreground italic">
+                „Guten Tag, mein Name ist [dein Name] von der Pflegeunion.
+                Könnten Sie mich bitte mit dem Sozialdienst bzw. dem
+                Case Management verbinden?“
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">2. Kurz vorstellen (max. 2 Sätze)</p>
+              <p className="mt-0.5 rounded-lg bg-muted/50 p-2.5 text-muted-foreground italic">
+                „Wir sind die Pflegeunion — ambulante Pflege, Intensivpflege,
+                Alltagshilfe und Tagespflege, mit Standorten in Ihrer Region.
+                Wir haben aktuell freie Kapazitäten und können Patientinnen
+                und Patienten aus der Entlassung kurzfristig übernehmen.“
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">3. Die drei Kernfragen</p>
+              <ul className="mt-0.5 flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
+                <li>
+                  „Wer ist bei Ihnen für die Überleitung zuständig — und wie
+                  erreiche ich die Person direkt?“ (Name + Durchwahl notieren!)
+                </li>
+                <li>
+                  „Wie läuft die Patientenüberleitung bei Ihnen ab — dürfen
+                  wir Ihnen Infomaterial oder unsere Kontaktbox zukommen
+                  lassen?“
+                </li>
+                <li>
+                  „Haben Sie aktuell Patientinnen oder Patienten, für die eine
+                  Versorgung gesucht wird?“
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium">4. Übergabe an den Standort</p>
+              <p className="mt-0.5 rounded-lg bg-muted/50 p-2.5 text-muted-foreground italic">
+                „Für konkrete Patienten erreichen Sie unsere
+                Pflegedienstleitung direkt — ich gebe Ihnen die Nummer.“
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                → Die zuständige PDL mit Telefonnummer steht auf jeder Karte
+                unten („Zuständiger Standort“). Diese Nummer weitergeben.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">Wenn Einwände kommen</p>
+              <ul className="mt-0.5 flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
+                <li>
+                  „Wir haben schon Partner“ → „Verstehe ich gut. Gerade bei
+                  kurzfristigen Entlassungen oder vollen Partnern sind wir
+                  eine schnelle zweite Option — darf ich Ihnen einfach unsere
+                  Kontaktdaten dalassen?“
+                </li>
+                <li>
+                  „Keine Zeit“ → „Kein Problem — wann passt es besser? Ich
+                  rufe gern erneut an.“ (Beim Loggen „Nicht erreicht“ wählen —
+                  Wiedervorlage kommt automatisch.)
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-medium">5. Abschluss</p>
+              <p className="mt-0.5 text-muted-foreground">
+                Bedanken, Namen wiederholen, auflegen — und sofort loggen:
+                Mit wem gesprochen? Was vereinbart? Neuen Ansprechpartner
+                speichern, wenn du einen Namen bekommen hast.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Suche & Filter */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Suchen: Klinik, Ort, Ansprechpartner, Telefon…"
+          className="w-full"
+          autoComplete="off"
+        />
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
               ["faellig", "Jetzt anrufen (fällig)"],
               ["erstbesuch", "Noch nie kontaktiert"],
-              ["alle", "Alle"],
+              ["alle", "Alle anzeigen"],
             ] as const
           ).map(([value, label]) => (
             <button
@@ -203,13 +348,6 @@ export function CallcenterCrm({
             </button>
           ))}
           <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-          <button
-            type="button"
-            onClick={() => setKatFilter("")}
-            className={chip(katFilter === "")}
-          >
-            Alle Kategorien
-          </button>
           {PLACE_KINDS.map((p) => (
             <button
               key={p.key}
@@ -245,6 +383,10 @@ export function CallcenterCrm({
             ))}
           </div>
         )}
+        <p className="text-xs text-muted-foreground">
+          {sorted.length} in der Liste — fällige zuerst. Filter antippen zum
+          Ein-/Ausschalten.
+        </p>
       </div>
 
       {/* Anruf-Liste */}
@@ -252,7 +394,7 @@ export function CallcenterCrm({
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
           {targets.length === 0
             ? "Noch keine Institutionen im CRM — das Team importiert sie unter „Ziel-Orte“."
-            : "Keine Institution passt zu Suche/Filter."}
+            : "Nichts gefunden — Suche leeren oder oben „Alle anzeigen“ wählen."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -261,6 +403,10 @@ export function CallcenterCrm({
             const status = crmStatus(t, today);
             const history = (contactsByTarget.get(t.id) ?? []).slice(0, 5);
             const targetPersons = personsByTarget.get(t.id) ?? [];
+            const hub = hubFor(t);
+            const pdlNamen = splitPdlNames(hub?.pdl_name ?? null);
+            const pdlTelefon = splitPdlPhones(hub?.pdl_phone ?? null)[0] ?? null;
+            const hauptnummer = targetPersons.find((p) => p.telefon)?.telefon;
             return (
               <li
                 key={t.id}
@@ -293,29 +439,31 @@ export function CallcenterCrm({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+
+                    {/* Wen anrufen? */}
                     {targetPersons.map((p) => (
                       <p
                         key={p.id}
-                        className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"
+                        className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm"
                       >
-                        <span className="flex items-center gap-1">
-                          <UserRound className="size-3" />
+                        <span className="flex items-center gap-1 text-muted-foreground">
+                          <UserRound className="size-3.5" />
                           {p.name}
                           {p.funktion ? ` (${p.funktion})` : ""}
                         </span>
                         {p.telefon && (
                           <a
-                            href={`tel:${p.telefon.replace(/[^\d+]/g, "")}`}
-                            className="flex items-center gap-1 font-medium text-primary hover:underline"
+                            href={telHref(p.telefon)}
+                            className="flex items-center gap-1 font-semibold text-primary hover:underline"
                           >
-                            <Phone className="size-3" />
+                            <Phone className="size-3.5" />
                             {p.telefon}
                           </a>
                         )}
                         {p.email && (
                           <a
                             href={`mailto:${p.email}`}
-                            className="flex items-center gap-1 text-primary hover:underline"
+                            className="flex items-center gap-1 text-xs text-primary hover:underline"
                           >
                             <Mail className="size-3" />
                             {p.email}
@@ -324,43 +472,85 @@ export function CallcenterCrm({
                       </p>
                     ))}
                     {targetPersons.length === 0 && t.ansprechpartner && (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                        <UserRound className="size-3" />
+                      <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+                        <UserRound className="size-3.5" />
                         {t.ansprechpartner}
                       </p>
                     )}
+
+                    {/* Zuständiger Standort: dahin werden Patienten vermittelt */}
+                    {hub && (
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 rounded-lg bg-muted/50 px-2 py-1 text-xs">
+                        <span className="flex items-center gap-1 font-medium">
+                          <Building2 className="size-3" />
+                          Zuständiger Standort: {hub.name}
+                        </span>
+                        {pdlNamen.length > 0 && (
+                          <span className="text-muted-foreground">
+                            PDL: {pdlNamen.join(", ")}
+                          </span>
+                        )}
+                        {pdlTelefon && (
+                          <a
+                            href={telHref(pdlTelefon)}
+                            className="flex items-center gap-1 font-semibold text-primary hover:underline"
+                          >
+                            <Phone className="size-3" />
+                            {pdlTelefon}
+                          </a>
+                        )}
+                        <span className="w-full text-muted-foreground">
+                          → Diese Nummer bei konkreten Patienten an die Klinik
+                          weitergeben.
+                        </span>
+                      </p>
+                    )}
+
                     {t.letzter_besuch && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         <CalendarClock className="mr-1 inline size-3" />
-                        {kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am{" "}
-                        {formatIsoDate(t.letzter_besuch)}
+                        Zuletzt: {kontaktArtLabel(t.letzte_kontakt_art) ||
+                          "Kontakt"}{" "}
+                        am {formatIsoDate(t.letzter_besuch)}
                         {t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""}
                       </p>
                     )}
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={open ? "secondary" : "default"}
-                    onClick={() => openLog(t.id)}
-                  >
-                    <PhoneCall className="size-4" />
-                    Anruf loggen
-                    {open ? (
-                      <ChevronUp className="size-3.5" />
-                    ) : (
-                      <ChevronDown className="size-3.5" />
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {hauptnummer && (
+                      <Button size="sm" render={<a href={telHref(hauptnummer)} />}>
+                        <PhoneCall className="size-4" />
+                        {hauptnummer}
+                      </Button>
                     )}
-                  </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={open ? "secondary" : "outline"}
+                      onClick={() => openLog(t.id)}
+                    >
+                      Anruf loggen
+                      {open ? (
+                        <ChevronUp className="size-3.5" />
+                      ) : (
+                        <ChevronDown className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {open && (
                   <div className="flex flex-col gap-2.5 rounded-lg border bg-background p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Kurz festhalten, wie der Anruf lief — mehr braucht es
+                      nicht. Bei „Nicht erreicht“ steht die Klinik in 3 Tagen
+                      automatisch wieder oben in der Liste.
+                    </p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       {(
                         [
                           [true, "Erreicht"],
-                          [false, "Nicht erreicht (in 3 Tagen wieder)"],
+                          [false, "Nicht erreicht"],
                         ] as const
                       ).map(([value, label]) => (
                         <button
@@ -387,7 +577,7 @@ export function CallcenterCrm({
                       <Input
                         value={ansprechpartner}
                         onChange={(e) => setAnsprechpartner(e.target.value)}
-                        placeholder="Gesprochen mit… (Name)"
+                        placeholder="Mit wem gesprochen? (Name)"
                         autoComplete="off"
                         maxLength={200}
                         className="w-64 bg-background"
@@ -408,14 +598,14 @@ export function CallcenterCrm({
                               onChange={(e) => setSavePerson(e.target.checked)}
                               className="size-4 accent-primary"
                             />
-                            Als Ansprechpartner speichern
+                            Als neuen Ansprechpartner speichern
                           </label>
                           {savePerson && (
                             <>
                               <Input
                                 value={pFunktion}
                                 onChange={(e) => setPFunktion(e.target.value)}
-                                placeholder="Funktion, z. B. Case Management"
+                                placeholder="Funktion, z. B. Sozialdienst"
                                 maxLength={120}
                                 className="w-56 bg-background"
                               />
@@ -437,7 +627,7 @@ export function CallcenterCrm({
                       maxLength={1000}
                       placeholder={
                         erreicht
-                          ? "Gesprächsnotiz (Pflicht): Was wurde besprochen, nächste Schritte…"
+                          ? "Gesprächsnotiz (Pflicht): Was wurde besprochen? Nächste Schritte?"
                           : "Notiz (optional), z. B. Mailbox, Rückruf erbeten…"
                       }
                     />
@@ -454,7 +644,7 @@ export function CallcenterCrm({
                     {history.length > 0 && (
                       <div className="flex flex-col gap-1 border-t pt-2">
                         <p className="text-xs font-semibold text-muted-foreground">
-                          Letzte Kontakte
+                          Bisherige Kontakte
                         </p>
                         {history.map((c) => (
                           <p
@@ -476,7 +666,7 @@ export function CallcenterCrm({
           })}
           {sorted.length > 100 && (
             <p className="text-center text-xs text-muted-foreground">
-              {sorted.length - 100} weitere — Suche/Filter nutzen.
+              {sorted.length - 100} weitere — Suche oder Filter nutzen.
             </p>
           )}
         </ul>
