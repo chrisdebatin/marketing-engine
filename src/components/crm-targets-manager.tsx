@@ -6,9 +6,13 @@ import {
   Building2,
   CalendarClock,
   Import,
+  Mail,
+  MapPin,
   Pencil,
+  Phone,
   Plus,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,11 +37,15 @@ import {
   todayIso,
 } from "@/lib/crm";
 import {
+  createCrmPerson,
   createCrmTarget,
+  deleteCrmPerson,
   deleteCrmTarget,
   importCrmTargets,
   updateCrmTarget,
 } from "@/app/(app)/ziele/actions";
+import { collectGeoTags, geoChip } from "@/lib/geo-tags";
+import { CrmCsvImport } from "@/components/crm-csv-import";
 
 export interface CrmTargetRow {
   id: string;
@@ -56,6 +64,17 @@ export interface CrmTargetRow {
   recare_partner?: boolean | null;
   plan?: string | null;
   relevanz?: number | null;
+  geo_tag?: string | null;
+}
+
+export interface CrmPersonRow {
+  id: string;
+  target_id: string;
+  name: string;
+  funktion: string | null;
+  telefon: string | null;
+  email: string | null;
+  notiz: string | null;
 }
 
 export interface HubOption {
@@ -98,11 +117,20 @@ function StatusBadge({ t }: { t: CrmTargetRow }) {
 export function CrmTargetsManager({
   targets,
   hubs,
+  persons = [],
 }: {
   targets: CrmTargetRow[];
   hubs: HubOption[];
+  persons?: CrmPersonRow[];
 }) {
   const [pending, startTransition] = useTransition();
+
+  const personsByTarget = new Map<string, CrmPersonRow[]>();
+  for (const p of persons) {
+    const arr = personsByTarget.get(p.target_id) ?? [];
+    arr.push(p);
+    personsByTarget.set(p.target_id, arr);
+  }
 
   const hubItems: Record<string, string> = {
     [HUB_NONE]: "Noch keinem Hub zugeteilt",
@@ -145,11 +173,47 @@ export function CrmTargetsManager({
   >("alle");
   const [prioFilter, setPrioFilter] = useState<0 | 1 | 2 | 3>(0);
   const [nurPdl, setNurPdl] = useState(false);
+  const [geoFilter, setGeoFilter] = useState("");
 
   // Bearbeiten
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState<CrmTargetRow | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Neuer Ansprechpartner (im Bearbeiten-Bereich)
+  const [pName, setPName] = useState("");
+  const [pFunktion, setPFunktion] = useState("");
+  const [pTelefon, setPTelefon] = useState("");
+  const [pEmail, setPEmail] = useState("");
+
+  function addPerson(targetId: string) {
+    startTransition(async () => {
+      const res = await createCrmPerson({
+        target_id: targetId,
+        name: pName,
+        funktion: pFunktion,
+        telefon: pTelefon,
+        email: pEmail,
+      });
+      if (res.ok) {
+        toast.success("Ansprechpartner gespeichert");
+        setPName("");
+        setPFunktion("");
+        setPTelefon("");
+        setPEmail("");
+      } else {
+        toast.error(res.error);
+      }
+    });
+  }
+
+  function removePerson(id: string) {
+    startTransition(async () => {
+      const res = await deleteCrmPerson(id);
+      if (res.ok) toast.success("Ansprechpartner gelöscht");
+      else toast.error(res.error);
+    });
+  }
 
   function create() {
     startTransition(async () => {
@@ -205,6 +269,7 @@ export function CrmTargetsManager({
         plan: edit.plan ?? "",
         relevanz: edit.relevanz ?? "",
         intervall_wochen: edit.intervall_wochen,
+        geo_tag: edit.geo_tag ?? "",
       });
       if (res.ok) {
         toast.success("Ziel-Ort aktualisiert");
@@ -231,9 +296,14 @@ export function CrmTargetsManager({
   // Suche + Filter über alle Ziele, dann Gruppierung.
   const isPdlAdded = (t: CrmTargetRow) => /Von der PDL/i.test(t.note ?? "");
   const q = query.trim().toLowerCase();
+  const geoTags = collectGeoTags(targets);
   const filtered = targets.filter((t) => {
     if (q) {
-      const hay = `${t.name} ${t.ort ?? ""} ${t.adresse ?? ""} ${t.ansprechpartner ?? ""}`.toLowerCase();
+      const personText = (personsByTarget.get(t.id) ?? [])
+        .map((p) => `${p.name} ${p.telefon ?? ""}`)
+        .join(" ");
+      const hay =
+        `${t.name} ${t.ort ?? ""} ${t.adresse ?? ""} ${t.ansprechpartner ?? ""} ${t.geo_tag ?? ""} ${personText}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (statusFilter !== "alle" && crmStatus(t, todayIso()) !== statusFilter) {
@@ -241,6 +311,7 @@ export function CrmTargetsManager({
     }
     if (prioFilter !== 0 && relevanzOf(t) !== prioFilter) return false;
     if (nurPdl && !isPdlAdded(t)) return false;
+    if (geoFilter && (t.geo_tag ?? "") !== geoFilter) return false;
     return true;
   });
 
@@ -332,6 +403,10 @@ export function CrmTargetsManager({
             >
               {pending ? "Importiere…" : "Importieren"}
             </Button>
+            <p className="mt-1 text-sm font-medium">
+              Oder: CSV-Datei mit Spalten-Zuordnung
+            </p>
+            <CrmCsvImport hubs={hubs} />
           </div>
         )}
 
@@ -502,6 +577,30 @@ export function CrmTargetsManager({
               {filtered.length} von {targets.length} Orten
             </span>
           </div>
+          {geoTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <MapPin className="size-3.5 text-muted-foreground" />
+              <button
+                type="button"
+                onClick={() => setGeoFilter("")}
+                className={cnFilterChip(geoFilter === "")}
+              >
+                Alle Regionen
+              </button>
+              {geoTags.slice(0, 15).map(({ tag, count }) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setGeoFilter(geoFilter === tag ? "" : tag)}
+                  className={`cursor-pointer rounded-full px-2.5 py-1 text-xs font-medium select-none ${geoChip(tag)} ${
+                    geoFilter === tag ? "ring-2 ring-primary" : ""
+                  }`}
+                >
+                  {tag} ({count})
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -548,7 +647,16 @@ export function CrmTargetsManager({
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-medium">{t.name}</p>
+                          <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                            {t.name}
+                            {t.geo_tag && (
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${geoChip(t.geo_tag)}`}
+                              >
+                                {t.geo_tag}
+                              </span>
+                            )}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             {[
                               t.kategorie ? placeKindLabel(t.kategorie) : null,
@@ -559,6 +667,36 @@ export function CrmTargetsManager({
                               .join(" · ") || "—"}
                             {` · Follow-up alle ${t.intervall_wochen} Wochen`}
                           </p>
+                          {(personsByTarget.get(t.id) ?? []).map((p) => (
+                            <p
+                              key={p.id}
+                              className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"
+                            >
+                              <span className="flex items-center gap-1">
+                                <UserRound className="size-3" />
+                                {p.name}
+                                {p.funktion ? ` (${p.funktion})` : ""}
+                              </span>
+                              {p.telefon && (
+                                <a
+                                  href={`tel:${p.telefon.replace(/[^\d+]/g, "")}`}
+                                  className="flex items-center gap-1 text-primary hover:underline"
+                                >
+                                  <Phone className="size-3" />
+                                  {p.telefon}
+                                </a>
+                              )}
+                              {p.email && (
+                                <a
+                                  href={`mailto:${p.email}`}
+                                  className="flex items-center gap-1 text-primary hover:underline"
+                                >
+                                  <Mail className="size-3" />
+                                  {p.email}
+                                </a>
+                              )}
+                            </p>
+                          ))}
                           {t.letzter_besuch && (
                             <p className="mt-0.5 text-xs text-muted-foreground">
                               <CalendarClock className="mr-1 inline size-3" />
@@ -774,6 +912,15 @@ export function CrmTargetsManager({
                               className="sm:w-56"
                               maxLength={120}
                             />
+                            <Input
+                              value={edit.geo_tag ?? ""}
+                              onChange={(e) =>
+                                setEdit({ ...edit, geo_tag: e.target.value })
+                              }
+                              placeholder="Geo-Tag (leer = aus Ort)"
+                              className="sm:w-48"
+                              maxLength={60}
+                            />
                           </div>
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                             <Select
@@ -832,6 +979,91 @@ export function CrmTargetsManager({
                               maxLength={1000}
                             />
                           </div>
+                          {/* Ansprechpartner pflegen */}
+                          <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-2.5">
+                            <p className="flex items-center gap-1.5 text-xs font-semibold">
+                              <UserRound className="size-3.5 text-primary" />
+                              Ansprechpartner
+                            </p>
+                            {(personsByTarget.get(t.id) ?? []).length === 0 && (
+                              <p className="text-xs text-muted-foreground">
+                                Noch keine Ansprechpartner hinterlegt.
+                              </p>
+                            )}
+                            {(personsByTarget.get(t.id) ?? []).map((p) => (
+                              <div
+                                key={p.id}
+                                className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm"
+                              >
+                                <span className="font-medium">{p.name}</span>
+                                {p.funktion && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {p.funktion}
+                                  </span>
+                                )}
+                                {p.telefon && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {p.telefon}
+                                  </span>
+                                )}
+                                {p.email && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {p.email}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  disabled={pending}
+                                  onClick={() => removePerson(p.id)}
+                                  className="text-muted-foreground hover:text-destructive"
+                                  aria-label="Ansprechpartner löschen"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <Input
+                                value={pName}
+                                onChange={(e) => setPName(e.target.value)}
+                                placeholder="Name"
+                                className="sm:flex-1"
+                                maxLength={200}
+                              />
+                              <Input
+                                value={pFunktion}
+                                onChange={(e) => setPFunktion(e.target.value)}
+                                placeholder="Funktion, z. B. Case Management"
+                                className="sm:w-56"
+                                maxLength={120}
+                              />
+                              <Input
+                                value={pTelefon}
+                                onChange={(e) => setPTelefon(e.target.value)}
+                                placeholder="Telefon"
+                                className="sm:w-44"
+                                maxLength={60}
+                              />
+                              <Input
+                                value={pEmail}
+                                onChange={(e) => setPEmail(e.target.value)}
+                                placeholder="E-Mail"
+                                className="sm:w-56"
+                                maxLength={200}
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={pending || !pName.trim()}
+                                onClick={() => addPerson(t.id)}
+                              >
+                                <Plus className="size-4" />
+                                Hinzufügen
+                              </Button>
+                            </div>
+                          </div>
+
                           <div className="flex items-center gap-2">
                             <Button
                               type="button"

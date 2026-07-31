@@ -35,6 +35,8 @@ export const KONTAKT_ARTEN = [
 
 export function kontaktArtLabel(key: string | null | undefined): string {
   if (!key) return "";
+  // 'lead' wird nicht aktiv gewählt, sondern vom Frontoffice geloggt.
+  if (key === "lead") return "Lead eingegangen";
   return KONTAKT_ARTEN.find((k) => k.key === key)?.label ?? key;
 }
 

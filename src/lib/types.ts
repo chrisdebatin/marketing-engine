@@ -441,6 +441,7 @@ export interface Database {
           recare_partner: boolean | null;
           plan: string | null;
           relevanz: number | null;
+          geo_tag: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -460,6 +461,7 @@ export interface Database {
           recare_partner?: boolean | null;
           plan?: string | null;
           relevanz?: number | null;
+          geo_tag?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;
@@ -540,6 +542,7 @@ export interface Database {
           quelle_detail: string | null;
           lead_name: string | null;
           hub_id: string | null;
+          target_id: string | null;
           notiz: string | null;
           created_at: string | null;
         };
@@ -551,6 +554,7 @@ export interface Database {
           quelle_detail?: string | null;
           lead_name?: string | null;
           hub_id?: string | null;
+          target_id?: string | null;
           notiz?: string | null;
           created_at?: string | null;
         };
@@ -637,6 +641,30 @@ export interface Database {
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_contacts"]["Insert"]>;
+        Relationships: [];
+      };
+      crm_persons: {
+        Row: {
+          id: string;
+          target_id: string;
+          name: string;
+          funktion: string | null;
+          telefon: string | null;
+          email: string | null;
+          notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_id: string;
+          name: string;
+          funktion?: string | null;
+          telefon?: string | null;
+          email?: string | null;
+          notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_persons"]["Insert"]>;
         Relationships: [];
       };
       note_topics: {

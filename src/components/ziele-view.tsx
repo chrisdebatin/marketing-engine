@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { CrmKanban } from "@/components/crm-kanban";
 import {
   CrmTargetsManager,
+  type CrmPersonRow,
   type CrmTargetRow,
 } from "@/components/crm-targets-manager";
 
@@ -16,9 +17,11 @@ import {
 export function ZieleView({
   targets,
   hubs,
+  persons = [],
 }: {
   targets: CrmTargetRow[];
   hubs: { id: string; name: string }[];
+  persons?: CrmPersonRow[];
 }) {
   const [view, setView] = useState<"kanban" | "liste">("kanban");
 
@@ -51,7 +54,7 @@ export function ZieleView({
       {view === "kanban" ? (
         <CrmKanban targets={targets} hubs={hubs} />
       ) : (
-        <CrmTargetsManager targets={targets} hubs={hubs} />
+        <CrmTargetsManager targets={targets} hubs={hubs} persons={persons} />
       )}
     </div>
   );

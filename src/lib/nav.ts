@@ -9,6 +9,7 @@ import {
   Inbox,
   Map,
   Megaphone,
+  PhoneOutgoing,
   Send,
   Settings,
   Sparkles,
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/hubs", label: "Hubs", Icon: Building2 },
       { href: "/ziele", label: "Ziele (CRM)", Icon: Target },
+      { href: "/callcenter", label: "Call-Center", Icon: PhoneOutgoing },
       { href: "/kapazitaet", label: "Kapazität", Icon: BedDouble },
       { href: "/themen", label: "Themen", Icon: BookOpen },
     ],

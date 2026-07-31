@@ -216,7 +216,7 @@ export async function logContactOnTarget(input: {
 }
 
 /** Namens-Normalisierung für den Abgleich Auslage-Ort ↔ CRM-Ziel. */
-function normName(s: string): string {
+export function normName(s: string): string {
   return s
     .toLowerCase()
     .replace(/\(.*?\)/g, "")

@@ -45,16 +45,18 @@ export default async function ZielePage() {
   const admin = createAdminClient();
   const followup = await getFollowupWeeks();
 
-  // Fallback ?? [] — fehlt Migration 0026, darf die Seite nicht crashen.
-  const [{ data }, { data: contactRows }] = await Promise.all([
-    admin.from("crm_targets").select("*").order("name"),
-    admin
-      .from("crm_contacts")
-      .select("id, hub_id, target_id, kontakt_art, ansprechpartner, note, contact_date")
-      .order("contact_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(30),
-  ]);
+  // Fallback ?? [] — fehlt Migration 0026/0041, darf die Seite nicht crashen.
+  const [{ data }, { data: contactRows }, { data: personRows }] =
+    await Promise.all([
+      admin.from("crm_targets").select("*").order("name"),
+      admin
+        .from("crm_contacts")
+        .select("id, hub_id, target_id, kontakt_art, ansprechpartner, note, contact_date")
+        .order("contact_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(30),
+      admin.from("crm_persons").select("*").order("name"),
+    ]);
 
   const hubIds = new Set(session.hubs.map((h) => h.id));
   const targets = ((data ?? []) as CrmTargetRow[]).filter(
@@ -110,6 +112,7 @@ export default async function ZielePage() {
       <ZieleView
         targets={targets}
         hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
+        persons={personRows ?? []}
       />
 
       {/* Globales Kontakt-Log über alle Standorte */}
