@@ -95,9 +95,11 @@ export default async function KommunikationPage() {
           Entwürfe: MD-Wochen-Updates ({mdDrafts.length})
         </p>
         <p className="-mt-1 text-sm text-muted-foreground">
-          Pro MD eine individuelle Mail mit den Zahlen seiner Standorte —
-          aufklappen, prüfen, optional eine Anmerkung ergänzen und freigeben.
-          Ohne Freigabe wird nichts versendet.
+          Pro MD eine individuelle Mail mit den Zahlen der jeweiligen
+          Standorte — links durchklicken (oder ↑/↓), rechts prüfen und mit
+          einem Klick freigeben; danach springt die Auswahl automatisch zum
+          nächsten offenen Entwurf. „Alle offenen senden“ schickt den Rest
+          auf einmal. Ohne Freigabe wird nichts versendet.
         </p>
         <MdDraftList
           drafts={mdDrafts.map((d) => ({
