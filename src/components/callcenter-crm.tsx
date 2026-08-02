@@ -13,6 +13,7 @@ import {
   MapPin,
   Phone,
   PhoneCall,
+  Search,
   UserRound,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -111,8 +112,8 @@ export function CallcenterCrm({
   const [geoFilter, setGeoFilter] = useState("");
   const [katFilter, setKatFilter] = useState("krankenhaus");
   const [statusFilter, setStatusFilter] = useState<
-    "faellig" | "erstbesuch" | "alle"
-  >("faellig");
+    "anrufen" | "erstbesuch" | "alle"
+  >("anrufen");
   const [skriptOpen, setSkriptOpen] = useState(false);
 
   // Anruf-Log-Formular (je aufgeklapptem Ziel)
@@ -174,8 +175,11 @@ export function CallcenterCrm({
     }
     if (geoFilter && (t.geo_tag ?? "") !== geoFilter) return false;
     if (katFilter && (t.kategorie ?? "sonstiges") !== katFilter) return false;
-    if (statusFilter !== "alle" && crmStatus(t, today) !== statusFilter) {
-      return false;
+    if (statusFilter !== "alle") {
+      const s = crmStatus(t, today);
+      // „Jetzt anrufen“ = fällige UND noch nie kontaktierte Institutionen.
+      if (statusFilter === "anrufen" && s === "geplant") return false;
+      if (statusFilter === "erstbesuch" && s !== "erstbesuch") return false;
     }
     return true;
   });
@@ -228,6 +232,11 @@ export function CallcenterCrm({
             erreicht wurde. Der nächste Anruf-Termin wird automatisch gesetzt.
           </li>
         </ol>
+        <p className="text-xs text-muted-foreground">
+          Tipp: Arbeitet ihr zu mehreren, teilt euch die Regionen über die
+          Regions-Filter unten auf — so ruft niemand dieselbe Klinik doppelt
+          an.
+        </p>
       </div>
 
       {/* Gesprächsleitfaden */}
@@ -333,7 +342,7 @@ export function CallcenterCrm({
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
-              ["faellig", "Jetzt anrufen (fällig)"],
+              ["anrufen", "Jetzt anrufen (fällig + neu)"],
               ["erstbesuch", "Noch nie kontaktiert"],
               ["alle", "Alle anzeigen"],
             ] as const
@@ -394,7 +403,9 @@ export function CallcenterCrm({
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
           {targets.length === 0
             ? "Noch keine Institutionen im CRM — das Team importiert sie unter „Ziel-Orte“."
-            : "Nichts gefunden — Suche leeren oder oben „Alle anzeigen“ wählen."}
+            : katFilter
+              ? `Nichts gefunden — der Kategorie-Filter „${placeKindLabel(katFilter)}“ ist aktiv. Ihn oben antippen zum Abwählen oder „Alle anzeigen“ wählen.`
+              : "Nichts gefunden — Suche leeren oder oben „Alle anzeigen“ wählen."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
@@ -517,10 +528,27 @@ export function CallcenterCrm({
                     )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    {hauptnummer && (
+                    {hauptnummer ? (
                       <Button size="sm" render={<a href={telHref(hauptnummer)} />}>
                         <PhoneCall className="size-4" />
                         {hauptnummer}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        render={
+                          <a
+                            href={`https://www.google.com/search?q=${encodeURIComponent(
+                              `${t.name} ${t.ort ?? ""} Telefonnummer`.trim(),
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          />
+                        }
+                      >
+                        <Search className="size-4" />
+                        Nummer suchen
                       </Button>
                     )}
                     <Button
@@ -543,8 +571,9 @@ export function CallcenterCrm({
                   <div className="flex flex-col gap-2.5 rounded-lg border bg-background p-3">
                     <p className="text-xs text-muted-foreground">
                       Kurz festhalten, wie der Anruf lief — mehr braucht es
-                      nicht. Bei „Nicht erreicht“ steht die Klinik in 3 Tagen
-                      automatisch wieder oben in der Liste.
+                      nicht. Bei „Nicht erreicht“ steht die Klinik nach 3
+                      Tagen (nächster Werktag) automatisch wieder oben in der
+                      Liste.
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       {(

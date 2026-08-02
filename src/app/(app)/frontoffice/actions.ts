@@ -189,6 +189,9 @@ export async function logCallcenterCall(input: {
     next.setDate(next.getDate() + weeks * 7);
   } else {
     next.setDate(next.getDate() + 3);
+    // Wiedervorlage nie am Wochenende — das Call-Center arbeitet werktags.
+    if (next.getDay() === 6) next.setDate(next.getDate() + 2);
+    else if (next.getDay() === 0) next.setDate(next.getDate() + 1);
   }
   const logNote = erreicht ? note : ["Nicht erreicht", note].filter(Boolean).join(" — ");
 
@@ -213,7 +216,7 @@ export async function logCallcenterCall(input: {
   }
   if (updErr) return { ok: false, error: "Speichern fehlgeschlagen." };
 
-  await admin.from("crm_contacts").insert({
+  const { error: logErr } = await admin.from("crm_contacts").insert({
     target_id: target.id,
     hub_id: target.hub_id,
     kontakt_art: "anruf",
@@ -221,6 +224,13 @@ export async function logCallcenterCall(input: {
     note: logNote || null,
     contact_date: today,
   });
+  if (logErr) {
+    return {
+      ok: false,
+      error:
+        "Anruf-Historie konnte nicht gespeichert werden — bitte erneut speichern.",
+    };
+  }
 
   const personName = (input.neue_person?.name ?? "").trim().slice(0, 200);
   if (personName) {
