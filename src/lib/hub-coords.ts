@@ -1,6 +1,7 @@
-// Approximate coordinates (lat, lng) per hub, keyed by exact hub name.
-// Hubs without a mappable location resolve to null (shown in a list, not the map).
-export const HUB_COORDS: Record<string, [number, number] | null> = {
+// Approximate coordinates (lat, lng) per city. Hub names resolve over this
+// list, after stripping the service prefix ("Alltagshilfe X" → "X") — a new
+// hub in a bekannter Stadt landet damit automatisch auf der Karte.
+const CITY_COORDS: Record<string, [number, number]> = {
   Dorsten: [51.66, 6.964],
   Alverdissen: [51.983, 9.083],
   "Bad Oeynhausen": [52.203, 8.804],
@@ -9,26 +10,31 @@ export const HUB_COORDS: Record<string, [number, number] | null> = {
   "Bad Nenndorf": [52.336, 9.379],
   Hameln: [52.104, 9.356],
   "Bad Pyrmont": [51.986, 9.253],
-  "Tagespflege Dorsten": [51.66, 6.964],
-  "Alltagshilfe Dorsten": [51.66, 6.964],
-  "Alltagshilfe Duisburg": [51.435, 6.762],
-  "Alltagshilfe Düsseldorf": [51.228, 6.773],
-  "Alltagshilfe Neuenrade": [51.283, 7.783],
-  "Alltagshilfe Iserlohn": [51.374, 7.697],
   Düsseldorf: [51.228, 6.773],
   Kerpen: [50.871, 6.696],
   Velbert: [51.338, 7.043],
   Gevelsberg: [51.318, 7.338],
-  "Pflegeunion Intensiv": null,
   Duisburg: [51.435, 6.762],
   Iserlohn: [51.374, 7.697],
   Neuenrade: [51.283, 7.783],
   Attendorn: [51.126, 7.903],
-  "Tagespflgege Duisburg": [51.435, 6.762],
+  Lüdenscheid: [51.22, 7.628],
+};
+
+// Exakte Hub-Namen, die nicht über den Stadt-Namen auflösbar sind.
+// null = bewusst nicht kartierbar (erscheint in der Liste, nicht auf der Karte).
+export const HUB_COORDS: Record<string, [number, number] | null> = {
+  "Pflegeunion Intensiv": null,
 };
 
 export function hubCoords(name: string): [number, number] | null {
-  return HUB_COORDS[name] ?? null;
+  if (name in HUB_COORDS) return HUB_COORDS[name];
+  if (CITY_COORDS[name]) return CITY_COORDS[name];
+  // "Alltagshilfe Duisburg", "Tagespflege Dorsten", "Tagespflgege Duisburg" …
+  const city = name
+    .replace(/^(Alltagshilfe|Tagespflege|Tagespflgege|Intensivpflege|Pflegeunion)\s+/i, "")
+    .trim();
+  return CITY_COORDS[city] ?? null;
 }
 
 // Deterministic colors per responsible MD.
