@@ -30,6 +30,14 @@ const extractionSchema = z.object({
         ),
     }),
   ),
+  wiedervorlage: z
+    .string()
+    .nullable()
+    .describe(
+      "NUR wenn die Notiz einen konkreten Termin für die nächste Aktion nennt " +
+        "(„ruf an nächsten Montag“, „Anfang September wieder melden“, „in 2 Wochen“): " +
+        "dieses Datum als JJJJ-MM-TT, aufgelöst relativ zum genannten heutigen Datum. Sonst null.",
+    ),
 });
 
 export type ExtractedTodos = z.infer<typeof extractionSchema>;
@@ -48,6 +56,10 @@ export async function extractTodosFromCallNote(input: {
   const note = (input.note ?? "").trim();
   if (!note || !process.env.ANTHROPIC_API_KEY) return null;
 
+  const heute = new Date();
+  const heuteIso = heute.toISOString().slice(0, 10);
+  const wochentag = heute.toLocaleDateString("de-DE", { weekday: "long" });
+
   try {
     const client = new Anthropic();
     const response = await client.messages.parse({
@@ -63,11 +75,13 @@ export async function extractTodosFromCallNote(input: {
         "Extrahiere NUR Aufgaben, die aus der Notiz klar hervorgehen und die der Standort/die PDL vor Ort erledigen soll " +
         "(z. B. „PDL vorbeischicken“ → besuch, „Infomaterial/Box zusenden/vorbeibringen“ → box/flyer, „Rückruf gewünscht“ → anruf). " +
         "Keine Aufgaben erfinden — reine Info-Notizen ergeben eine leere Liste. " +
-        "Die Zusammenfassung ist der Kontext für die PDL: mit wem gesprochen, was vereinbart.",
+        "Die Zusammenfassung ist der Kontext für die PDL: mit wem gesprochen, was vereinbart. " +
+        "Nennt die Notiz einen Termin für die nächste Aktion, löse ihn zu einem Datum auf (wiedervorlage).",
       messages: [
         {
           role: "user",
           content: [
+            `Heute ist ${wochentag}, der ${heuteIso}.`,
             input.targetName ? `Institution: ${input.targetName}` : null,
             input.ansprechpartner
               ? `Gesprächspartner: ${input.ansprechpartner}`

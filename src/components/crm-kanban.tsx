@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, MapPin, Phone, Users } from "lucide-react";
+import { CalendarClock, ListTodo, MapPin, Phone, Users } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -26,9 +26,15 @@ import type { CrmTargetRow } from "@/components/crm-targets-manager";
 const HUB_ALL = "__all__";
 const CARD_CAP = 50;
 
-type Stage = "neu" | "faellig" | "kontakt";
+type Stage = "aufgaben" | "neu" | "faellig" | "kontakt";
 
 const STAGES: { key: Stage; title: string; hint: string; accent: string }[] = [
+  {
+    key: "aufgaben",
+    title: "Offene Aufgaben",
+    hint: "Vom Call-Center vereinbart — PDL muss ran",
+    accent: "border-t-primary",
+  },
   {
     key: "neu",
     title: "Erstkontakt offen",
@@ -69,22 +75,43 @@ const KAT_COLORS: Record<string, { border: string; dot: string; label: string }>
 const katColor = (kategorie: string | null | undefined) =>
   KAT_COLORS[kategorie ?? "sonstiges"] ?? KAT_COLORS.sonstiges;
 
-function stageOf(t: CrmTargetRow, today: string): Stage {
+function stageOf(t: CrmTargetRow, today: string, hasTodos: boolean): Stage {
+  if (hasTodos) return "aufgaben";
   const s = crmStatus(t, today);
   return s === "erstbesuch" ? "neu" : s === "faellig" ? "faellig" : "kontakt";
+}
+
+export interface KanbanTodo {
+  art: string;
+  aufgabe: string;
+  besprochen: string | null;
+}
+
+export interface KanbanLastContact {
+  art: string;
+  date: string;
+  hubName: string | null;
+  pdl: string | null;
+  ansprechpartner: string | null;
+  note: string | null;
 }
 
 /**
  * CRM-Pipeline als Kanban: Karten wandern automatisch, sobald die PDLs
  * Kontakte loggen (Erstkontakt → In Kontakt, Fälligkeit per Datum) —
- * die Spalten spiegeln echte Aktivität wider.
+ * die Spalten spiegeln echte Aktivität wider. Orte mit offenen
+ * Call-Center-Aufgaben stehen in einer eigenen Spalte vorn.
  */
 export function CrmKanban({
   targets,
   hubs,
+  todosByTarget = {},
+  lastByTarget = {},
 }: {
   targets: CrmTargetRow[];
   hubs: { id: string; name: string }[];
+  todosByTarget?: Record<string, KanbanTodo[]>;
+  lastByTarget?: Record<string, KanbanLastContact>;
 }) {
   const [hubFilter, setHubFilter] = useState<string>(HUB_ALL);
   const [query, setQuery] = useState("");
@@ -110,7 +137,11 @@ export function CrmKanban({
 
   const byStage = new Map<Stage, CrmTargetRow[]>();
   for (const s of STAGES) byStage.set(s.key, []);
-  for (const t of filtered) byStage.get(stageOf(t, today))!.push(t);
+  for (const t of filtered) {
+    byStage
+      .get(stageOf(t, today, (todosByTarget[t.id] ?? []).length > 0))!
+      .push(t);
+  }
   for (const [, list] of byStage) {
     list.sort(
       (a, b) =>
@@ -160,7 +191,7 @@ export function CrmKanban({
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {STAGES.map((stage) => {
           const list = byStage.get(stage.key) ?? [];
           return (
@@ -247,8 +278,53 @@ export function CrmKanban({
                         )
                       )}
 
+                      {(todosByTarget[t.id] ?? []).slice(0, 2).map((todo, i) => (
+                        <span
+                          key={i}
+                          className="mt-0.5 flex items-start gap-1 text-xs font-medium text-primary"
+                        >
+                          <ListTodo className="mt-0.5 size-3 shrink-0" />
+                          {todo.aufgabe}
+                        </span>
+                      ))}
+                      {(todosByTarget[t.id] ?? []).length > 2 && (
+                        <span className="text-xs text-muted-foreground">
+                          +{(todosByTarget[t.id] ?? []).length - 2} weitere
+                          Aufgaben
+                        </span>
+                      )}
+
                       {open && (
                         <span className="mt-1 flex flex-col gap-0.5 border-t pt-1 text-xs text-muted-foreground">
+                          {lastByTarget[t.id] && (
+                            <span>
+                              Zuletzt:{" "}
+                              {kontaktArtLabel(lastByTarget[t.id].art) ||
+                                "Kontakt"}{" "}
+                              am {formatIsoDate(lastByTarget[t.id].date)}
+                              {lastByTarget[t.id].hubName
+                                ? ` · ${lastByTarget[t.id].hubName}`
+                                : ""}
+                              {lastByTarget[t.id].pdl
+                                ? ` (PDL ${lastByTarget[t.id].pdl})`
+                                : ""}
+                              {lastByTarget[t.id].ansprechpartner
+                                ? ` · mit ${lastByTarget[t.id].ansprechpartner}`
+                                : ""}
+                            </span>
+                          )}
+                          {t.naechster_besuch && (
+                            <span className="font-medium text-foreground">
+                              Nächste Aktion ab{" "}
+                              {formatIsoDate(t.naechster_besuch)}
+                            </span>
+                          )}
+                          {(todosByTarget[t.id] ?? [])[0]?.besprochen && (
+                            <span>
+                              Besprochen: „
+                              {(todosByTarget[t.id] ?? [])[0].besprochen}“
+                            </span>
+                          )}
                           {t.adresse && <span>{t.adresse}</span>}
                           {t.ansprechpartner && (
                             <span className="flex items-center gap-1">

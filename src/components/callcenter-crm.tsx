@@ -6,6 +6,7 @@ import {
   BookOpen,
   Building2,
   CalendarClock,
+  Check,
   ChevronDown,
   ChevronUp,
   ListChecks,
@@ -22,6 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { placeKindLabel, PLACE_KINDS } from "@/lib/places";
 import {
+  anrufErreicht,
   crmStatus,
   formatIsoDate,
   kontaktArtLabel,
@@ -86,6 +88,16 @@ export function CallcenterCrm({
     contactsByTarget.set(c.target_id, arr);
   }
 
+  // Tagesliste: 30 Anrufe pro Tag — heute bereits angerufene zählen mit.
+  const TAGESZIEL = 30;
+  const anrufeHeute = contacts.filter(
+    (c) => c.kontakt_art === "anruf" && c.contact_date === today,
+  );
+  const heuteAngerufen = new Set(anrufeHeute.map((c) => c.target_id));
+  const heuteErreicht = new Set(
+    anrufeHeute.filter((c) => anrufErreicht(c.note)).map((c) => c.target_id),
+  );
+
   /**
    * Zuständiger Standort einer Klinik: die Hub-Zuteilung aus dem CRM;
    * fehlt sie, der Standort, dessen Name zum Ort/Geo-Tag passt.
@@ -110,10 +122,10 @@ export function CallcenterCrm({
   // Filter
   const [query, setQuery] = useState("");
   const [geoFilter, setGeoFilter] = useState("");
-  const [katFilter, setKatFilter] = useState("krankenhaus");
+  const [katFilter, setKatFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "anrufen" | "erstbesuch" | "alle"
-  >("anrufen");
+  >("alle");
   const [skriptOpen, setSkriptOpen] = useState(false);
 
   // Anruf-Log-Formular (je aufgeklapptem Ziel)
@@ -195,6 +207,26 @@ export function CallcenterCrm({
       a.name.localeCompare(b.name, "de"),
   );
 
+  // Die heutigen Targets: fällige + noch nie kontaktierte, abzüglich der
+  // bereits angerufenen, aufgefüllt bis zum Tagesziel.
+  const tagesQueue = targets
+    .filter(
+      (t) => crmStatus(t, today) !== "geplant" && !heuteAngerufen.has(t.id),
+    )
+    .sort(
+      (a, b) =>
+        statusRank(a) - statusRank(b) ||
+        (a.naechster_besuch ?? "9999").localeCompare(
+          b.naechster_besuch ?? "9999",
+        ) ||
+        a.name.localeCompare(b.name, "de"),
+    );
+  const tagesliste = tagesQueue.slice(
+    0,
+    Math.max(0, TAGESZIEL - heuteAngerufen.size),
+  );
+  const erledigteHeute = targets.filter((t) => heuteAngerufen.has(t.id));
+
   const chip = (active: boolean) =>
     cn(
       "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors select-none",
@@ -237,6 +269,62 @@ export function CallcenterCrm({
           Regions-Filter unten auf — so ruft niemand dieselbe Klinik doppelt
           an.
         </p>
+      </div>
+
+      {/* Targets für heute (Tagesziel) */}
+      <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="flex items-center gap-1.5 text-sm font-semibold">
+            <PhoneCall className="size-4 text-primary" />
+            Targets für heute
+          </p>
+          <p className="text-sm text-muted-foreground tabular-nums">
+            <span className="font-semibold text-foreground">
+              {heuteAngerufen.size}
+            </span>
+            /{TAGESZIEL} angerufen ·{" "}
+            <span className="font-semibold text-foreground">
+              {heuteErreicht.size}
+            </span>{" "}
+            erreicht
+          </p>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-all"
+            style={{
+              width: `${Math.min(100, Math.round((heuteAngerufen.size / TAGESZIEL) * 100))}%`,
+            }}
+          />
+        </div>
+        {erledigteHeute.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {erledigteHeute.map((t) => (
+              <span
+                key={t.id}
+                className={cn(
+                  "flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.7rem] font-medium",
+                  heuteErreicht.has(t.id)
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    : "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+                )}
+              >
+                <Check className="size-3" />
+                {t.name}
+                {!heuteErreicht.has(t.id) && " (nicht erreicht)"}
+              </span>
+            ))}
+          </div>
+        )}
+        {tagesliste.length === 0 ? (
+          <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+            {heuteAngerufen.size >= TAGESZIEL
+              ? `Tagesziel geschafft — alle ${TAGESZIEL} Anrufe erledigt. 🎉`
+              : "Keine offenen Targets mehr — alles Fällige und Neue ist abtelefoniert."}
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">{tagesliste.map(renderCard)}</ul>
+        )}
       </div>
 
       {/* Gesprächsleitfaden */}
@@ -330,8 +418,11 @@ export function CallcenterCrm({
         )}
       </div>
 
-      {/* Suche & Filter */}
+      {/* Suche & Filter — alle Institutionen (zum Nachschlagen) */}
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+        <p className="text-sm font-semibold">
+          Alle Institutionen — Suche &amp; Filter
+        </p>
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -409,8 +500,19 @@ export function CallcenterCrm({
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {sorted.slice(0, 100).map((t) => {
-            const open = openId === t.id;
+          {sorted.slice(0, 100).map(renderCard)}
+          {sorted.length > 100 && (
+            <p className="text-center text-xs text-muted-foreground">
+              {sorted.length - 100} weitere — Suche oder Filter nutzen.
+            </p>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+
+  function renderCard(t: CrmTargetRow) {
+    const open = openId === t.id;
             const status = crmStatus(t, today);
             const history = (contactsByTarget.get(t.id) ?? []).slice(0, 5);
             const targetPersons = personsByTarget.get(t.id) ?? [];
@@ -691,15 +793,6 @@ export function CallcenterCrm({
                   </div>
                 )}
               </li>
-            );
-          })}
-          {sorted.length > 100 && (
-            <p className="text-center text-xs text-muted-foreground">
-              {sorted.length - 100} weitere — Suche oder Filter nutzen.
-            </p>
-          )}
-        </ul>
-      )}
-    </div>
-  );
+    );
+  }
 }

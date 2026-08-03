@@ -296,6 +296,16 @@ export async function logCallcenterCall(input: {
             contact_id: logRow?.id ?? null,
           }),
         );
+      // Genannter Termin ("ruf an nächsten Montag") schlägt den
+      // Standard-Rhythmus: die Klinik taucht an dem Tag wieder in der
+      // Tagesliste auf.
+      const wv = extracted.wiedervorlage;
+      if (wv && /^\d{4}-\d{2}-\d{2}$/.test(wv) && wv > today) {
+        await admin
+          .from("crm_targets")
+          .update({ naechster_besuch: wv })
+          .eq("id", target.id);
+      }
     }
   }
 

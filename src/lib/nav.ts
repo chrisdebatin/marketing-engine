@@ -9,7 +9,6 @@ import {
   Inbox,
   Map,
   Megaphone,
-  PhoneOutgoing,
   Send,
   Settings,
   Sparkles,
@@ -17,7 +16,6 @@ import {
   Truck,
   type LucideIcon,
 } from "lucide-react";
-
 /**
  * Zentrale Navigations-Struktur — von Sidebar (Desktop) und Top-Bar (Mobil)
  * gemeinsam genutzt, damit beide immer synchron sind.
@@ -27,12 +25,10 @@ export interface NavItem {
   label: string;
   Icon: LucideIcon;
 }
-
 export interface NavGroup {
   title: string;
   items: NavItem[];
 }
-
 export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Übersicht",
@@ -46,8 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Standorte",
     items: [
       { href: "/hubs", label: "Hubs", Icon: Building2 },
-      { href: "/ziele", label: "Ziele (CRM)", Icon: Target },
-      { href: "/callcenter", label: "Call-Center", Icon: PhoneOutgoing },
+      { href: "/ziele", label: "CRM & Call-Center", Icon: Target },
       { href: "/kapazitaet", label: "Kapazität", Icon: BedDouble },
       { href: "/themen", label: "Themen", Icon: BookOpen },
     ],
@@ -68,25 +63,21 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [{ href: "/assistant", label: "Assistant", Icon: Sparkles }],
   },
 ];
-
 export const ADMIN_NAV_ITEM: NavItem = {
   href: "/admin",
   label: "Admin",
   Icon: Settings,
 };
-
 export function navGroups(isAdmin: boolean): NavGroup[] {
   if (!isAdmin) return NAV_GROUPS;
   return NAV_GROUPS.map((g) =>
     g.title === "System" ? { ...g, items: [...g.items, ADMIN_NAV_ITEM] } : g,
   );
 }
-
 /** Flache Liste für die mobile Top-Bar. */
 export function navItems(isAdmin: boolean): NavItem[] {
   return navGroups(isAdmin).flatMap((g) => g.items);
 }
-
 export function isNavActive(href: string, pathname: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
