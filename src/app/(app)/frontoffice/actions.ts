@@ -10,6 +10,36 @@ import { getFollowupWeeks } from "@/lib/settings";
 
 type Result = { ok: true } | { ok: false; error: string };
 
+/**
+ * Extraktions-Ergebnis → crm_todos-Zeilen. Ohne erkannte Aufgabe entsteht
+ * ein bereits erledigter "Nur Info"-Eintrag — er markiert die Notiz als
+ * ausgewertet (kein erneutes Analysieren) und bewahrt die Zusammenfassung.
+ */
+function todoRows(
+  extracted: import("@/lib/crm-todos-ai").ExtractedTodos,
+  base: { target_id: string; hub_id: string | null; contact_id: string | null },
+): import("@/lib/types").Database["public"]["Tables"]["crm_todos"]["Insert"][] {
+  const besprochen = extracted.zusammenfassung.slice(0, 1000) || null;
+  if (extracted.todos.length === 0) {
+    return [
+      {
+        ...base,
+        art: "sonstiges",
+        aufgabe: "Nur Info — keine Aufgabe erkannt",
+        besprochen,
+        status: "erledigt",
+        done_at: new Date().toISOString(),
+      },
+    ];
+  }
+  return extracted.todos.map((t) => ({
+    ...base,
+    art: t.art,
+    aufgabe: t.aufgabe.slice(0, 500),
+    besprochen,
+  }));
+}
+
 function revalidateFrontoffice() {
   revalidatePath("/frontoffice");
   revalidatePath("/callcenter");
@@ -176,7 +206,7 @@ export async function logCallcenterCall(input: {
   const admin = createAdminClient();
   const { data: target } = await admin
     .from("crm_targets")
-    .select("id, hub_id, intervall_wochen")
+    .select("id, hub_id, intervall_wochen, name")
     .eq("id", targetId)
     .maybeSingle();
   if (!target) return { ok: false, error: "Institution nicht gefunden." };
@@ -216,14 +246,18 @@ export async function logCallcenterCall(input: {
   }
   if (updErr) return { ok: false, error: "Speichern fehlgeschlagen." };
 
-  const { error: logErr } = await admin.from("crm_contacts").insert({
-    target_id: target.id,
-    hub_id: target.hub_id,
-    kontakt_art: "anruf",
-    ansprechpartner: ansprechpartner || null,
-    note: logNote || null,
-    contact_date: today,
-  });
+  const { data: logRow, error: logErr } = await admin
+    .from("crm_contacts")
+    .insert({
+      target_id: target.id,
+      hub_id: target.hub_id,
+      kontakt_art: "anruf",
+      ansprechpartner: ansprechpartner || null,
+      note: logNote || null,
+      contact_date: today,
+    })
+    .select("id")
+    .single();
   if (logErr) {
     return {
       ok: false,
@@ -243,8 +277,127 @@ export async function logCallcenterCall(input: {
     });
   }
 
+  // KI: Notiz auswerten und To-dos für die PDL anlegen (nice-to-have —
+  // darf das Loggen nie blockieren; ohne Tabelle 0042 passiert nichts).
+  if (erreicht && note) {
+    const { extractTodosFromCallNote } = await import("@/lib/crm-todos-ai");
+    const extracted = await extractTodosFromCallNote({
+      note,
+      targetName: target.name,
+      ansprechpartner,
+    });
+    if (extracted) {
+      await admin
+        .from("crm_todos")
+        .insert(
+          todoRows(extracted, {
+            target_id: target.id,
+            hub_id: target.hub_id,
+            contact_id: logRow?.id ?? null,
+          }),
+        );
+    }
+  }
+
   revalidateFrontoffice();
   return { ok: true };
+}
+
+/**
+ * Bestehende Call-Center-Notizen nachträglich mit KI auswerten: legt für
+ * Anrufe der letzten 30 Tage To-dos an, die noch keine haben. Admin-Button
+ * auf der Call-Center-Seite.
+ */
+export async function analyzeCallNotes(): Promise<{
+  ok: boolean;
+  message: string;
+}> {
+  const session = await requireSession();
+  if (!session.isAdmin) return { ok: false, message: "Nur für Admins." };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      message: "ANTHROPIC_API_KEY fehlt — KI-Auswertung nicht möglich.",
+    };
+  }
+
+  const admin = createAdminClient();
+  const cutoff = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const [{ data: contacts }, { data: existing, error: todoErr }] =
+    await Promise.all([
+      admin
+        .from("crm_contacts")
+        .select("id, target_id, hub_id, ansprechpartner, note, contact_date")
+        .eq("kontakt_art", "anruf")
+        .gte("contact_date", cutoff)
+        .not("note", "is", null)
+        .order("contact_date", { ascending: false })
+        .limit(200),
+      admin.from("crm_todos").select("contact_id").limit(2000),
+    ]);
+  if (todoErr) {
+    return {
+      ok: false,
+      message:
+        "Tabelle crm_todos fehlt — bitte supabase/apply_all_pending.sql im Supabase SQL-Editor ausführen.",
+    };
+  }
+
+  const done = new Set((existing ?? []).map((t) => t.contact_id));
+  const offen = (contacts ?? []).filter(
+    (c) =>
+      !done.has(c.id) &&
+      (c.note ?? "").trim() &&
+      !(c.note ?? "").startsWith("Nicht erreicht"),
+  );
+  if (offen.length === 0) {
+    return { ok: true, message: "Nichts zu tun — alle Notizen sind bereits ausgewertet." };
+  }
+
+  const batch = offen.slice(0, 40);
+  const targetIds = [...new Set(batch.map((c) => c.target_id))];
+  const { data: targetRows } = await admin
+    .from("crm_targets")
+    .select("id, name")
+    .in("id", targetIds);
+  const nameOf = new Map((targetRows ?? []).map((t) => [t.id, t.name]));
+
+  const { extractTodosFromCallNote } = await import("@/lib/crm-todos-ai");
+  let created = 0;
+  let analysiert = 0;
+  for (const c of batch) {
+    const extracted = await extractTodosFromCallNote({
+      note: c.note ?? "",
+      targetName: nameOf.get(c.target_id),
+      ansprechpartner: c.ansprechpartner,
+    });
+    if (!extracted) continue;
+    analysiert++;
+    const { error } = await admin
+      .from("crm_todos")
+      .insert(
+        todoRows(extracted, {
+          target_id: c.target_id,
+          hub_id: c.hub_id,
+          contact_id: c.id,
+        }),
+      );
+    if (!error) created += extracted.todos.length;
+  }
+
+  revalidateFrontoffice();
+  const rest = offen.length - batch.length;
+  return {
+    ok: true,
+    message: `${analysiert} Notizen ausgewertet, ${created} To-dos angelegt.${
+      rest > 0 ? ` ${rest} weitere offen — Button erneut klicken.` : ""
+    }`,
+  };
 }
 
 /** Lead-Eintrag löschen (Vertipper). */

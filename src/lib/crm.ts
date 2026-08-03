@@ -18,6 +18,15 @@ export function crmStatus(t: CrmDates, today: string = todayIso()): CrmStatus {
   return "geplant";
 }
 
+/**
+ * Ob ein geloggter Anruf jemanden erreicht hat. Konvention aus
+ * logCallcenterCall: Nicht-erreicht-Anrufe bekommen das Notiz-Präfix
+ * „Nicht erreicht“ — es gibt (noch) keine eigene Spalte dafür.
+ */
+export function anrufErreicht(note: string | null | undefined): boolean {
+  return !(note ?? "").startsWith("Nicht erreicht");
+}
+
 export function formatIsoDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);

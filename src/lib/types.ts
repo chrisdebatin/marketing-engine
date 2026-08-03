@@ -667,6 +667,34 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["crm_persons"]["Insert"]>;
         Relationships: [];
       };
+      crm_todos: {
+        Row: {
+          id: string;
+          target_id: string;
+          hub_id: string | null;
+          contact_id: string | null;
+          art: string;
+          aufgabe: string;
+          besprochen: string | null;
+          status: string;
+          created_at: string | null;
+          done_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_id: string;
+          hub_id?: string | null;
+          contact_id?: string | null;
+          art?: string;
+          aufgabe: string;
+          besprochen?: string | null;
+          status?: string;
+          created_at?: string | null;
+          done_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["crm_todos"]["Insert"]>;
+        Relationships: [];
+      };
       note_topics: {
         Row: {
           id: string;

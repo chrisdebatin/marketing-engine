@@ -10,6 +10,7 @@ import {
   type VisitTarget,
 } from "@/components/crm-visit-list";
 import { PdlTabs } from "@/components/pdl-tabs";
+import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
 import {
   OrderShop,
   type OrderWithItems,
@@ -150,10 +151,31 @@ export default async function HubShareLinkPage({
   const capCurrent = capReports.find((r) => r.week_start === capWeek) ?? null;
   const capPrevious = capReports.find((r) => r.week_start !== capWeek) ?? null;
 
+  // Call-Center-Aufträge (KI-erkannt aus Gesprächsnotizen). Fehlt Tabelle
+  // 0042, fällt die Abfrage auf [] zurück und der Tab zeigt den Leerzustand.
+  const { data: todoRows } = await admin
+    .from("crm_todos")
+    .select("id, target_id, art, aufgabe, besprochen, created_at")
+    .eq("hub_id", hub.id)
+    .eq("status", "offen")
+    .order("created_at", { ascending: false })
+    .limit(100);
+
   const ownTargets = (crmTargets ?? []) as VisitTarget[];
   const dueCount = ownTargets.filter(
     (t) => crmStatus(t, todayIso()) !== "geplant",
   ).length;
+
+  const todoTarget = (id: string) => ownTargets.find((t) => t.id === id);
+  const pdlTodos: PdlTodo[] = (todoRows ?? []).map((t) => ({
+    id: t.id,
+    art: t.art,
+    aufgabe: t.aufgabe,
+    besprochen: t.besprochen,
+    created_at: t.created_at,
+    target_name: todoTarget(t.target_id)?.name ?? "Unbekannter Ort",
+    target_ort: todoTarget(t.target_id)?.ort ?? null,
+  }));
 
   // Vereintes Aktivitäts-Log: Kontakt-Log + manuell erfasste Auslagen.
   // Auto-Auslagen (aus Box-/Flyer-Kontakten) werden per Name+Datum
@@ -402,6 +424,12 @@ export default async function HubShareLinkPage({
                 )}
               </div>
             ),
+          },
+          {
+            id: "auftraege",
+            label: "Aufträge",
+            badge: pdlTodos.length > 0 ? pdlTodos.length : undefined,
+            content: <PdlTodoList token={token} initial={pdlTodos} />,
           },
           {
             id: "kapazitaet",

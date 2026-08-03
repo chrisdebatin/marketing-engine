@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { crmStatus, todayIso } from "@/lib/crm";
 import { getCallcenterToken } from "@/lib/frontoffice-token";
 import { CopyLink } from "@/components/copy-link";
+import { AnalyzeNotesButton } from "@/components/analyze-notes-button";
 import {
   CallcenterCrm,
   type CallcenterContactRow,
@@ -62,6 +63,7 @@ export default async function CallcenterPage() {
     { data: personRows },
     { data: contactRows },
     { data: hubRows },
+    { data: todoRows },
   ] = await Promise.all([
     admin.from("crm_targets").select("*").order("name").limit(2000),
     admin.from("crm_persons").select("*").order("name").limit(4000),
@@ -72,6 +74,13 @@ export default async function CallcenterPage() {
       .order("created_at", { ascending: false })
       .limit(500),
     admin.from("hubs").select("id, name, pdl_name, pdl_phone").order("name"),
+    // KI-To-dos aus Gesprächsnotizen (Tabelle 0042; fehlt sie → []).
+    admin
+      .from("crm_todos")
+      .select("id, target_id, hub_id, art, aufgabe, besprochen, created_at")
+      .eq("status", "offen")
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   const targets = (targetRows ?? []) as CrmTargetRow[];
@@ -117,6 +126,47 @@ export default async function CallcenterPage() {
         <Stat icon={PhoneCall} value={anrufe7} label="Anrufe (7 Tage)" />
         <Stat icon={PhoneCall} value={anrufe28} label="Anrufe (4 Wochen)" />
       </div>
+
+      {/* KI-To-dos aus den Gesprächsnotizen */}
+      <section className="flex flex-col gap-2.5 rounded-xl border bg-card p-5 shadow-sm">
+        <p className="flex items-center gap-1.5 font-semibold">
+          <ListTodo className="size-4 text-primary" />
+          Aufgaben für die Standorte ({(todoRows ?? []).length} offen)
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Claude liest jede Gesprächsnotiz automatisch aus: Steht dort z. B.
+          „PDL vorbeischicken“, entsteht ein Auftrag für den zuständigen
+          Standort — sichtbar auf dem PDL-Dashboard im Tab „Aufträge“, samt
+          Zusammenfassung des Gesprächs.
+        </p>
+        <AnalyzeNotesButton />
+        {(todoRows ?? []).length > 0 && (
+          <ul className="flex flex-col gap-1 border-t pt-2">
+            {(todoRows ?? []).slice(0, 15).map((t) => {
+              const target = (targetRows ?? []).find(
+                (x) => x.id === t.target_id,
+              );
+              const hubName = (hubRows ?? []).find(
+                (h) => h.id === t.hub_id,
+              )?.name;
+              return (
+                <li key={t.id} className="text-sm">
+                  <span className="font-medium">{t.aufgabe}</span>{" "}
+                  <span className="text-muted-foreground">
+                    — {target?.name ?? "Unbekannt"}
+                    {hubName ? ` → ${hubName}` : " → kein Standort zugeordnet"}
+                  </span>
+                </li>
+              );
+            })}
+            {(todoRows ?? []).length > 15 && (
+              <li className="text-xs text-muted-foreground">
+                {(todoRows ?? []).length - 15} weitere auf den PDL-Dashboards.
+              </li>
+            )}
+          </ul>
+        )}
+      </section>
 
       {/* Team-Link (ohne Login) */}
       <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
