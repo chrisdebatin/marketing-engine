@@ -92,14 +92,22 @@ export default async function KapazitaetPage() {
 
   const gemeldet = hubRows.filter((r) => r.isCurrent).length;
   const withData = hubRows.filter((r) => r.latest);
-  const totals = withData.reduce(
-    (acc, r) => ({
-      frei: acc.frei + (r.latest?.freie_plaetze ?? 0),
-      beatmung: acc.beatmung + (r.latest?.beatmung_plaetze ?? 0),
-      wg: acc.wg + (r.latest?.wg_plaetze ?? 0),
-    }),
-    { frei: 0, beatmung: 0, wg: 0 },
+  const freiGesamt = withData.reduce(
+    (s, r) => s + (r.latest?.freie_plaetze ?? 0),
+    0,
   );
+  // Ø-Score je Leistungsbereich über die jeweils letzte Meldung je Standort.
+  const avgScore = (
+    key: "pflege_score" | "alltagshilfe_score" | "wundversorgung_score",
+  ) => {
+    const values = withData
+      .map((r) => r.latest?.[key])
+      .filter((v): v is number => typeof v === "number");
+    if (values.length === 0) return "—";
+    return (values.reduce((s, v) => s + v, 0) / values.length)
+      .toFixed(1)
+      .replace(".", ",");
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -126,10 +134,23 @@ export default async function KapazitaetPage() {
           <CapacityFreetext />
 
           {/* Kennzahlen (Basis: jeweils letzte Meldung je Standort) */}
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Stat icon={BedDouble} value={totals.frei} label="Freie Plätze gesamt" />
-            <Stat icon={Wind} value={totals.beatmung} label="davon mit Beatmung" />
-            <Stat icon={Baby} value={totals.wg} label="davon WG-Plätze" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+            <Stat
+              icon={BedDouble}
+              value={avgScore("pflege_score")}
+              label="Ø Pflege (1–5)"
+            />
+            <Stat
+              icon={Baby}
+              value={avgScore("alltagshilfe_score")}
+              label="Ø Alltagshilfe (1–5)"
+            />
+            <Stat
+              icon={Wind}
+              value={avgScore("wundversorgung_score")}
+              label="Ø Wundversorgung (1–5)"
+            />
+            <Stat icon={BedDouble} value={freiGesamt} label="Freie Plätze gesamt" />
             <Stat
               icon={CalendarCheck}
               value={`${gemeldet}/${hubs.length}`}
@@ -231,14 +252,28 @@ export default async function KapazitaetPage() {
                     <ul className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
                       {history.map((r) => (
                         <li key={r.id} className="tabular-nums">
-                          {formatIsoDate(r.week_start)}: {r.freie_plaetze} frei
-                          {r.beatmung_plaetze > 0
-                            ? ` · ${r.beatmung_plaetze} Beatmung`
-                            : ""}
-                          {r.wg_plaetze > 0 ? ` · ${r.wg_plaetze} WG` : ""}
-                          {r.aufnahme_ab
-                            ? ` · ab ${formatIsoDate(r.aufnahme_ab)}`
-                            : ""}
+                          {formatIsoDate(r.week_start)}:{" "}
+                          {[
+                            r.pflege_score != null
+                              ? `Pflege ${r.pflege_score}`
+                              : null,
+                            r.alltagshilfe_score != null
+                              ? `Alltagshilfe ${r.alltagshilfe_score}`
+                              : null,
+                            r.wundversorgung_score != null
+                              ? `Wund ${r.wundversorgung_score}`
+                              : null,
+                            `${r.freie_plaetze} frei`,
+                            r.beatmung_plaetze > 0
+                              ? `${r.beatmung_plaetze} Beatmung`
+                              : null,
+                            r.wg_plaetze > 0 ? `${r.wg_plaetze} WG` : null,
+                            r.aufnahme_ab
+                              ? `ab ${formatIsoDate(r.aufnahme_ab)}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </li>
                       ))}
                     </ul>
