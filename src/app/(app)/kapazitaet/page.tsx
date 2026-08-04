@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { capacityWeekStart, type CapacityReport } from "@/lib/capacity";
 import { formatIsoDate } from "@/lib/crm";
 import { Badge } from "@/components/ui/badge";
+import { CapacityFreetext } from "@/components/capacity-freetext";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -100,6 +101,9 @@ export default async function KapazitaetPage() {
         </p>
       ) : (
         <>
+          {/* Freitext-Eintrag: KI ordnet Zahlen den Standorten zu */}
+          <CapacityFreetext />
+
           {/* Kennzahlen (Basis: jeweils letzte Meldung je Standort) */}
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <Stat icon={BedDouble} value={totals.frei} label="Freie Plätze gesamt" />
