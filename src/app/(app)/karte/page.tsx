@@ -91,11 +91,12 @@ export default async function KartePage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">Karte der Auslage-Orte</h1>
+        <h1 className="text-2xl font-semibold">Karte der Standorte</h1>
         <p className="text-sm text-muted-foreground">
-          Alle Orte, die die PDLs über ihre Links eingetragen haben —
-          Krankenhäuser, Praxen, Apotheken &amp; Co., gruppiert nach Hub.
-          Farbe = verantwortlicher MD.
+          Jeder Pin ist ein Standort (Hub) — mit MD und PDL im Popup, auch
+          ohne eingetragene Auslagen. Pin-Größe = Anzahl der Orte, die die
+          PDLs über ihre Links eingetragen haben (Krankenhäuser, Praxen,
+          Apotheken &amp; Co.). Farbe = verantwortlicher MD.
         </p>
       </div>
 

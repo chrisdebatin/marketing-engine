@@ -59,8 +59,10 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
   const mapRef = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Map<string, CircleMarker>>(new Map());
 
-  const withPlaces = hubs
-    .map((h) => ({ ...h, places: placesFor(h, filter) }))
+  // Auf der Karte steht jeder Standort — auch ohne eingetragene Orte;
+  // die Liste rechts zeigt nur Hubs mit Auslagen.
+  const mapped = hubs.map((h) => ({ ...h, places: placesFor(h, filter) }));
+  const withPlaces = mapped
     .filter((h) => h.places.length > 0)
     .sort((a, b) => b.places.length - a.places.length);
   const countFlyer = hubs.reduce((s, h) => s + h.flyer.length, 0);
@@ -84,7 +86,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
       }).addTo(map);
 
       const bounds: [number, number][] = [];
-      for (const h of withPlaces) {
+      for (const h of mapped) {
         if (h.lat == null || h.lng == null) continue;
         const lines = h.places
           .slice(0, 10)
@@ -101,6 +103,12 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
           h.places.length > 10
             ? `<br/>… und ${h.places.length - 10} weitere`
             : "";
+        const info = [
+          h.md ? `MD: ${esc(h.md)}` : null,
+          h.pdl ? `PDL: ${esc(h.pdl)}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
         const marker = L.circleMarker([h.lat, h.lng], {
           radius: Math.min(9 + h.places.length, 16),
           color: "#ffffff",
@@ -110,10 +118,10 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
         })
           .addTo(map)
           .bindPopup(
-            `<strong>${esc(h.name)}</strong><br/>` +
-              `${h.flyer.length} Flyer-Orte · ${h.box.length} Box-Lieferorte<br/><br/>` +
-              lines +
-              more,
+            `<strong>${esc(h.name)}</strong>` +
+              (info ? `<br/>${info}` : "") +
+              `<br/>${h.flyer.length} Flyer-Orte · ${h.box.length} Box-Lieferorte` +
+              (lines ? `<br/><br/>${lines}${more}` : ""),
           );
         markersRef.current.set(h.id, marker);
         bounds.push([h.lat, h.lng]);
