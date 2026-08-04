@@ -61,3 +61,27 @@ export function guessTag(text: string) {
   const hit = TAG_GUESSES.find((g) => g.re.test(text));
   return hit ? anfrageTag(hit.key) : null;
 }
+
+export type AnfrageTag = (typeof ANFRAGE_TAGS)[number];
+
+/**
+ * Alle Tags einer Anfrage: gespeicherter Tag (bzw. geratener Fallback) plus
+ * Plattform-Tag — läuft z. B. eine Stellenanzeige auf Meta, trägt die Karte
+ * beide Chips (Stellenanzeige + Meta-Kampagne).
+ */
+export function anfrageTagsOf(
+  tagValue: string | null | undefined,
+  text: string,
+): AnfrageTag[] {
+  const tags: AnfrageTag[] = [];
+  const push = (t: AnfrageTag | null) => {
+    if (t && !tags.some((x) => x.key === t.key)) tags.push(t);
+  };
+  // Gespeichert können mehrere Keys sein (kommagetrennt).
+  for (const key of (tagValue ?? "").split(",")) push(anfrageTag(key.trim()));
+  if (tags.length === 0) push(guessTag(text));
+  // Plattform ergänzen: "… auf Meta schalten" → zusätzlich Meta-Kampagne.
+  if (/\bmeta\b|facebook|instagram/i.test(text)) push(anfrageTag("meta"));
+  if (/zeitung|kurier|anzeiger|wochenblatt/i.test(text)) push(anfrageTag("zeitung"));
+  return tags;
+}

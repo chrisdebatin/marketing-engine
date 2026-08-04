@@ -1,13 +1,16 @@
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { noteFileAllowed } from "@/lib/note-images";
 
 const BUCKET = "note-images";
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /**
- * Screenshot-Upload für Anfragen-To-dos: legt das Bild im öffentlichen
- * Storage-Bucket "note-images" ab (Bucket wird beim ersten Upload
- * automatisch angelegt) und gibt die öffentliche URL zurück.
+ * Datei-Upload für Anfragen-To-dos (Bilder, PDF, Office, CSV/TXT): legt die
+ * Datei im öffentlichen Storage-Bucket "note-images" ab (Bucket wird beim
+ * ersten Upload automatisch angelegt) und gibt die öffentliche URL zurück.
+ * Der Original-Dateiname bleibt im Pfad erhalten, damit die Karten ihn
+ * anzeigen können.
  */
 export async function POST(req: Request) {
   await requireSession();
@@ -16,21 +19,29 @@ export async function POST(req: Request) {
   try {
     form = await req.formData();
   } catch {
-    return Response.json({ error: "Kein Bild empfangen." }, { status: 400 });
+    return Response.json({ error: "Keine Datei empfangen." }, { status: 400 });
   }
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return Response.json({ error: "Kein Bild empfangen." }, { status: 400 });
+    return Response.json({ error: "Keine Datei empfangen." }, { status: 400 });
   }
-  if (!file.type.startsWith("image/")) {
-    return Response.json({ error: "Nur Bilder sind möglich." }, { status: 400 });
+  if (!noteFileAllowed(file.type)) {
+    return Response.json(
+      { error: "Dateityp nicht unterstützt (Bilder, PDF, Office, CSV/TXT)." },
+      { status: 400 },
+    );
   }
   if (file.size > MAX_BYTES) {
-    return Response.json({ error: "Bild zu groß (max. 8 MB)." }, { status: 400 });
+    return Response.json({ error: "Datei zu groß (max. 8 MB)." }, { status: 400 });
   }
 
-  const ext = (file.type.split("/")[1] ?? "png").replace(/[^a-z0-9]/gi, "") || "png";
-  const path = `${crypto.randomUUID()}.${ext}`;
+  const safeName =
+    file.name
+      .normalize("NFKD")
+      .replace(/[^\w.-]+/g, "_")
+      .replace(/_{2,}/g, "_")
+      .slice(0, 80) || "datei";
+  const path = `${crypto.randomUUID()}-${safeName}`;
   const bytes = Buffer.from(await file.arrayBuffer());
 
   const admin = createAdminClient();

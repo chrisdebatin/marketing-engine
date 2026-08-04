@@ -2,18 +2,22 @@
 
 import { useRef, useState, type ClipboardEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, Paperclip, X } from "lucide-react";
+import { FileText, Loader2, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  NOTE_FILE_ACCEPT,
   NOTE_IMAGE_MAX,
   imagesFromClipboard,
+  isImageUrl,
+  noteFileName,
   uploadNoteImage,
 } from "@/lib/note-images";
 
 /**
- * Screenshots an ein Formular hängen: per Strg/Cmd+V direkt ins Textfeld
- * (onPaste durchreichen) oder über den Büroklammer-Button. Bilder werden
- * sofort hochgeladen; der Aufrufer bekommt nur die fertigen URLs.
+ * Dateien an ein Formular hängen: Screenshots per Strg/Cmd+V direkt ins
+ * Textfeld (onPaste durchreichen) oder beliebige Dateien (PDF, Office …)
+ * über den Büroklammer-Button. Uploads laufen sofort; der Aufrufer bekommt
+ * nur die fertigen URLs.
  */
 export function useImageAttach() {
   const [images, setImages] = useState<string[]>([]);
@@ -26,7 +30,7 @@ export function useImageAttach() {
       let count = images.length;
       for (const file of files) {
         if (count >= NOTE_IMAGE_MAX) {
-          toast.error(`Max. ${NOTE_IMAGE_MAX} Bilder pro Eintrag.`);
+          toast.error(`Max. ${NOTE_IMAGE_MAX} Dateien pro Eintrag.`);
           break;
         }
         const r = await uploadNoteImage(file);
@@ -64,7 +68,27 @@ export function useImageAttach() {
   };
 }
 
-/** Thumbnails der angehängten Bilder + Büroklammer zum Datei-Auswählen. */
+/** Vorschau eines Anhangs: Bild-Thumbnail oder Datei-Chip mit Namen. */
+function AttachmentPreview({ url }: { url: string }) {
+  if (isImageUrl(url)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt="Angehängte Datei"
+        className="h-14 w-auto rounded-md border object-cover"
+      />
+    );
+  }
+  return (
+    <span className="flex h-14 max-w-40 items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 text-xs text-muted-foreground">
+      <FileText className="size-4 shrink-0 text-primary" />
+      <span className="truncate">{noteFileName(url)}</span>
+    </span>
+  );
+}
+
+/** Vorschau der angehängten Dateien + Büroklammer zum Datei-Auswählen. */
 export function ImageAttachRow({
   attach,
   disabled,
@@ -78,7 +102,7 @@ export function ImageAttachRow({
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept={NOTE_FILE_ACCEPT}
         multiple
         className="hidden"
         onChange={(e) => {
@@ -99,24 +123,19 @@ export function ImageAttachRow({
         ) : (
           <Paperclip className="size-3.5" />
         )}
-        {attach.uploading ? "Lädt hoch…" : "Screenshot anhängen"}
+        {attach.uploading ? "Lädt hoch…" : "Datei anhängen"}
       </Button>
       {attach.images.length === 0 && !attach.uploading && (
         <span className="text-xs text-muted-foreground">
-          oder einfach mit Strg/Cmd+V ins Textfeld einfügen
+          PDF, Office, Bilder — Screenshots auch mit Strg/Cmd+V ins Textfeld
         </span>
       )}
       {attach.images.map((url) => (
         <span key={url} className="relative inline-block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt="Angehängter Screenshot"
-            className="h-14 w-auto rounded-md border object-cover"
-          />
+          <AttachmentPreview url={url} />
           <button
             type="button"
-            aria-label="Bild entfernen"
+            aria-label="Datei entfernen"
             className="absolute -top-1.5 -right-1.5 rounded-full border bg-background p-0.5 text-muted-foreground shadow-sm hover:text-destructive"
             onClick={() => attach.remove(url)}
           >
@@ -128,20 +147,49 @@ export function ImageAttachRow({
   );
 }
 
-/** Bild-Reihe auf einer Kanban-Karte: kleine Thumbnails, Klick öffnet groß. */
-export function NoteImageStrip({ urls }: { urls: string[] }) {
+/**
+ * Datei-Reihe auf einer Kanban-Karte: Bild-Thumbnails (Klick öffnet groß)
+ * und Datei-Chips (Klick öffnet/lädt). Mit onRemove erscheint ein X zum
+ * Entfernen einzelner Anhänge.
+ */
+export function NoteImageStrip({
+  urls,
+  onRemove,
+}: {
+  urls: string[];
+  onRemove?: (url: string) => void;
+}) {
   if (urls.length === 0) return null;
   return (
     <span className="flex flex-wrap gap-1.5">
       {urls.map((url) => (
-        <a key={url} href={url} target="_blank" rel="noreferrer">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt="Screenshot zur Anfrage"
-            className="h-16 w-auto rounded-md border object-cover transition-opacity hover:opacity-80"
-          />
-        </a>
+        <span key={url} className="relative inline-block">
+          <a href={url} target="_blank" rel="noreferrer">
+            {isImageUrl(url) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={url}
+                alt="Anhang zur Anfrage"
+                className="h-16 w-auto rounded-md border object-cover transition-opacity hover:opacity-80"
+              />
+            ) : (
+              <span className="flex h-9 max-w-44 items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted">
+                <FileText className="size-3.5 shrink-0 text-primary" />
+                <span className="truncate">{noteFileName(url)}</span>
+              </span>
+            )}
+          </a>
+          {onRemove && (
+            <button
+              type="button"
+              aria-label="Anhang entfernen"
+              className="absolute -top-1.5 -right-1.5 rounded-full border bg-background p-0.5 text-muted-foreground shadow-sm hover:text-destructive"
+              onClick={() => onRemove(url)}
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </span>
       ))}
     </span>
   );

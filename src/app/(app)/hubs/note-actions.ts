@@ -151,6 +151,8 @@ export async function updateHubNote(
     done?: boolean;
     status?: string | null;
     notiz?: string | null;
+    /** Anhänge (öffentliche Storage-URLs) — ersetzt die gespeicherte Liste. */
+    images?: string[];
   },
 ): Promise<Result> {
   const cleanId = (id ?? "").trim();
@@ -187,10 +189,19 @@ export async function updateHubNote(
     input.notiz !== undefined
       ? { notiz: (input.notiz ?? "").trim().slice(0, 2000) || null }
       : {};
+  const imagesPatch =
+    input.images !== undefined
+      ? {
+          images: input.images
+            .filter((u) => typeof u === "string" && u.startsWith("http"))
+            .slice(0, 6),
+        }
+      : {};
   if (
     Object.keys(patch).length === 0 &&
     input.status === undefined &&
-    input.notiz === undefined
+    input.notiz === undefined &&
+    input.images === undefined
   ) {
     return { ok: true };
   }
@@ -198,7 +209,7 @@ export async function updateHubNote(
   const admin = createAdminClient();
   let { error } = await admin
     .from("hub_notes")
-    .update({ ...patch, ...statusPatch, ...notizPatch })
+    .update({ ...patch, ...statusPatch, ...notizPatch, ...imagesPatch })
     .eq("id", cleanId);
   // Spalte status/notiz fehlt bis Migration 0038/0044 — dann ohne sie speichern.
   if (error && (error.code === "PGRST204" || error.code === "42703")) {

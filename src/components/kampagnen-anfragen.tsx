@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
   Check,
   Inbox,
+  Paperclip,
   Pencil,
   Plus,
   RotateCcw,
@@ -23,8 +24,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { ANFRAGE_TAGS, anfrageTag, guessTag, hubChip } from "@/lib/anfrage-tags";
-import { noteImages } from "@/lib/note-images";
+import { ANFRAGE_TAGS, anfrageTagsOf, hubChip } from "@/lib/anfrage-tags";
+import {
+  NOTE_FILE_ACCEPT,
+  NOTE_IMAGE_MAX,
+  noteImages,
+  uploadNoteImage,
+} from "@/lib/note-images";
 import {
   ImageAttachRow,
   NoteImageStrip,
@@ -155,6 +161,53 @@ export function KampagnenAnfragen({
     });
   }
 
+  // Dateien direkt an bestehende Karten hängen (ein Input für alle Karten).
+  const cardFileRef = useRef<HTMLInputElement>(null);
+  const attachTarget = useRef<AnfrageRow | null>(null);
+
+  function attachToCard(a: AnfrageRow) {
+    attachTarget.current = a;
+    cardFileRef.current?.click();
+  }
+
+  async function onCardFiles(files: File[]) {
+    const a = attachTarget.current;
+    if (!a || files.length === 0) return;
+    const existing = noteImages(a.images);
+    const frei = NOTE_IMAGE_MAX - existing.length;
+    if (frei <= 0) {
+      toast.error(`Max. ${NOTE_IMAGE_MAX} Dateien pro Karte.`);
+      return;
+    }
+    const urls: string[] = [];
+    for (const f of files.slice(0, frei)) {
+      const r = await uploadNoteImage(f);
+      if (r.ok) urls.push(r.url);
+      else toast.error(r.error);
+    }
+    if (urls.length === 0) return;
+    startTransition(async () => {
+      const r = await updateHubNote(a.id, { images: [...existing, ...urls] });
+      if (r.ok) {
+        toast.success(
+          urls.length === 1 ? "Datei angehängt" : `${urls.length} Dateien angehängt`,
+        );
+      } else {
+        toast.error(r.error);
+      }
+    });
+  }
+
+  function removeFile(a: AnfrageRow, url: string) {
+    startTransition(async () => {
+      const r = await updateHubNote(a.id, {
+        images: noteImages(a.images).filter((u) => u !== url),
+      });
+      if (r.ok) toast.success("Anhang entfernt");
+      else toast.error(r.error);
+    });
+  }
+
   function move(a: AnfrageRow, ziel: Spalte) {
     startTransition(async () => {
       const r = await updateHubNote(a.id, {
@@ -240,6 +293,19 @@ export function KampagnenAnfragen({
       </div>
       <ImageAttachRow attach={attach} disabled={pending} />
 
+      {/* Datei-Input für die Karten-Anhänge (Ziel-Karte via attachTarget) */}
+      <input
+        ref={cardFileRef}
+        type="file"
+        accept={NOTE_FILE_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void onCardFiles(Array.from(e.target.files ?? []));
+          e.target.value = "";
+        }}
+      />
+
       {/* Kanban */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {SPALTEN.map((sp) => {
@@ -267,7 +333,7 @@ export function KampagnenAnfragen({
                   </p>
                 )}
                 {list.map((a) => {
-                  const kategorie = anfrageTag(a.tag) ?? guessTag(a.text);
+                  const kategorien = anfrageTagsOf(a.tag, a.text);
                   return (
                   <div
                     key={a.id}
@@ -285,16 +351,17 @@ export function KampagnenAnfragen({
                       >
                         {hubName(a.hub_id)}
                       </span>
-                      {kategorie && (
+                      {kategorien.map((k) => (
                         <span
+                          key={k.key}
                           className={cn(
                             "rounded-full px-2 py-0.5 text-[0.65rem] font-semibold whitespace-nowrap",
-                            kategorie.chip,
+                            k.chip,
                           )}
                         >
-                          {kategorie.label}
+                          {k.label}
                         </span>
-                      )}
+                      ))}
                     </span>
                     {editId === a.id ? (
                       <span className="flex flex-col gap-1">
@@ -339,7 +406,10 @@ export function KampagnenAnfragen({
                         {a.text}
                       </span>
                     )}
-                    <NoteImageStrip urls={noteImages(a.images)} />
+                    <NoteImageStrip
+                      urls={noteImages(a.images)}
+                      onRemove={(url) => removeFile(a, url)}
+                    />
 
                     {/* Notiz unten an der Karte */}
                     {notizId === a.id ? (
@@ -464,6 +534,18 @@ export function KampagnenAnfragen({
                           <StickyNote className="size-3.5" />
                         </Button>
                       )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground"
+                        disabled={pending}
+                        aria-label="Datei anhängen"
+                        title="Datei anhängen (PDF, Office, Bilder)"
+                        onClick={() => attachToCard(a)}
+                      >
+                        <Paperclip className="size-3.5" />
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
