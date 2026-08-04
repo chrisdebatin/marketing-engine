@@ -535,6 +535,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["meta_ads"]["Insert"]>;
         Relationships: [];
       };
+      meta_creatives: {
+        Row: {
+          id: string;
+          name: string;
+          path: string;
+          url: string;
+          mime: string;
+          size_bytes: number;
+          notiz: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          path: string;
+          url: string;
+          mime: string;
+          size_bytes?: number;
+          notiz?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["meta_creatives"]["Insert"]
+        >;
+        Relationships: [];
+      };
       lead_calls: {
         Row: {
           id: string;

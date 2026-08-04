@@ -1,6 +1,7 @@
 import {
   BedDouble,
   BookOpen,
+  Bot,
   Building2,
   ChartColumn,
   Rocket,
@@ -54,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
       { href: "/online-anzeigen", label: "Online Anzeigen", Icon: Rocket },
+      { href: "/meta-ads", label: "Meta Ads KI", Icon: Bot },
       { href: "/kommunikation", label: "Kommunikation", Icon: Send },
       { href: "/postfach", label: "Postfach", Icon: Inbox },
     ],

@@ -196,3 +196,18 @@ notify pgrst, 'reload schema';
 alter table public.hub_notes add column if not exists notiz text;
 
 notify pgrst, 'reload schema';
+
+-- ── 0045: Werbemittel-Katalog für den Meta-Ads-KI-Agenten ──────────
+create table if not exists public.meta_creatives (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  path        text not null,
+  url         text not null,
+  mime        text not null,
+  size_bytes  bigint not null default 0,
+  notiz       text,
+  created_at  timestamptz default now()
+);
+alter table public.meta_creatives disable row level security;
+
+notify pgrst, 'reload schema';
