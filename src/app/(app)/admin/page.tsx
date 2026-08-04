@@ -413,7 +413,7 @@ export default async function AdminPage() {
                     <div className="min-w-0">
                       <h2 className="flex flex-wrap items-center gap-2 leading-tight font-semibold">
                         <span className="truncate">{h.name}</span>
-                        <HubTags md={h.responsible_md} pdl={h.pdl_name} />
+                        <HubTags md={h.responsible_md} pdl={h.pdl_name} hubName={h.name} />
                       </h2>
                       <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">

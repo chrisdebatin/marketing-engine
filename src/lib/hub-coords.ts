@@ -27,6 +27,26 @@ export const HUB_COORDS: Record<string, [number, number] | null> = {
   "Pflegeunion Intensiv": null,
 };
 
+// Bundesland je Stadt — alles andere in CITY_COORDS liegt in NRW.
+// (Alverdissen/Barntrup und Bad Oeynhausen gehören zu NRW.)
+const NIEDERSACHSEN = new Set([
+  "Rinteln",
+  "Hessisch-Oldendorf",
+  "Bad Nenndorf",
+  "Hameln",
+  "Bad Pyrmont",
+]);
+
+/** "NRW" | "Niedersachsen" — null, wenn die Stadt unbekannt ist. */
+export function hubBundesland(name: string): "NRW" | "Niedersachsen" | null {
+  if (hubCoords(name) == null) return null;
+  const city = name
+    .replace(/^(Alltagshilfe|Tagespflege|Tagespflgege|Intensivpflege|Pflegeunion)\s+/i, "")
+    .trim();
+  const key = CITY_COORDS[name] ? name : city;
+  return NIEDERSACHSEN.has(key) ? "Niedersachsen" : "NRW";
+}
+
 export function hubCoords(name: string): [number, number] | null {
   if (name in HUB_COORDS) return HUB_COORDS[name];
   if (CITY_COORDS[name]) return CITY_COORDS[name];

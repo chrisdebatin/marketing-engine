@@ -1,6 +1,35 @@
 import { cn } from "@/lib/utils";
-import { mdColor, mdShort } from "@/lib/hub-coords";
+import { hubBundesland, mdColor, mdShort } from "@/lib/hub-coords";
 import { splitPdlNames } from "@/lib/pdl";
+
+/**
+ * Bundesland-Tag (NRW blau / Niedersachsen grün), aus dem Hub-Namen
+ * abgeleitet. Nichts, wenn die Stadt unbekannt ist.
+ */
+export function LandTag({
+  hubName,
+  className,
+}: {
+  hubName: string;
+  className?: string;
+}) {
+  const land = hubBundesland(hubName);
+  if (!land) return null;
+  return (
+    <span
+      title={`Bundesland: ${land}`}
+      className={cn(
+        "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-xs font-medium",
+        land === "NRW"
+          ? "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-400"
+          : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+        className,
+      )}
+    >
+      {land === "Niedersachsen" ? "Nieders." : land}
+    </span>
+  );
+}
 
 /**
  * Small colored tag showing the responsible MD (first name), colored
@@ -72,16 +101,20 @@ export function HubTags({
   md,
   pdl,
   pdlRole,
+  hubName,
   className,
 }: {
   md: string | null;
   pdl: string | null;
   pdlRole?: string;
+  /** Wenn gesetzt, wird zusätzlich das Bundesland getaggt (NRW/Nieders.). */
+  hubName?: string;
   className?: string;
 }) {
-  if (!md && !pdl) return null;
+  if (!md && !pdl && !hubName) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1.5", className)}>
+      {hubName && <LandTag hubName={hubName} />}
       <MdTag md={md} />
       <PdlTag pdl={pdl} role={pdlRole} />
     </span>

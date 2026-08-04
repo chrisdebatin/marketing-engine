@@ -257,6 +257,7 @@ export default async function HubsPage({
                       md={h.responsible_md}
                       pdl={h.pdl_name}
                       pdlRole={pdlRoleShort(h.name)}
+                      hubName={h.name}
                     />
                     {personalByHub.has(h.id) && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-chart-5/40 bg-chart-5/10 px-2 py-0.5 text-xs font-medium text-chart-5">

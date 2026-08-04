@@ -145,6 +145,7 @@ export default async function HubDetailPage({
               md={hub.responsible_md}
               pdl={hub.pdl_name}
               pdlRole={pdlRoleShort(hub.name)}
+              hubName={hub.name}
             />
           </div>
           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted-foreground">

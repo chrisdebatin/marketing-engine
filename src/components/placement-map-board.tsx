@@ -7,6 +7,7 @@ import { FileText, MapPin, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { HubTags } from "@/components/md-tag";
 import { cn } from "@/lib/utils";
+import { hubBundesland } from "@/lib/hub-coords";
 import { placeKindLabel } from "@/lib/places";
 
 /** Ein von der PDL eingetragener Ort (Auslage bzw. Box-Lieferung). */
@@ -104,6 +105,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
             ? `<br/>… und ${h.places.length - 10} weitere`
             : "";
         const info = [
+          hubBundesland(h.name),
           h.md ? `MD: ${esc(h.md)}` : null,
           h.pdl ? `PDL: ${esc(h.pdl)}` : null,
         ]
@@ -218,7 +220,7 @@ export function PlacementMapBoard({ hubs }: { hubs: MapHub[] }) {
                     {h.places.length}
                   </Badge>
                 </button>
-                <HubTags md={h.md} pdl={h.pdl} pdlRole={h.pdlRole} />
+                <HubTags md={h.md} pdl={h.pdl} pdlRole={h.pdlRole} hubName={h.name} />
 
                 <ul className="flex flex-col gap-1">
                   {h.places.map((p, i) => {
