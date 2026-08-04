@@ -66,6 +66,13 @@ const capacitySchema = z.object({
           "Qualitative Kapazitäts-Info als kurzer Satz („Kapazität in der Alltagshilfe " +
             "eingeschränkt“, „Personalmangel“), sonstige Anmerkung — oder null.",
         ),
+      wortlaut: z
+        .string()
+        .nullable()
+        .describe(
+          "Die Passage der Meldung, die diesen Standort betrifft, WÖRTLICH zitiert " +
+            "(unverändert, inkl. Tippfehler). null nur, wenn kein Bezugstext existiert.",
+        ),
     }),
   ),
 });

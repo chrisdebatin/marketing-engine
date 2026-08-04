@@ -89,7 +89,20 @@ export async function importCapacityFromText(input: {
       wg_plaetze: clampPlaetze(m.wg_plaetze ?? vorhanden?.wg_plaetze ?? 0),
       kinder_moeglich: m.kinder_moeglich ?? vorhanden?.kinder_moeglich ?? false,
       aufnahme_ab: aufnahme,
-      notiz: (m.notiz ?? "").trim().slice(0, 500) || vorhanden?.notiz || null,
+      // KI-Anmerkung plus Original-Wortlaut der Meldung, nachvollziehbar
+      // für alle, die die Zahlen später lesen.
+      notiz:
+        [
+          (m.notiz ?? "").trim(),
+          (m.wortlaut ?? "").trim()
+            ? `Wortlaut: „${(m.wortlaut ?? "").trim()}“`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" — ")
+          .slice(0, 900) ||
+        vorhanden?.notiz ||
+        null,
       updated_at: new Date().toISOString(),
     };
     const scores = {

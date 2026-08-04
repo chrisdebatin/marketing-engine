@@ -16,6 +16,20 @@ export const dynamic = "force-dynamic";
 // Server-Actions dieser Seite rufen Claude auf — mehr Zeit als die 10s-Vorgabe.
 export const maxDuration = 60;
 
+/** Zeitpunkt der Meldung (deutsche Zeit), z. B. "04.08., 14:32". */
+function meldungZeit(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString("de-DE", {
+    timeZone: "Europe/Berlin",
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function ScoreBadge({ value }: { value: number | null | undefined }) {
   if (value == null) return <span className="text-muted-foreground">—</span>;
   return (
@@ -195,6 +209,11 @@ export default async function KapazitaetPage() {
                           <Badge variant="outline" className="text-muted-foreground">
                             keine Meldung
                           </Badge>
+                        )}
+                        {latest && meldungZeit(latest.updated_at) && (
+                          <span className="mt-0.5 block text-[11px] text-muted-foreground tabular-nums">
+                            gemeldet {meldungZeit(latest.updated_at)} Uhr
+                          </span>
                         )}
                       </td>
                       <td className="px-2 py-1.5">
