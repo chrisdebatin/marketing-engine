@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatIsoDate } from "@/lib/crm";
-import type { CapacityReport } from "@/lib/capacity";
+import { cn } from "@/lib/utils";
+import {
+  SCORE_FIELDS,
+  SCORE_HINT,
+  scoreClasses,
+  type CapacityReport,
+  type ScoreKey,
+} from "@/lib/capacity";
 
 /**
  * Wöchentliche Kapazitäts-Meldung der PDL: freie Plätze (gesamt, Beatmung,
@@ -33,6 +40,11 @@ export function CapacityForm({
   const [beatmung, setBeatmung] = useState(String(seed?.beatmung_plaetze ?? 0));
   const [wg, setWg] = useState(String(seed?.wg_plaetze ?? 0));
   const [kinder, setKinder] = useState(Boolean(seed?.kinder_moeglich));
+  const [scores, setScores] = useState<Record<ScoreKey, number | null>>({
+    pflege_score: seed?.pflege_score ?? null,
+    alltagshilfe_score: seed?.alltagshilfe_score ?? null,
+    wundversorgung_score: seed?.wundversorgung_score ?? null,
+  });
   const [aufnahmeAb, setAufnahmeAb] = useState(current?.aufnahme_ab ?? "");
   const [notiz, setNotiz] = useState(current?.notiz ?? "");
   const [saving, setSaving] = useState(false);
@@ -51,6 +63,7 @@ export function CapacityForm({
           beatmung_plaetze: beatmung,
           wg_plaetze: wg,
           kinder_moeglich: kinder,
+          ...scores,
           aufnahme_ab: aufnahmeAb,
           notiz,
         }),
@@ -122,6 +135,46 @@ export function CapacityForm({
       )}
 
       <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm">
+        {/* Kapazitäts-Skala je Leistungsbereich */}
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">
+            Kapazität je Bereich{" "}
+            <span className="font-normal text-muted-foreground">
+              ({SCORE_HINT})
+            </span>
+          </p>
+          <div className="flex flex-wrap gap-6">
+            {SCORE_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-1 text-sm">
+                <span className="font-medium">{label}</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      disabled={saving}
+                      onClick={() =>
+                        setScores((prev) => ({
+                          ...prev,
+                          [key]: prev[key] === n ? null : n,
+                        }))
+                      }
+                      className={cn(
+                        "size-8 rounded-md border text-sm font-semibold tabular-nums transition-colors",
+                        scores[key] === n
+                          ? cn(scoreClasses(n), "border-transparent ring-2 ring-primary/40")
+                          : "bg-background text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-6">
           {numField(
             "Freie Plätze gesamt",

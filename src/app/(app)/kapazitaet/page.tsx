@@ -1,13 +1,34 @@
 import { Baby, BedDouble, CalendarCheck, Wind } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { capacityWeekStart, type CapacityReport } from "@/lib/capacity";
+import {
+  capacityWeekStart,
+  SCORE_HINT,
+  scoreClasses,
+  type CapacityReport,
+} from "@/lib/capacity";
 import { formatIsoDate } from "@/lib/crm";
 import { Badge } from "@/components/ui/badge";
 import { CapacityFreetext } from "@/components/capacity-freetext";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+// Server-Actions dieser Seite rufen Claude auf — mehr Zeit als die 10s-Vorgabe.
+export const maxDuration = 60;
+
+function ScoreBadge({ value }: { value: number | null | undefined }) {
+  if (value == null) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex size-6 items-center justify-center rounded-md text-xs font-semibold tabular-nums",
+        scoreClasses(value),
+      )}
+    >
+      {value}
+    </span>
+  );
+}
 
 function Stat({
   icon: Icon,
@@ -124,10 +145,10 @@ export default async function KapazitaetPage() {
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="py-1.5 pr-2 font-medium">Standort</th>
                     <th className="px-2 py-1.5 font-medium">Status</th>
+                    <th className="px-2 py-1.5 font-medium">Pflege</th>
+                    <th className="px-2 py-1.5 font-medium">Alltagshilfe</th>
+                    <th className="px-2 py-1.5 font-medium">Wundversorgung</th>
                     <th className="px-2 py-1.5 font-medium">Frei</th>
-                    <th className="px-2 py-1.5 font-medium">Beatmung</th>
-                    <th className="px-2 py-1.5 font-medium">WG</th>
-                    <th className="px-2 py-1.5 font-medium">Kinder</th>
                     <th className="px-2 py-1.5 font-medium">Aufnahme ab</th>
                     <th className="px-2 py-1.5 font-medium">Anmerkung</th>
                   </tr>
@@ -156,6 +177,15 @@ export default async function KapazitaetPage() {
                           </Badge>
                         )}
                       </td>
+                      <td className="px-2 py-1.5">
+                        <ScoreBadge value={latest?.pflege_score} />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <ScoreBadge value={latest?.alltagshilfe_score} />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <ScoreBadge value={latest?.wundversorgung_score} />
+                      </td>
                       <td
                         className={cn(
                           "px-2 py-1.5 font-semibold tabular-nums",
@@ -163,15 +193,6 @@ export default async function KapazitaetPage() {
                         )}
                       >
                         {latest?.freie_plaetze ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5 tabular-nums">
-                        {latest?.beatmung_plaetze ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5 tabular-nums">
-                        {latest?.wg_plaetze ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        {latest ? (latest.kinder_moeglich ? "ja" : "nein") : "—"}
                       </td>
                       <td className="px-2 py-1.5 tabular-nums">
                         {latest?.aufnahme_ab
@@ -186,6 +207,10 @@ export default async function KapazitaetPage() {
                 </tbody>
               </table>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Skala je Leistungsbereich: {SCORE_HINT}. Beatmung/WG/Kinder
+              stehen weiter im Verlauf unten.
+            </p>
           </section>
 
           {/* Verlauf je Standort */}

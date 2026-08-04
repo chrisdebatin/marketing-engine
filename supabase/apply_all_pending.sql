@@ -180,3 +180,14 @@ create index if not exists crm_todos_contact_idx on public.crm_todos (contact_id
 alter table public.crm_todos disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0043: Kapazitäts-Skala 1–5 (Pflege / Alltagshilfe / Wundversorgung) ─
+
+alter table public.capacity_reports add column if not exists pflege_score smallint
+  check (pflege_score between 1 and 5);
+alter table public.capacity_reports add column if not exists alltagshilfe_score smallint
+  check (alltagshilfe_score between 1 and 5);
+alter table public.capacity_reports add column if not exists wundversorgung_score smallint
+  check (wundversorgung_score between 1 and 5);
+
+notify pgrst, 'reload schema';

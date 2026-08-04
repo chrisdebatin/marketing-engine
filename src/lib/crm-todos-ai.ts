@@ -64,7 +64,7 @@ export async function extractTodosFromCallNote(input: {
     const client = new Anthropic();
     const response = await client.messages.parse({
       model: MODEL,
-      max_tokens: 2048,
+      max_tokens: 8192,
       output_config: {
         effort: "low",
         format: zodOutputFormat(extractionSchema),

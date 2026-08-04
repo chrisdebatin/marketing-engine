@@ -12,6 +12,8 @@ import type {
 } from "@/components/crm-targets-manager";
 
 export const dynamic = "force-dynamic";
+// Server-Actions dieser Seite rufen Claude auf — mehr Zeit als die 10s-Vorgabe.
+export const maxDuration = 60;
 
 /**
  * Call-Center-Link (token-gated, ohne Login): die Anruf-Liste der

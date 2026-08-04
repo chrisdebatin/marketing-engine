@@ -570,6 +570,9 @@ export interface Database {
           beatmung_plaetze: number;
           wg_plaetze: number;
           kinder_moeglich: boolean;
+          pflege_score: number | null;
+          alltagshilfe_score: number | null;
+          wundversorgung_score: number | null;
           aufnahme_ab: string | null;
           notiz: string | null;
           created_at: string | null;
@@ -583,6 +586,9 @@ export interface Database {
           beatmung_plaetze?: number;
           wg_plaetze?: number;
           kinder_moeglich?: boolean;
+          pflege_score?: number | null;
+          alltagshilfe_score?: number | null;
+          wundversorgung_score?: number | null;
           aufnahme_ab?: string | null;
           notiz?: string | null;
           created_at?: string | null;

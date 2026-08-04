@@ -34,6 +34,8 @@ import type {
 } from "@/components/crm-kanban";
 
 export const dynamic = "force-dynamic";
+// Server-Actions dieser Seite rufen Claude auf — mehr Zeit als die 10s-Vorgabe.
+export const maxDuration = 60;
 
 function Stat({
   icon: Icon,

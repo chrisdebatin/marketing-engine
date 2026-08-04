@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { capacityWeekStart, clampPlaetze } from "@/lib/capacity";
+import { capacityWeekStart, clampPlaetze, clampScore } from "@/lib/capacity";
 import { extractCapacityFromText } from "@/lib/capacity-ai";
 
 /**
@@ -31,11 +31,18 @@ export async function importCapacityFromText(input: {
     text,
     hubs.map((h) => h.name),
   );
-  if (!extracted || extracted.meldungen.length === 0) {
+  if (!extracted) {
     return {
       ok: false,
       message:
-        "Keine Standort-Angaben erkannt — bitte Standort-Namen und Zahlen nennen.",
+        "KI-Auswertung fehlgeschlagen (Zeitüberschreitung oder API-Fehler) — bitte erneut versuchen.",
+    };
+  }
+  if (extracted.meldungen.length === 0) {
+    return {
+      ok: false,
+      message:
+        "Keine Standort-Angaben erkannt — bitte die Standorte beim Namen nennen.",
     };
   }
 
@@ -70,25 +77,42 @@ export async function importCapacityFromText(input: {
       m.aufnahme_ab && /^\d{4}-\d{2}-\d{2}$/.test(m.aufnahme_ab)
         ? m.aufnahme_ab
         : (vorhanden?.aufnahme_ab ?? null);
-    const { error } = await admin.from("capacity_reports").upsert(
-      {
-        hub_id: hub.id,
-        week_start: week,
-        freie_plaetze: clampPlaetze(
-          m.freie_plaetze ?? vorhanden?.freie_plaetze ?? 0,
-        ),
-        beatmung_plaetze: clampPlaetze(
-          m.beatmung_plaetze ?? vorhanden?.beatmung_plaetze ?? 0,
-        ),
-        wg_plaetze: clampPlaetze(m.wg_plaetze ?? vorhanden?.wg_plaetze ?? 0),
-        kinder_moeglich:
-          m.kinder_moeglich ?? vorhanden?.kinder_moeglich ?? false,
-        aufnahme_ab: aufnahme,
-        notiz: (m.notiz ?? "").trim().slice(0, 500) || vorhanden?.notiz || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "hub_id,week_start" },
-    );
+    const base = {
+      hub_id: hub.id,
+      week_start: week,
+      freie_plaetze: clampPlaetze(
+        m.freie_plaetze ?? vorhanden?.freie_plaetze ?? 0,
+      ),
+      beatmung_plaetze: clampPlaetze(
+        m.beatmung_plaetze ?? vorhanden?.beatmung_plaetze ?? 0,
+      ),
+      wg_plaetze: clampPlaetze(m.wg_plaetze ?? vorhanden?.wg_plaetze ?? 0),
+      kinder_moeglich: m.kinder_moeglich ?? vorhanden?.kinder_moeglich ?? false,
+      aufnahme_ab: aufnahme,
+      notiz: (m.notiz ?? "").trim().slice(0, 500) || vorhanden?.notiz || null,
+      updated_at: new Date().toISOString(),
+    };
+    const scores = {
+      pflege_score:
+        clampScore(m.pflege_score) ?? vorhanden?.pflege_score ?? null,
+      alltagshilfe_score:
+        clampScore(m.alltagshilfe_score) ??
+        vorhanden?.alltagshilfe_score ??
+        null,
+      wundversorgung_score:
+        clampScore(m.wundversorgung_score) ??
+        vorhanden?.wundversorgung_score ??
+        null,
+    };
+    let { error } = await admin
+      .from("capacity_reports")
+      .upsert({ ...base, ...scores }, { onConflict: "hub_id,week_start" });
+    // Score-Spalten fehlen bis Migration 0043 — dann ohne sie speichern.
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      ({ error } = await admin
+        .from("capacity_reports")
+        .upsert(base, { onConflict: "hub_id,week_start" }));
+    }
     if (error) {
       return {
         ok: false,

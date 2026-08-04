@@ -369,7 +369,9 @@ export async function analyzeCallNotes(): Promise<{
     return { ok: true, message: "Nichts zu tun — alle Notizen sind bereits ausgewertet." };
   }
 
-  const batch = offen.slice(0, 40);
+  // 24 Notizen pro Klick, in 8er-Wellen parallel — bleibt unter dem
+  // 60s-Limit der Vercel-Function.
+  const batch = offen.slice(0, 24);
   const targetIds = [...new Set(batch.map((c) => c.target_id))];
   const { data: targetRows } = await admin
     .from("crm_targets")
@@ -380,24 +382,34 @@ export async function analyzeCallNotes(): Promise<{
   const { extractTodosFromCallNote } = await import("@/lib/crm-todos-ai");
   let created = 0;
   let analysiert = 0;
-  for (const c of batch) {
-    const extracted = await extractTodosFromCallNote({
-      note: c.note ?? "",
-      targetName: nameOf.get(c.target_id),
-      ansprechpartner: c.ansprechpartner,
-    });
-    if (!extracted) continue;
-    analysiert++;
-    const { error } = await admin
-      .from("crm_todos")
-      .insert(
-        todoRows(extracted, {
-          target_id: c.target_id,
-          hub_id: c.hub_id,
-          contact_id: c.id,
-        }),
-      );
-    if (!error) created += extracted.todos.length;
+  for (let i = 0; i < batch.length; i += 8) {
+    const welle = batch.slice(i, i + 8);
+    const results = await Promise.all(
+      welle.map(async (c) => {
+        const extracted = await extractTodosFromCallNote({
+          note: c.note ?? "",
+          targetName: nameOf.get(c.target_id),
+          ansprechpartner: c.ansprechpartner,
+        });
+        if (!extracted) return null;
+        const { error } = await admin
+          .from("crm_todos")
+          .insert(
+            todoRows(extracted, {
+              target_id: c.target_id,
+              hub_id: c.hub_id,
+              contact_id: c.id,
+            }),
+          );
+        return error ? null : extracted.todos.length;
+      }),
+    );
+    for (const r of results) {
+      if (r !== null) {
+        analysiert++;
+        created += r;
+      }
+    }
   }
 
   revalidateFrontoffice();

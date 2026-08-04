@@ -34,6 +34,24 @@ const capacitySchema = z.object({
         .boolean()
         .nullable()
         .describe("Kinder-Versorgung möglich? null wenn nicht genannt."),
+      pflege_score: z
+        .number()
+        .nullable()
+        .describe(
+          "Kapazität ambulante Pflege auf Skala 1–5 (5 = volle Kapazität, 1 = keine). Nur wenn ableitbar, sonst null.",
+        ),
+      alltagshilfe_score: z
+        .number()
+        .nullable()
+        .describe(
+          "Kapazität Alltagshilfe auf Skala 1–5 (5 = volle Kapazität, 1 = keine). Nur wenn ableitbar, sonst null.",
+        ),
+      wundversorgung_score: z
+        .number()
+        .nullable()
+        .describe(
+          "Kapazität Wundversorgung auf Skala 1–5 (5 = volle Kapazität, 1 = keine). Nur wenn ableitbar, sonst null.",
+        ),
       aufnahme_ab: z
         .string()
         .nullable()
@@ -72,7 +90,7 @@ export async function extractCapacityFromText(
     const client = new Anthropic();
     const response = await client.messages.parse({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       output_config: {
         effort: "low",
         format: zodOutputFormat(capacitySchema),
@@ -83,12 +101,20 @@ export async function extractCapacityFromText(
         "und ab wann aufgenommen werden kann. Ordne jede Angabe genau einem Standort aus der " +
         "Liste zu (Name exakt übernehmen). Standorte, die im Text nicht vorkommen, lässt du weg. " +
         "Nichts erfinden — nicht genannte Werte bleiben null.\n\n" +
+        "Zusätzlich meldet jeder Standort seine Kapazität je Leistungsbereich (Pflege, " +
+        "Alltagshilfe, Wundversorgung) auf einer Skala 1–5: 5 = volle Kapazität (viel frei), " +
+        "4 = gut aufnahmefähig, 3 = mittel, 2 = eingeschränkt, 1 = keine Kapazität/voll. " +
+        "Bezieht sich eine Aussage auf einen Bereich, setze NUR dessen Score " +
+        "(„Alltagshilfe eingeschränkt“ → alltagshilfe_score 2). Gilt sie für den ganzen " +
+        "Standort ohne Bereichs-Nennung, betrifft sie die Pflege (pflege_score).\n\n" +
         "Auch qualitative Aussagen OHNE Zahlen sind Meldungen:\n" +
-        "- „voll“, „keine Kapazität“, „nimmt nichts mehr an“ → freie_plaetze 0.\n" +
+        "- „voll“, „keine Kapazität“, „nimmt nichts mehr an“ → Score 1 (und freie_plaetze 0, " +
+        "wenn es um den ganzen Standort geht).\n" +
         "- „Kapazität eingeschränkt“, „Personalmangel“, „nur eingeschränkt aufnahmefähig“ " +
-        "→ Zahlen bleiben null, die Aussage kommt als kurzer Satz in die notiz.\n" +
+        "→ Score 2 im betroffenen Bereich + kurzer Satz in der notiz.\n" +
         "- Auch indirekte Hinweise zählen: „Stellenanzeige für die Alltagshilfe in Velbert " +
-        "schalten“ bedeutet, dass dort die Kapazität eingeschränkt ist → notiz.\n" +
+        "schalten“ bedeutet, dass dort die Alltagshilfe-Kapazität eingeschränkt ist " +
+        "→ alltagshilfe_score 2 + notiz.\n" +
         "Nennt der Text einen Bereich, den es nicht als eigenen Standort in der Liste gibt " +
         "(z. B. „Alltagshilfe Velbert“ fehlt), wähle den Standort derselben Stadt " +
         "(z. B. „Velbert“) und benenne den Bereich in der notiz.",
