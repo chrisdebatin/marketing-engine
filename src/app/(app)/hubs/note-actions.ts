@@ -145,7 +145,13 @@ async function loadNote(id: string) {
 
 export async function updateHubNote(
   id: string,
-  input: { text?: string; is_todo?: boolean; done?: boolean; status?: string | null },
+  input: {
+    text?: string;
+    is_todo?: boolean;
+    done?: boolean;
+    status?: string | null;
+    notiz?: string | null;
+  },
 ): Promise<Result> {
   const cleanId = (id ?? "").trim();
   if (!cleanId) return { ok: false, error: "Notiz fehlt." };
@@ -177,16 +183,24 @@ export async function updateHubNote(
   }
   const statusPatch =
     input.status !== undefined ? { status: input.status || null } : {};
-  if (Object.keys(patch).length === 0 && input.status === undefined) {
+  const notizPatch =
+    input.notiz !== undefined
+      ? { notiz: (input.notiz ?? "").trim().slice(0, 2000) || null }
+      : {};
+  if (
+    Object.keys(patch).length === 0 &&
+    input.status === undefined &&
+    input.notiz === undefined
+  ) {
     return { ok: true };
   }
 
   const admin = createAdminClient();
   let { error } = await admin
     .from("hub_notes")
-    .update({ ...patch, ...statusPatch })
+    .update({ ...patch, ...statusPatch, ...notizPatch })
     .eq("id", cleanId);
-  // Spalte status fehlt bis Migration 0038 — dann ohne sie speichern.
+  // Spalte status/notiz fehlt bis Migration 0038/0044 — dann ohne sie speichern.
   if (error && (error.code === "PGRST204" || error.code === "42703")) {
     ({ error } = await admin.from("hub_notes").update(patch).eq("id", cleanId));
   }

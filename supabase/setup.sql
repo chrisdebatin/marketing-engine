@@ -1104,6 +1104,16 @@ alter table public.capacity_reports add column if not exists wundversorgung_scor
 notify pgrst, 'reload schema';
 
 -- ============================================================
+-- 0044_hub_note_notiz.sql
+-- ============================================================
+-- 0044: Freitext-Notiz an Kampagnen-Anfragen (Kanban-Karten) —
+-- z. B. Zwischenstände ("Warten auf Freigabe", "Budget geklärt").
+
+alter table public.hub_notes add column if not exists notiz text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

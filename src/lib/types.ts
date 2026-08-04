@@ -406,12 +406,14 @@ export interface Database {
           status: string | null;
           tag: string | null;
           images: Json | null;
+          notiz: string | null;
           created_at: string | null;
         };
         Insert: {
           id?: string;
           hub_id: string;
           text: string;
+          notiz?: string | null;
           is_todo?: boolean;
           done_at?: string | null;
           topic_id?: string | null;

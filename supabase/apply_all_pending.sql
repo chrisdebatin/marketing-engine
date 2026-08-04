@@ -191,3 +191,8 @@ alter table public.capacity_reports add column if not exists wundversorgung_scor
   check (wundversorgung_score between 1 and 5);
 
 notify pgrst, 'reload schema';
+
+-- ── 0044: Notiz-Feld an Kampagnen-Anfragen ─────────────────────────
+alter table public.hub_notes add column if not exists notiz text;
+
+notify pgrst, 'reload schema';

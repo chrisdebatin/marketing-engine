@@ -6,8 +6,10 @@ import {
   ArrowRight,
   Check,
   Inbox,
+  Pencil,
   Plus,
   RotateCcw,
+  StickyNote,
   Trash2,
 } from "lucide-react";
 import {
@@ -19,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { ANFRAGE_TAGS, anfrageTag, guessTag, hubChip } from "@/lib/anfrage-tags";
 import { noteImages } from "@/lib/note-images";
@@ -43,6 +46,7 @@ export interface AnfrageRow {
   status?: string | null;
   tag?: string | null;
   images?: unknown;
+  notiz?: string | null;
   created_at: string | null;
 }
 
@@ -109,6 +113,42 @@ export function KampagnenAnfragen({
         toast.success("Anfrage als To-do geloggt");
         setText("");
         attach.reset();
+      } else {
+        toast.error(r.error);
+      }
+    });
+  }
+
+  // Karten-Editing: Titel-Text und Notiz (je eine Karte gleichzeitig).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [notizId, setNotizId] = useState<string | null>(null);
+  const [notizText, setNotizText] = useState("");
+
+  function saveText(a: AnfrageRow) {
+    if (pending) return;
+    if (!editText.trim()) {
+      toast.error("Text eingeben.");
+      return;
+    }
+    startTransition(async () => {
+      const r = await updateHubNote(a.id, { text: editText });
+      if (r.ok) {
+        toast.success("Gespeichert");
+        setEditId(null);
+      } else {
+        toast.error(r.error);
+      }
+    });
+  }
+
+  function saveNotiz(a: AnfrageRow) {
+    if (pending) return;
+    startTransition(async () => {
+      const r = await updateHubNote(a.id, { notiz: notizText });
+      if (r.ok) {
+        toast.success(notizText.trim() ? "Notiz gespeichert" : "Notiz entfernt");
+        setNotizId(null);
       } else {
         toast.error(r.error);
       }
@@ -256,16 +296,100 @@ export function KampagnenAnfragen({
                         </span>
                       )}
                     </span>
-                    <span
-                      className={cn(
-                        "min-w-0",
-                        sp.key === "erledigt" &&
-                          "text-muted-foreground line-through",
-                      )}
-                    >
-                      {a.text}
-                    </span>
+                    {editId === a.id ? (
+                      <span className="flex flex-col gap-1">
+                        <Textarea
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          rows={2}
+                          maxLength={2000}
+                          className="bg-background text-sm"
+                          disabled={pending}
+                          autoFocus
+                        />
+                        <span className="flex gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={pending}
+                            onClick={() => saveText(a)}
+                          >
+                            Speichern
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setEditId(null)}
+                          >
+                            Abbrechen
+                          </Button>
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "min-w-0",
+                          sp.key === "erledigt" &&
+                            "text-muted-foreground line-through",
+                        )}
+                      >
+                        {a.text}
+                      </span>
+                    )}
                     <NoteImageStrip urls={noteImages(a.images)} />
+
+                    {/* Notiz unten an der Karte */}
+                    {notizId === a.id ? (
+                      <span className="flex flex-col gap-1">
+                        <Textarea
+                          value={notizText}
+                          onChange={(e) => setNotizText(e.target.value)}
+                          rows={2}
+                          maxLength={2000}
+                          placeholder="Notiz, z. B. „Warten auf Freigabe“, Budget, Rückfragen…"
+                          className="bg-background text-xs"
+                          disabled={pending}
+                          autoFocus
+                        />
+                        <span className="flex gap-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            disabled={pending}
+                            onClick={() => saveNotiz(a)}
+                          >
+                            Speichern
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setNotizId(null)}
+                          >
+                            Abbrechen
+                          </Button>
+                        </span>
+                      </span>
+                    ) : a.notiz ? (
+                      <button
+                        type="button"
+                        title="Notiz bearbeiten"
+                        onClick={() => {
+                          setNotizId(a.id);
+                          setNotizText(a.notiz ?? "");
+                          setEditId(null);
+                        }}
+                        className="flex items-start gap-1 rounded-md bg-muted/60 px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted"
+                      >
+                        <StickyNote className="mt-0.5 size-3 shrink-0" />
+                        <span className="whitespace-pre-wrap">{a.notiz}</span>
+                      </button>
+                    ) : null}
                     <span className="flex items-center gap-0.5">
                       {sp.key === "offen" && (
                         <Button
@@ -304,6 +428,40 @@ export function KampagnenAnfragen({
                         >
                           <RotateCcw className="size-3.5" />
                           Zurück
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground"
+                        disabled={pending}
+                        aria-label="Text bearbeiten"
+                        title="Text bearbeiten"
+                        onClick={() => {
+                          setEditId(a.id);
+                          setEditText(a.text);
+                          setNotizId(null);
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      {!a.notiz && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground"
+                          disabled={pending}
+                          aria-label="Notiz hinzufügen"
+                          title="Notiz hinzufügen"
+                          onClick={() => {
+                            setNotizId(a.id);
+                            setNotizText("");
+                            setEditId(null);
+                          }}
+                        >
+                          <StickyNote className="size-3.5" />
                         </Button>
                       )}
                       <Button
