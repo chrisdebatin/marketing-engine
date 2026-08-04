@@ -1,7 +1,8 @@
 /** Kategorie-Tags für Anfragen-To-dos (Kanban). */
 export const ANFRAGE_TAGS = [
-  { key: "meta", label: "Meta-Anzeige", chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
-  { key: "zeitung", label: "Zeitungsanzeige", chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  { key: "meta", label: "Meta-Kampagne", chip: "bg-sky-500/15 text-sky-700 dark:text-sky-300" },
+  { key: "zeitung", label: "Zeitung", chip: "bg-amber-500/15 text-amber-700 dark:text-amber-300" },
+  { key: "print", label: "Print", chip: "bg-orange-500/15 text-orange-700 dark:text-orange-300" },
   { key: "stellenanzeige", label: "Stellenanzeige", chip: "bg-violet-500/15 text-violet-700 dark:text-violet-300" },
   { key: "material", label: "Material", chip: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" },
   { key: "flyer", label: "Flyer", chip: "bg-rose-500/15 text-rose-700 dark:text-rose-300" },
@@ -47,7 +48,8 @@ export function anfrageTag(key: string | null | undefined) {
  * Spezifisches vor Generischem ("Zeitungsanzeige" vor "Anzeige").
  */
 const TAG_GUESSES: { key: string; re: RegExp }[] = [
-  { key: "zeitung", re: /zeitung|print|kurier|anzeiger|wochenblatt/i },
+  { key: "zeitung", re: /zeitung|kurier|anzeiger|wochenblatt/i },
+  { key: "print", re: /\bprint\b|druck|plakat|broschüre|postwurf/i },
   { key: "stellenanzeige", re: /stellenanzeige|personal|recruit|pflegefachkraft|examiniert|\bjoin\b|indeed|stepstone/i },
   { key: "flyer", re: /flyer|auslage|aufsteller/i },
   { key: "material", re: /material|kugelschreiber|\bbox(en)?\b|nachschub|bestell|giveaway|werbemittel/i },
