@@ -44,7 +44,10 @@ const capacitySchema = z.object({
       notiz: z
         .string()
         .nullable()
-        .describe("Sonstige relevante Anmerkung zu diesem Standort, sonst null."),
+        .describe(
+          "Qualitative Kapazitäts-Info als kurzer Satz („Kapazität in der Alltagshilfe " +
+            "eingeschränkt“, „Personalmangel“), sonstige Anmerkung — oder null.",
+        ),
     }),
   ),
 });
@@ -79,7 +82,16 @@ export async function extractCapacityFromText(
         "je Standort freie Plätze (gesamt), davon Beatmung, davon WG, ob Kinder möglich sind " +
         "und ab wann aufgenommen werden kann. Ordne jede Angabe genau einem Standort aus der " +
         "Liste zu (Name exakt übernehmen). Standorte, die im Text nicht vorkommen, lässt du weg. " +
-        "Nichts erfinden — nicht genannte Werte bleiben null.",
+        "Nichts erfinden — nicht genannte Werte bleiben null.\n\n" +
+        "Auch qualitative Aussagen OHNE Zahlen sind Meldungen:\n" +
+        "- „voll“, „keine Kapazität“, „nimmt nichts mehr an“ → freie_plaetze 0.\n" +
+        "- „Kapazität eingeschränkt“, „Personalmangel“, „nur eingeschränkt aufnahmefähig“ " +
+        "→ Zahlen bleiben null, die Aussage kommt als kurzer Satz in die notiz.\n" +
+        "- Auch indirekte Hinweise zählen: „Stellenanzeige für die Alltagshilfe in Velbert " +
+        "schalten“ bedeutet, dass dort die Kapazität eingeschränkt ist → notiz.\n" +
+        "Nennt der Text einen Bereich, den es nicht als eigenen Standort in der Liste gibt " +
+        "(z. B. „Alltagshilfe Velbert“ fehlt), wähle den Standort derselben Stadt " +
+        "(z. B. „Velbert“) und benenne den Bereich in der notiz.",
       messages: [
         {
           role: "user",
