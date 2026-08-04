@@ -169,9 +169,6 @@ export default async function KapazitaetPage() {
                     <th className="px-2 py-1.5 font-medium">Pflege</th>
                     <th className="px-2 py-1.5 font-medium">Alltagshilfe</th>
                     <th className="px-2 py-1.5 font-medium">Wundversorgung</th>
-                    <th className="px-2 py-1.5 font-medium">Frei</th>
-                    <th className="px-2 py-1.5 font-medium">Beatmung</th>
-                    <th className="px-2 py-1.5 font-medium">WG</th>
                     <th className="px-2 py-1.5 font-medium">Aufnahme ab</th>
                     <th className="px-2 py-1.5 font-medium">Anmerkung</th>
                   </tr>
@@ -209,20 +206,6 @@ export default async function KapazitaetPage() {
                       <td className="px-2 py-1.5">
                         <ScoreBadge value={latest?.wundversorgung_score} />
                       </td>
-                      <td
-                        className={cn(
-                          "px-2 py-1.5 font-semibold tabular-nums",
-                          (latest?.freie_plaetze ?? 0) > 0 && "text-chart-4",
-                        )}
-                      >
-                        {latest?.freie_plaetze ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5 tabular-nums">
-                        {latest?.beatmung_plaetze ?? "—"}
-                      </td>
-                      <td className="px-2 py-1.5 tabular-nums">
-                        {latest?.wg_plaetze ?? "—"}
-                      </td>
                       <td className="px-2 py-1.5 tabular-nums">
                         {latest?.aufnahme_ab
                           ? formatIsoDate(latest.aufnahme_ab)
@@ -237,9 +220,8 @@ export default async function KapazitaetPage() {
               </table>
             </div>
             <p className="text-xs text-muted-foreground">
-              Skala je Leistungsbereich: {SCORE_HINT}. Frei/Beatmung/WG sind
-              die gemeldeten Platz-Zahlen der PDLs; Kinder-Versorgung steht im
-              Verlauf unten.
+              Skala je Leistungsbereich: {SCORE_HINT}. Die gemeldeten
+              Platz-Zahlen (Frei/Beatmung/WG/Kinder) stehen im Verlauf unten.
             </p>
           </section>
 
