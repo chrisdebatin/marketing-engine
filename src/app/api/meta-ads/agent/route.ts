@@ -109,6 +109,19 @@ const tools: Anthropic.Tool[] = [
     },
   },
   {
+    name: "search_interests",
+    description:
+      "Sucht Interessen-Targeting-Optionen (z. B. 'Pflege', 'Familie', 'Gesundheitswesen') mit ID und Reichweite. Die IDs werden bei create_ad_set als interest_ids verwendet.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Suchbegriff, z. B. 'Pflegeheim' oder 'Familie'." },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "list_uploaded_creatives",
     description:
       "Listet die in der Marketing-Engine hochgeladenen Werbemittel (Bilder) mit ID, Name und Notiz. Diese IDs werden bei create_ad als creative_upload_id verwendet.",
@@ -179,6 +192,17 @@ const tools: Anthropic.Tool[] = [
         },
         age_min: { type: "integer", description: "Optional, NICHT bei EMPLOYMENT." },
         age_max: { type: "integer", description: "Optional, NICHT bei EMPLOYMENT." },
+        genders: {
+          type: "string",
+          enum: ["alle", "frauen", "maenner"],
+          description: "Optional, NICHT bei EMPLOYMENT. Standard: alle.",
+        },
+        interest_ids: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional: Interessen-IDs aus search_interests. Sparsam einsetzen — bei kleinen Radien lieber weglassen (Advantage+), sonst wird die Zielgruppe zu klein.",
+        },
       },
       required: ["campaign_id", "name", "daily_budget_euro", "optimization_goal"],
       additionalProperties: false,
@@ -324,6 +348,21 @@ async function runTool(
     return r.data ?? [];
   }
 
+  if (name === "search_interests") {
+    const r = await metaFetch("search", {
+      type: "adinterest",
+      q: String(input.query ?? ""),
+      limit: "10",
+      locale: "de_DE",
+    });
+    return ((r.data ?? []) as Record<string, unknown>[]).map((i) => ({
+      id: i.id,
+      name: i.name,
+      audience_size: i.audience_size_upper_bound ?? i.audience_size,
+      topic: i.topic,
+    }));
+  }
+
   if (name === "list_uploaded_creatives") {
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -393,6 +432,16 @@ async function runTool(
     const targeting: Record<string, unknown> = { geo_locations: geoLocations };
     if (input.age_min) targeting.age_min = Number(input.age_min);
     if (input.age_max) targeting.age_max = Number(input.age_max);
+    if (input.genders === "frauen") targeting.genders = [1];
+    else if (input.genders === "maenner") targeting.genders = [2];
+    const interestIds = Array.isArray(input.interest_ids)
+      ? input.interest_ids.map(String)
+      : [];
+    if (interestIds.length > 0) {
+      targeting.flexible_spec = [
+        { interests: interestIds.map((id) => ({ id })) },
+      ];
+    }
 
     const budgetCents = Math.round(Number(input.daily_budget_euro) * 100);
     if (!Number.isFinite(budgetCents) || budgetCents < 100) {
@@ -569,9 +618,18 @@ ${creativeList}
 
 ## Freetext campaign flow
 When the user says something like "Ich brauche Mitarbeiter in Essen" or "Kunden in Velbert, 15 €/Tag":
+
+**Step 0 — Zielgruppen-Briefing (one short message, before creating anything):** Unless the user already provided the answers or says "mach einfach"/"leg einfach los", first ask a compact set of clarifying questions to sharpen targeting and copy. Ask only what's missing and genuinely affects the setup, max 5, as a numbered list with your recommended default in parentheses so the user can just reply "passt". Typical questions:
+- Wen sprechen wir an? (Kunden: meist pflegende Angehörige, 35–65 — selten die Pflegebedürftigen selbst. Mitarbeiter: Pflegefachkraft vs. Hilfskraft, examiniert?)
+- Leistungs-/Themenschwerpunkt? (z. B. Grundpflege, Intensivpflege, Alltagshilfe, Verhinderungspflege — bestimmt Copy und Formular)
+- Radius um den Standort? (Standard 25 km, ab 1 km möglich)
+- Budget/Tag und Laufzeit? (Standard 20 €/Tag, offenes Ende)
+- Lead-Formular (empfohlen, günstigere Leads) oder Website-Klicks — und welche Ziel-URL?
+If the user answers "mach einfach" or ignores the questions, proceed with the stated defaults. Never ask more than once per campaign.
+
 1. Infer intent (Kunden/Mitarbeiter), location, budget (default 20 €/day if unsaid — state the assumption).
 2. Geo-targeting: if the request references a hub/its address or a radius under 17 km, use create_ad_set's address parameter with the hub address from the context above (custom location, radius from 1 km). Otherwise search_locations for the city key (city radius min 17 km).
-3. Create campaign → ad set (default ~25 km radius unless specified) → ad(s), ALL PAUSED, using the best-fitting uploaded creative(s). If lead ads: check list_lead_forms first; if no form exists, build a WEBSITE/traffic setup instead and tell the user a lead form would perform better.
+3. Create campaign → ad set (default ~25 km radius unless specified) → ad(s), ALL PAUSED, using the best-fitting uploaded creative(s). Targeting levers: age_min/age_max and genders where sensible (e.g. Kunden-Kampagnen: 35–65, Angehörige), interest_ids via search_interests ONLY for larger radii (≥ 25 km) — in small local audiences prefer broad targeting (Advantage+) so the audience doesn't collapse. Never age/gender/interests on EMPLOYMENT campaigns (Meta blocks it). If lead ads: check list_lead_forms first; if no form exists, build a WEBSITE/traffic setup instead and tell the user a lead form would perform better.
 4. Naming convention: [Intent]-[Stadt]-[JJJJ-MM], e.g. "Mitarbeiter-Essen-2026-08".
 5. Write persuasive German ad copy: strong hook, emotional benefit, social proof, clear CTA. Never generic. For care: family support, independence, quality of life, trusted local care — NEVER imply the platform knows someone's medical condition. For recruiting: appreciation, fair pay, team, work-life balance — no discriminatory wording.
 6. Afterwards summarize exactly what was created (IDs, budget, targeting, copy) and remind the user everything is PAUSED and needs their approval to go live.
