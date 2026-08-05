@@ -52,9 +52,14 @@ export async function MetaCampaignOverview() {
         fields: "campaign_id,daily_budget,effective_status",
         limit: "100",
       }),
+      // Metas Preset "last_7d" zählt OHNE heute — junge Kampagnen zeigen
+      // dann 0. Deshalb expliziter Zeitraum: letzte 7 Tage inkl. heute.
       metaFetch(`${acct}/insights`, {
         level: "campaign",
-        date_preset: "last_7d",
+        time_range: JSON.stringify({
+          since: new Date(Date.now() - 6 * 86400_000).toISOString().slice(0, 10),
+          until: new Date().toISOString().slice(0, 10),
+        }),
         fields: "campaign_id,spend,impressions,actions",
       }),
     ]);
