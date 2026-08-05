@@ -146,7 +146,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "create_ad_set",
     description:
-      "Legt ein Ad Set an — IMMER PAUSED. Targeting per Städte-Keys (aus search_locations) mit Radius. Bei EMPLOYMENT-Kampagnen keine Alters-/Geschlechts-Einschränkung angeben.",
+      "Legt ein Ad Set an — IMMER PAUSED. Geo-Targeting entweder per address (Umkreis um eine konkrete Adresse, z. B. die Hub-Adresse — Radius ab 1 km, BEVORZUGT für 'X km um den Standort') ODER per city_keys aus search_locations (Stadt-Targeting, Radius min. 17 km). Bei EMPLOYMENT-Kampagnen keine Alters-/Geschlechts-Einschränkung angeben.",
     input_schema: {
       type: "object",
       properties: {
@@ -162,16 +162,25 @@ const tools: Anthropic.Tool[] = [
           enum: ["ON_AD", "WEBSITE"],
           description: "ON_AD = Instant-Formular (Lead Ads), WEBSITE = Klick zur Website.",
         },
+        address: {
+          type: "string",
+          description:
+            "Volle Adresse als Umkreis-Mittelpunkt (Meta geokodiert selbst), z. B. 'Lange Straße 41-43, 31840 Hessisch-Oldendorf, Deutschland'. Alternative zu city_keys.",
+        },
         city_keys: {
           type: "array",
           items: { type: "string" },
-          description: "Geo-Keys aus search_locations (Städte).",
+          description: "Geo-Keys aus search_locations (Städte). Alternative zu address.",
         },
-        radius_km: { type: "number", description: "Umkreis je Stadt in km (Standard 25)." },
+        radius_km: {
+          type: "number",
+          description:
+            "Umkreis in km (Standard 25). Bei address ab 1 km möglich, bei city_keys min. 17 km.",
+        },
         age_min: { type: "integer", description: "Optional, NICHT bei EMPLOYMENT." },
         age_max: { type: "integer", description: "Optional, NICHT bei EMPLOYMENT." },
       },
-      required: ["campaign_id", "name", "daily_budget_euro", "optimization_goal", "city_keys"],
+      required: ["campaign_id", "name", "daily_budget_euro", "optimization_goal"],
       additionalProperties: false,
     },
   },
@@ -360,17 +369,28 @@ async function runTool(
 
   if (name === "create_ad_set") {
     const cityKeys = Array.isArray(input.city_keys) ? input.city_keys.map(String) : [];
-    if (cityKeys.length === 0) throw new Error("city_keys fehlen (erst search_locations nutzen).");
-    const radius = Math.min(Math.max(Number(input.radius_km) || 25, 17), 80);
-    const targeting: Record<string, unknown> = {
-      geo_locations: {
-        cities: cityKeys.map((key) => ({
-          key,
-          radius,
-          distance_unit: "kilometer",
-        })),
-      },
-    };
+    const address = String(input.address ?? "").trim();
+    if (cityKeys.length === 0 && !address) {
+      throw new Error("Geo-Targeting fehlt: entweder address oder city_keys angeben.");
+    }
+    const geoLocations: Record<string, unknown> = address
+      ? {
+          custom_locations: [
+            {
+              address_string: address,
+              radius: Math.min(Math.max(Number(input.radius_km) || 25, 1), 80),
+              distance_unit: "kilometer",
+            },
+          ],
+        }
+      : {
+          cities: cityKeys.map((key) => ({
+            key,
+            radius: Math.min(Math.max(Number(input.radius_km) || 25, 17), 80),
+            distance_unit: "kilometer",
+          })),
+        };
+    const targeting: Record<string, unknown> = { geo_locations: geoLocations };
     if (input.age_min) targeting.age_min = Number(input.age_min);
     if (input.age_max) targeting.age_max = Number(input.age_max);
 
@@ -550,8 +570,8 @@ ${creativeList}
 ## Freetext campaign flow
 When the user says something like "Ich brauche Mitarbeiter in Essen" or "Kunden in Velbert, 15 €/Tag":
 1. Infer intent (Kunden/Mitarbeiter), location, budget (default 20 €/day if unsaid — state the assumption).
-2. search_locations for the city, pick the correct key (verify region).
-3. Create campaign → ad set (city + ~25 km radius) → ad(s), ALL PAUSED, using the best-fitting uploaded creative(s). If lead ads: check list_lead_forms first; if no form exists, build a WEBSITE/traffic setup instead and tell the user a lead form would perform better.
+2. Geo-targeting: if the request references a hub/its address or a radius under 17 km, use create_ad_set's address parameter with the hub address from the context above (custom location, radius from 1 km). Otherwise search_locations for the city key (city radius min 17 km).
+3. Create campaign → ad set (default ~25 km radius unless specified) → ad(s), ALL PAUSED, using the best-fitting uploaded creative(s). If lead ads: check list_lead_forms first; if no form exists, build a WEBSITE/traffic setup instead and tell the user a lead form would perform better.
 4. Naming convention: [Intent]-[Stadt]-[JJJJ-MM], e.g. "Mitarbeiter-Essen-2026-08".
 5. Write persuasive German ad copy: strong hook, emotional benefit, social proof, clear CTA. Never generic. For care: family support, independence, quality of life, trusted local care — NEVER imply the platform knows someone's medical condition. For recruiting: appreciation, fair pay, team, work-life balance — no discriminatory wording.
 6. Afterwards summarize exactly what was created (IDs, budget, targeting, copy) and remind the user everything is PAUSED and needs their approval to go live.
