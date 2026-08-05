@@ -128,14 +128,19 @@ export async function MetaCampaignGrid() {
           const spend = Number(ins?.spend) || 0;
           const impressions = Number(ins?.impressions) || 0;
           const leads = leadsFrom(ins?.actions);
-          const budget =
-            adsets
-              .filter(
-                (s) =>
-                  s.campaign_id === c.id &&
-                  (active ? s.effective_status === "ACTIVE" : true),
-              )
+          const campaignAdsets = adsets.filter((s) => s.campaign_id === c.id);
+          const activeBudget =
+            campaignAdsets
+              .filter((s) => s.effective_status === "ACTIVE")
               .reduce((sum, s) => sum + (Number(s.daily_budget) || 0), 0) / 100;
+          const totalBudget =
+            campaignAdsets.reduce(
+              (sum, s) => sum + (Number(s.daily_budget) || 0),
+              0,
+            ) / 100;
+          // Kampagne live, aber kein Ad Set aktiv → liefert nichts aus.
+          const adsetsPaused = active && activeBudget === 0 && totalBudget > 0;
+          const budget = activeBudget > 0 ? activeBudget : totalBudget;
           const campaignAds = ads.filter((a) => a.campaign_id === c.id);
           const thumbs = campaignAds
             .filter((a) => a.creative?.thumbnail_url)
@@ -211,6 +216,11 @@ export async function MetaCampaignGrid() {
                 </dt>
                 <dd className="col-start-1 row-start-2 font-medium">
                   {budget > 0 ? euro(budget) : "—"}
+                  {adsetsPaused && (
+                    <span className="block text-[11px] font-normal text-amber-600">
+                      Ad Set pausiert
+                    </span>
+                  )}
                 </dd>
                 <dt className="col-start-2 row-start-1 text-[11px] text-muted-foreground">
                   Ausgaben

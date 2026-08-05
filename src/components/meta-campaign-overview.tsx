@@ -79,10 +79,18 @@ export async function MetaCampaignOverview() {
 
   const live = campaigns.filter((c) => c.effective_status === "ACTIVE");
   const paused = campaigns.length - live.length;
-  const budgetOf = (id: string) =>
-    adsets
-      .filter((s) => s.campaign_id === id && s.effective_status === "ACTIVE")
-      .reduce((sum, s) => sum + (Number(s.daily_budget) || 0), 0) / 100;
+  const budgetOf = (id: string) => {
+    const own = adsets.filter((s) => s.campaign_id === id);
+    const activeSum =
+      own
+        .filter((s) => s.effective_status === "ACTIVE")
+        .reduce((sum, s) => sum + (Number(s.daily_budget) || 0), 0) / 100;
+    const totalSum =
+      own.reduce((sum, s) => sum + (Number(s.daily_budget) || 0), 0) / 100;
+    // Kampagne live, aber alle Ad Sets pausiert → Budget trotzdem zeigen,
+    // mit Hinweis, dass nichts ausgeliefert wird.
+    return { budget: activeSum > 0 ? activeSum : totalSum, delivering: activeSum > 0 };
+  };
   const insightOf = (id: string) => insights.find((i) => i.campaign_id === id);
 
   return (
@@ -108,7 +116,7 @@ export async function MetaCampaignOverview() {
             const ins = insightOf(c.id);
             const spend = Number(ins?.spend) || 0;
             const leads = leadsFrom(ins?.actions);
-            const budget = budgetOf(c.id);
+            const { budget, delivering } = budgetOf(c.id);
             return (
               <li
                 key={c.id}
@@ -128,6 +136,11 @@ export async function MetaCampaignOverview() {
                     <dt className="text-xs text-muted-foreground">Tagesbudget</dt>
                     <dd className="font-medium">
                       {budget > 0 ? euro(budget) : "—"}
+                      {!delivering && budget > 0 && (
+                        <span className="block text-[11px] font-normal text-amber-600">
+                          Ad Set pausiert
+                        </span>
+                      )}
                     </dd>
                   </div>
                   <div>
