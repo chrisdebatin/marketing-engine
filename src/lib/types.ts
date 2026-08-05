@@ -544,6 +544,7 @@ export interface Database {
           mime: string;
           size_bytes: number;
           notiz: string | null;
+          meta_video_id: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -554,6 +555,7 @@ export interface Database {
           mime: string;
           size_bytes?: number;
           notiz?: string | null;
+          meta_video_id?: string | null;
           created_at?: string | null;
         };
         Update: Partial<

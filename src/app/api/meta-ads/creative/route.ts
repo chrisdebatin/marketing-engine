@@ -16,6 +16,39 @@ export async function POST(req: Request) {
     return Response.json({ error: "Nur für Admins." }, { status: 403 });
   }
 
+  // JSON-Modus: Datei liegt bereits im Bucket (per signierter URL hochgeladen,
+  // siehe ./sign) — hier nur noch die Katalog-Zeile anlegen.
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    const { path, name, mime, size, notiz } = (await req.json().catch(() => ({}))) as {
+      path?: string;
+      name?: string;
+      mime?: string;
+      size?: number;
+      notiz?: string;
+    };
+    if (!path || !name || !mime) {
+      return Response.json({ error: "Angaben unvollständig." }, { status: 400 });
+    }
+    const admin = createAdminClient();
+    const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(path);
+    const { data: row, error } = await admin
+      .from("meta_creatives")
+      .insert({
+        name: name.slice(0, 200),
+        path,
+        url: pub.publicUrl,
+        mime,
+        size_bytes: size ?? 0,
+        notiz: (notiz ?? "").trim().slice(0, 500) || null,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      return Response.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    }
+    return Response.json({ creative: row });
+  }
+
   let form: FormData;
   try {
     form = await req.formData();

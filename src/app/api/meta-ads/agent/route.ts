@@ -4,11 +4,14 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   MetaApiError,
+  getVideoThumbnail,
   metaAdAccountId,
   metaConfigured,
   metaFetch,
   metaPageId,
   uploadAdImage,
+  uploadAdVideo,
+  waitForVideoReady,
 } from "@/lib/meta-api";
 
 export const runtime = "nodejs";
@@ -174,7 +177,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "create_ad",
     description:
-      "Legt Creative + Anzeige in einem Ad Set an — IMMER PAUSED. Nutzt ein hochgeladenes Werbemittel (creative_upload_id aus list_uploaded_creatives).",
+      "Legt Creative + Anzeige in einem Ad Set an — IMMER PAUSED. Nutzt ein hochgeladenes Werbemittel (creative_upload_id aus list_uploaded_creatives); Bilder UND Videos (mp4/mov) werden unterstützt. Hinweis: Meta verarbeitet Videos asynchron — falls das Tool meldet, das Video sei noch in Verarbeitung, kurz warten und den Aufruf wiederholen (das Video wird nicht erneut hochgeladen).",
     input_schema: {
       type: "object",
       properties: {
@@ -395,35 +398,64 @@ async function runTool(
     const admin = createAdminClient();
     const { data: creative } = await admin
       .from("meta_creatives")
-      .select("id, name, url, mime")
+      .select("id, name, url, mime, meta_video_id")
       .eq("id", String(input.creative_upload_id))
       .maybeSingle();
     if (!creative) throw new Error("creative_upload_id unbekannt — list_uploaded_creatives nutzen.");
-    if (!creative.mime.startsWith("image/")) {
-      throw new Error("Nur Bild-Werbemittel werden derzeit unterstützt.");
+
+    const callToAction = input.lead_gen_form_id
+      ? {
+          type: String(input.cta_type),
+          value: {
+            link: String(input.link_url),
+            lead_gen_form_id: String(input.lead_gen_form_id),
+          },
+        }
+      : { type: String(input.cta_type), value: { link: String(input.link_url) } };
+
+    let objectStorySpec: Record<string, unknown>;
+    if (creative.mime.startsWith("video/")) {
+      // Video: einmal zu Meta hochladen (ID merken für Retries), Verarbeitung
+      // abwarten, Thumbnail holen — dann video_data-Creative bauen.
+      let videoId = creative.meta_video_id;
+      if (!videoId) {
+        videoId = await uploadAdVideo(creative.url, creative.name);
+        await admin
+          .from("meta_creatives")
+          .update({ meta_video_id: videoId })
+          .eq("id", creative.id);
+      }
+      await waitForVideoReady(videoId);
+      const thumb = await getVideoThumbnail(videoId);
+      const videoData: Record<string, unknown> = {
+        video_id: videoId,
+        image_url: thumb,
+        message: String(input.message ?? "").slice(0, 2000),
+        title: String(input.headline ?? "").slice(0, 255),
+        call_to_action: callToAction,
+      };
+      if (input.description) {
+        videoData.link_description = String(input.description).slice(0, 255);
+      }
+      objectStorySpec = { page_id: pageId, video_data: videoData };
+    } else {
+      const imageHash = await uploadAdImage(creative.url);
+      const linkData: Record<string, unknown> = {
+        message: String(input.message ?? "").slice(0, 2000),
+        name: String(input.headline ?? "").slice(0, 255),
+        link: String(input.link_url),
+        image_hash: imageHash,
+        call_to_action: callToAction,
+      };
+      if (input.description) linkData.description = String(input.description).slice(0, 255);
+      objectStorySpec = { page_id: pageId, link_data: linkData };
     }
-
-    const imageHash = await uploadAdImage(creative.url);
-
-    const linkData: Record<string, unknown> = {
-      message: String(input.message ?? "").slice(0, 2000),
-      name: String(input.headline ?? "").slice(0, 255),
-      link: String(input.link_url),
-      image_hash: imageHash,
-      call_to_action: input.lead_gen_form_id
-        ? {
-            type: String(input.cta_type),
-            value: { lead_gen_form_id: String(input.lead_gen_form_id) },
-          }
-        : { type: String(input.cta_type) },
-    };
-    if (input.description) linkData.description = String(input.description).slice(0, 255);
 
     const creativeRes = await metaFetch(
       `${acct}/adcreatives`,
       {
         name: `${String(input.name ?? "Creative").slice(0, 150)} — Creative`,
-        object_story_spec: JSON.stringify({ page_id: pageId, link_data: linkData }),
+        object_story_spec: JSON.stringify(objectStorySpec),
       },
       "POST",
     );
@@ -478,7 +510,7 @@ async function runTool(
 
 function buildSystemPrompt(
   hubs: { name: string; region: string | null; address: string | null }[],
-  creatives: { name: string; notiz: string | null }[],
+  creatives: { name: string; notiz: string | null; mime: string }[],
 ): string {
   const today = new Date().toISOString().slice(0, 10);
   const hubList = hubs
@@ -486,7 +518,12 @@ function buildSystemPrompt(
     .join("\n");
   const creativeList =
     creatives.length > 0
-      ? creatives.map((c) => `- ${c.name}${c.notiz ? ` (${c.notiz})` : ""}`).join("\n")
+      ? creatives
+          .map(
+            (c) =>
+              `- [${c.mime.startsWith("video/") ? "Video" : "Bild"}] ${c.name}${c.notiz ? ` (${c.notiz})` : ""}`,
+          )
+          .join("\n")
       : "(noch keine hochgeladen)";
 
   return `You are an expert Meta Ads performance marketer with full access to our Meta Ads account through the provided tools. Think like a Head of Growth: your goal is profitable lead generation with minimal wasted spend, not blind execution. Today: ${today}. Respond in German (the user is German).
@@ -563,7 +600,7 @@ export async function POST(req: Request) {
     admin.from("hubs").select("name, region, address").order("name"),
     admin
       .from("meta_creatives")
-      .select("name, notiz")
+      .select("name, notiz, mime")
       .order("created_at", { ascending: false }),
   ]);
 

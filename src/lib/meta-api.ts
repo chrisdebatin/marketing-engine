@@ -62,6 +62,57 @@ export async function metaFetch(
 }
 
 /**
+ * Startet den Video-Upload ins Werbekonto: Meta lädt das Video selbst von
+ * der öffentlichen URL (file_url) und verarbeitet es asynchron. Gibt die
+ * Video-ID zurück — Verarbeitung mit waitForVideoReady abwarten.
+ */
+export async function uploadAdVideo(videoUrl: string, name: string): Promise<string> {
+  const r = await metaFetch(
+    `${metaAdAccountId()}/advideos`,
+    { file_url: videoUrl, name: name.slice(0, 100) },
+    "POST",
+  );
+  if (!r.id) throw new MetaApiError("Meta hat keine Video-ID zurückgegeben.");
+  return String(r.id);
+}
+
+/**
+ * Wartet, bis Meta das Video fertig verarbeitet hat (Polling). Wirft nach
+ * Ablauf des Zeitfensters — der Aufrufer kann es später erneut versuchen,
+ * die Video-ID bleibt gültig.
+ */
+export async function waitForVideoReady(
+  videoId: string,
+  maxWaitMs = 90_000,
+): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    const r = await metaFetch(videoId, { fields: "status" });
+    const status = (r.status ?? {}) as Record<string, unknown>;
+    const state = String(status.video_status ?? "");
+    if (state === "ready") return;
+    if (state === "error") {
+      throw new MetaApiError("Meta konnte das Video nicht verarbeiten (Format prüfen).");
+    }
+    if (Date.now() - start > maxWaitMs) {
+      throw new MetaApiError(
+        "Video wird bei Meta noch verarbeitet — bitte in 1–2 Minuten erneut versuchen (das Video muss nicht neu hochgeladen werden).",
+      );
+    }
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+}
+
+/** Vorschaubild eines verarbeiteten Videos (für video_data.image_url nötig). */
+export async function getVideoThumbnail(videoId: string): Promise<string> {
+  const r = await metaFetch(`${videoId}/thumbnails`, { fields: "uri,is_preferred" });
+  const list = (r.data ?? []) as { uri?: string; is_preferred?: boolean }[];
+  const pick = list.find((t) => t.is_preferred) ?? list[0];
+  if (!pick?.uri) throw new MetaApiError("Kein Video-Vorschaubild verfügbar.");
+  return pick.uri;
+}
+
+/**
  * Lädt ein Bild (öffentliche URL, z. B. Supabase Storage) ins Werbekonto
  * hoch und gibt den image_hash für Ad-Creatives zurück.
  */

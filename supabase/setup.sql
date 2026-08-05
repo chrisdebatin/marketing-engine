@@ -1134,6 +1134,16 @@ alter table public.meta_creatives disable row level security;
 notify pgrst, 'reload schema';
 
 -- ============================================================
+-- 0046_meta_creatives_video.sql
+-- ============================================================
+-- 0046: Video-Creatives für den Meta-Ads-Agenten. meta_video_id speichert
+-- die ID des zu Meta hochgeladenen Videos, damit ein Retry (Meta verarbeitet
+-- Videos asynchron) nicht erneut hochladen muss.
+alter table public.meta_creatives add column if not exists meta_video_id text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

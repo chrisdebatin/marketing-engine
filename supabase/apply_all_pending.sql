@@ -213,3 +213,8 @@ create table if not exists public.meta_creatives (
 alter table public.meta_creatives disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0046: Video-Creatives (Meta-Video-ID für Retries) ──────────────
+alter table public.meta_creatives add column if not exists meta_video_id text;
+
+notify pgrst, 'reload schema';

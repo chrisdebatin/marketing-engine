@@ -6,6 +6,7 @@ import { ImagePlus, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 export interface CreativeRow {
@@ -68,24 +69,63 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
     let done = 0;
     const queue = [...list];
 
+    // Videos gehen direkt vom Browser zu Supabase Storage (signierte URL) —
+    // sie wären zu groß für den Weg über die Vercel-API-Route (4,5-MB-Limit).
+    async function uploadVideo(file: File) {
+      const signRes = await fetch("/api/meta-ads/creative/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, mime: file.type, size: file.size }),
+      });
+      const sign = await signRes.json();
+      if (!signRes.ok) throw new Error(sign.error ?? "Signierte URL fehlgeschlagen.");
+
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage
+        .from("meta-creatives")
+        .uploadToSignedUrl(sign.path, sign.token, file, { contentType: file.type });
+      if (upErr) throw new Error("Upload zu Storage fehlgeschlagen.");
+
+      const regRes = await fetch("/api/meta-ads/creative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: sign.path,
+          name: file.name,
+          mime: file.type,
+          size: file.size,
+          notiz: note,
+        }),
+      });
+      const reg = await regRes.json();
+      if (!regRes.ok) throw new Error(reg.error ?? "Registrieren fehlgeschlagen.");
+      return reg.creative as CreativeRow;
+    }
+
+    async function uploadImage(file: File) {
+      const prepped = await shrinkForUpload(file);
+      const form = new FormData();
+      form.set("file", prepped);
+      if (note) form.set("notiz", note);
+      const res = await fetch("/api/meta-ads/creative", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Upload fehlgeschlagen.");
+      return data.creative as CreativeRow;
+    }
+
     async function worker() {
       for (;;) {
         const file = queue.shift();
         if (!file) return;
         try {
-          const prepped = await shrinkForUpload(file);
-          const form = new FormData();
-          form.set("file", prepped);
-          if (note) form.set("notiz", note);
-          const res = await fetch("/api/meta-ads/creative", {
-            method: "POST",
-            body: form,
-          });
-          const data = await res.json();
-          if (!res.ok) failed.push(`${file.name}: ${data.error ?? "Fehler"}`);
-          else setItems((cur) => [data.creative as CreativeRow, ...cur]);
-        } catch {
-          failed.push(`${file.name}: Netzwerkfehler`);
+          const creative = file.type.startsWith("video/")
+            ? await uploadVideo(file)
+            : await uploadImage(file);
+          setItems((cur) => [creative, ...cur]);
+        } catch (err) {
+          failed.push(
+            `${file.name}: ${err instanceof Error ? err.message : "Netzwerkfehler"}`,
+          );
         }
         done++;
         setProgress(`${done}/${list.length} hochgeladen…`);
@@ -121,7 +161,7 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png"
+          accept="image/jpeg,image/png,video/mp4,video/quicktime"
           multiple
           hidden
           onChange={(e) => upload(e.target.files)}
@@ -152,8 +192,9 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
 
       {items.length === 0 ? (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-          Noch keine Werbemittel hochgeladen. Lade JPG/PNG-Motive hoch — der
-          Agent nutzt sie automatisch beim Erstellen von Anzeigen.
+          Noch keine Werbemittel hochgeladen. Lade JPG/PNG-Motive oder
+          MP4/MOV-Videos hoch — der Agent nutzt sie automatisch beim Erstellen
+          von Anzeigen.
         </p>
       ) : (
         <ul className="flex flex-col gap-4">
@@ -212,14 +253,23 @@ function CreativeCard({
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row">
-      <Image
-        src={creative.url}
-        alt={creative.name}
-        width={1080}
-        height={1080}
-        unoptimized
-        className="h-auto w-full max-w-xs shrink-0 self-start rounded-lg border"
-      />
+      {creative.mime.startsWith("video/") ? (
+        <video
+          src={creative.url}
+          controls
+          preload="metadata"
+          className="h-auto w-full max-w-xs shrink-0 self-start rounded-lg border"
+        />
+      ) : (
+        <Image
+          src={creative.url}
+          alt={creative.name}
+          width={1080}
+          height={1080}
+          unoptimized
+          className="h-auto w-full max-w-xs shrink-0 self-start rounded-lg border"
+        />
+      )}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
