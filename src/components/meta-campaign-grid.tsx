@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { LayoutGrid } from "lucide-react";
+import { ExternalLink, LayoutGrid } from "lucide-react";
 import { metaAdAccountId, metaConfigured, metaFetch } from "@/lib/meta-api";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,22 @@ interface AdsetRow {
 }
 interface AdRow {
   campaign_id: string;
-  creative?: { thumbnail_url?: string };
+  creative?: {
+    thumbnail_url?: string;
+    object_story_spec?: {
+      link_data?: { link?: string };
+      video_data?: { call_to_action?: { value?: { link?: string } } };
+    };
+  };
+}
+
+function adLink(ad: AdRow): string | null {
+  const spec = ad.creative?.object_story_spec;
+  return (
+    spec?.link_data?.link ??
+    spec?.video_data?.call_to_action?.value?.link ??
+    null
+  );
 }
 interface InsightRow {
   campaign_id: string;
@@ -71,7 +86,7 @@ export async function MetaCampaignGrid() {
         limit: "200",
       }),
       metaFetch(`${acct}/ads`, {
-        fields: "campaign_id,creative{thumbnail_url}",
+        fields: "campaign_id,creative{thumbnail_url,object_story_spec}",
         limit: "200",
       }),
       metaFetch(`${acct}/insights`, {
@@ -121,10 +136,14 @@ export async function MetaCampaignGrid() {
                   (active ? s.effective_status === "ACTIVE" : true),
               )
               .reduce((sum, s) => sum + (Number(s.daily_budget) || 0), 0) / 100;
-          const thumbs = ads
-            .filter((a) => a.campaign_id === c.id && a.creative?.thumbnail_url)
+          const campaignAds = ads.filter((a) => a.campaign_id === c.id);
+          const thumbs = campaignAds
+            .filter((a) => a.creative?.thumbnail_url)
             .map((a) => a.creative!.thumbnail_url!)
             .slice(0, 4);
+          const links = [
+            ...new Set(campaignAds.map(adLink).filter(Boolean) as string[]),
+          ];
           return (
             <li
               key={c.id}
@@ -165,6 +184,25 @@ export async function MetaCampaignGrid() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground">Noch keine Anzeigen.</p>
+              )}
+
+              {links.length > 0 && (
+                <p className="flex min-w-0 items-center gap-1 text-xs">
+                  <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
+                  {links.map((l, i) => (
+                    <a
+                      key={l}
+                      href={l}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-primary hover:underline"
+                      title={l}
+                    >
+                      {l.replace(/^https?:\/\/(www\.)?/, "")}
+                      {i < links.length - 1 && ","}
+                    </a>
+                  ))}
+                </p>
               )}
 
               <dl className="mt-auto grid grid-cols-4 gap-x-2 gap-y-0.5 text-sm">

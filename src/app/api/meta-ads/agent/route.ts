@@ -480,6 +480,13 @@ async function runTool(
       .maybeSingle();
     if (!creative) throw new Error("creative_upload_id unbekannt — list_uploaded_creatives nutzen.");
 
+    // Transparenz-Pflicht (EU AI Act): alle hochgeladenen Creatives sind
+    // KI-generiert — Kennzeichnung wird erzwungen, falls sie im Text fehlt.
+    let message = String(input.message ?? "").slice(0, 1900);
+    if (!/KI[- ]?(erstellt|generiert)/i.test(message)) {
+      message = `${message}\n\nSymbolbild – mit KI erstellt.`;
+    }
+
     const callToAction = input.lead_gen_form_id
       ? {
           type: String(input.cta_type),
@@ -507,7 +514,7 @@ async function runTool(
       const videoData: Record<string, unknown> = {
         video_id: videoId,
         image_url: thumb,
-        message: String(input.message ?? "").slice(0, 2000),
+        message,
         title: String(input.headline ?? "").slice(0, 255),
         call_to_action: callToAction,
       };
@@ -518,7 +525,7 @@ async function runTool(
     } else {
       const imageHash = await uploadAdImage(creative.url);
       const linkData: Record<string, unknown> = {
-        message: String(input.message ?? "").slice(0, 2000),
+        message,
         name: String(input.headline ?? "").slice(0, 255),
         link: String(input.link_url),
         image_hash: imageHash,
@@ -633,7 +640,7 @@ If the user answers "mach einfach" or ignores the questions, proceed with the st
 2. Geo-targeting: if the request references a hub/its address or a radius under 17 km, use create_ad_set's address parameter with the hub address from the context above (custom location, radius from 1 km). Otherwise search_locations for the city key (city radius min 17 km).
 3. Create campaign → ad set (default ~25 km radius unless specified) → ad(s), ALL PAUSED, using the best-fitting uploaded creative(s). Targeting levers: age_min/age_max and genders where sensible (e.g. Kunden-Kampagnen: 35–65, Angehörige), interest_ids via search_interests ONLY for larger radii (≥ 25 km) — in small local audiences prefer broad targeting (Advantage+) so the audience doesn't collapse. Never age/gender/interests on EMPLOYMENT campaigns (Meta blocks it). If lead ads: check list_lead_forms first; if no form exists, build a WEBSITE/traffic setup instead and tell the user a lead form would perform better.
 4. Naming convention: [Intent]-[Stadt]-[JJJJ-MM], e.g. "Mitarbeiter-Essen-2026-08".
-5. Write persuasive German ad copy: strong hook, emotional benefit, social proof, clear CTA. Never generic. For care: family support, independence, quality of life, trusted local care — NEVER imply the platform knows someone's medical condition. For recruiting: appreciation, fair pay, team, work-life balance — no discriminatory wording.
+5. Write persuasive German ad copy: strong hook, emotional benefit, social proof, clear CTA. Never generic. All uploaded creatives are AI-generated — every ad's primary text must end with the disclosure line "Symbolbild – mit KI erstellt." (the backend appends it automatically if you forget; account for it in your text length). For care: family support, independence, quality of life, trusted local care — NEVER imply the platform knows someone's medical condition. For recruiting: appreciation, fair pay, team, work-life balance — no discriminatory wording.
 6. Afterwards summarize exactly what was created (IDs, budget, targeting, copy) and remind the user everything is PAUSED and needs their approval to go live.
 If a tool call fails with a Meta policy/API error, adapt and retry sensibly (max 2 retries), otherwise explain the error in plain German.
 
