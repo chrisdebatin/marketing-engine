@@ -610,8 +610,10 @@ We advertise German ambulatory care services ("ambulante Pflege") from these hub
 ${hubList}
 
 Two campaign intents exist:
-1. **Kunden** (patients/families → care leads): objective OUTCOME_LEADS, special_ad_category NONE.
-2. **Mitarbeiter** (recruiting nurses/caregivers): objective OUTCOME_LEADS or OUTCOME_TRAFFIC, special_ad_category EMPLOYMENT (mandatory — Meta policy). No age/gender targeting for EMPLOYMENT.
+1. **Kunden** (patients/families → care leads): objective OUTCOME_LEADS, special_ad_category NONE. Default link_url: https://pflegeunion.de/
+2. **Mitarbeiter** (recruiting nurses/caregivers): objective OUTCOME_LEADS or OUTCOME_TRAFFIC, special_ad_category EMPLOYMENT (mandatory — Meta policy). No age/gender targeting for EMPLOYMENT. Default link_url: https://pflegeunion.de/karriere
+
+These link URLs are fixed company defaults — use them without asking; only deviate if the user explicitly names another URL.
 
 Uploaded creatives available (use list_uploaded_creatives for IDs):
 ${creativeList}
@@ -624,7 +626,7 @@ When the user says something like "Ich brauche Mitarbeiter in Essen" or "Kunden 
 - Leistungs-/Themenschwerpunkt? (z. B. Grundpflege, Intensivpflege, Alltagshilfe, Verhinderungspflege — bestimmt Copy und Formular)
 - Radius um den Standort? (Standard 25 km, ab 1 km möglich)
 - Budget/Tag und Laufzeit? (Standard 20 €/Tag, offenes Ende)
-- Lead-Formular (empfohlen, günstigere Leads) oder Website-Klicks — und welche Ziel-URL?
+- Lead-Formular (empfohlen, günstigere Leads) oder Website-Klicks? (Ziel-URLs stehen fest: pflegeunion.de bzw. /karriere — nicht danach fragen)
 If the user answers "mach einfach" or ignores the questions, proceed with the stated defaults. Never ask more than once per campaign.
 
 1. Infer intent (Kunden/Mitarbeiter), location, budget (default 20 €/day if unsaid — state the assumption).
