@@ -88,6 +88,27 @@ export async function POST(req: Request) {
   return Response.json({ creative: row });
 }
 
+/** Notiz (Tag + Beschreibung) eines Werbemittels ändern. */
+export async function PATCH(req: Request) {
+  const session = await requireSession();
+  if (!session.isAdmin) {
+    return Response.json({ error: "Nur für Admins." }, { status: 403 });
+  }
+  const { id, notiz } = (await req.json().catch(() => ({}))) as {
+    id?: string;
+    notiz?: string;
+  };
+  if (!id) return Response.json({ error: "ID fehlt." }, { status: 400 });
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("meta_creatives")
+    .update({ notiz: String(notiz ?? "").trim().slice(0, 500) || null })
+    .eq("id", id);
+  if (error) return Response.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+  return Response.json({ ok: true });
+}
+
 /** Werbemittel entfernen (Katalog-Zeile + Datei im Bucket). */
 export async function DELETE(req: Request) {
   const session = await requireSession();

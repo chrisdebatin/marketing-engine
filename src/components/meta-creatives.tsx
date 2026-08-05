@@ -2,9 +2,11 @@
 
 import { useRef, useState } from "react";
 import Image from "next/image";
-import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export interface CreativeRow {
   id: string;
@@ -154,42 +156,145 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
           Agent nutzt sie automatisch beim Erstellen von Anzeigen.
         </p>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <ul className="flex flex-col gap-4">
           {items.map((c) => (
-            <li
+            <CreativeCard
               key={c.id}
-              className="group relative overflow-hidden rounded-xl border bg-card shadow-sm"
-            >
-              <Image
-                src={c.url}
-                alt={c.name}
-                width={320}
-                height={320}
-                unoptimized
-                className="aspect-square w-full object-cover"
-              />
-              <div className="flex flex-col gap-0.5 p-2">
-                <span className="truncate text-xs font-medium" title={c.name}>
-                  {c.name}
-                </span>
-                {c.notiz && (
-                  <span className="truncate text-xs text-muted-foreground" title={c.notiz}>
-                    {c.notiz}
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(c.id)}
-                aria-label="Creative entfernen"
-                className="absolute top-1.5 right-1.5 rounded-md bg-background/80 p-1.5 text-muted-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-destructive"
-              >
-                <Trash2 className="size-3.5" />
-              </button>
-            </li>
+              creative={c}
+              onRemove={() => remove(c.id)}
+              onNotiz={(notiz) =>
+                setItems((cur) =>
+                  cur.map((x) => (x.id === c.id ? { ...x, notiz } : x)),
+                )
+              }
+            />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/** Tag ("kunden"/"mitarbeiter") aus dem Notiz-Anfang ziehen. */
+function splitNotiz(notiz: string | null): { tag: string | null; rest: string } {
+  const m = /^(kunden|mitarbeiter)\s*[—–-]?\s*/i.exec(notiz ?? "");
+  if (!m) return { tag: null, rest: notiz ?? "" };
+  return { tag: m[1].toLowerCase(), rest: (notiz ?? "").slice(m[0].length) };
+}
+
+function CreativeCard({
+  creative,
+  onRemove,
+  onNotiz,
+}: {
+  creative: CreativeRow;
+  onRemove: () => void;
+  onNotiz: (notiz: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(creative.notiz ?? "");
+  const [saving, setSaving] = useState(false);
+  const { tag, rest } = splitNotiz(creative.notiz);
+
+  async function save() {
+    setSaving(true);
+    const res = await fetch("/api/meta-ads/creative", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: creative.id, notiz: draft }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      onNotiz(draft.trim() || null);
+      setEditing(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-sm sm:flex-row">
+      <Image
+        src={creative.url}
+        alt={creative.name}
+        width={1080}
+        height={1080}
+        unoptimized
+        className="h-auto w-full max-w-xs shrink-0 self-start rounded-lg border"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {tag && (
+              <span
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                  tag === "kunden"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-sky-100 text-sky-800",
+                )}
+              >
+                {tag}
+              </span>
+            )}
+            <span className="truncate text-xs text-muted-foreground" title={creative.name}>
+              {creative.name}
+            </span>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(creative.notiz ?? "");
+                setEditing((e) => !e);
+              }}
+              aria-label="Notiz bearbeiten"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label="Creative entfernen"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {editing ? (
+          <div className="flex flex-col gap-2">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={3}
+              placeholder='z. B. „kunden — Quadrat 1:1 (Feed), Motiv 3: …“'
+            />
+            <div className="flex gap-2">
+              <Button type="button" size="sm" onClick={save} disabled={saving}>
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Speichern"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditing(false)}
+              >
+                Abbrechen
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm whitespace-pre-wrap">
+            {rest || (
+              <span className="text-muted-foreground">
+                Keine Beschreibung — Stift anklicken und Tag
+                („kunden“/„mitarbeiter“) + Beschreibung ergänzen.
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+    </li>
   );
 }
