@@ -2,6 +2,7 @@ import { Rocket } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MetaAdsAgent } from "@/components/meta-ads-agent";
+import { MetaCampaignOverview } from "@/components/meta-campaign-overview";
 import { MetaCreatives, type CreativeRow } from "@/components/meta-creatives";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,8 @@ export default async function MetaAdsPage() {
           </p>
         </div>
       </div>
+
+      <MetaCampaignOverview />
 
       <MetaAdsAgent />
 
