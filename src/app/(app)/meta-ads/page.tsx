@@ -2,6 +2,7 @@ import { Rocket } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MetaAdsAgent } from "@/components/meta-ads-agent";
+import { MetaCampaignGrid } from "@/components/meta-campaign-grid";
 import { MetaCampaignOverview } from "@/components/meta-campaign-overview";
 import { MetaCreatives, type CreativeRow } from "@/components/meta-creatives";
 
@@ -49,6 +50,8 @@ export default async function MetaAdsPage() {
       <MetaCampaignOverview />
 
       <MetaAdsAgent />
+
+      <MetaCampaignGrid />
 
       <section className="flex flex-col gap-3 border-t pt-5">
         <h2 className="text-lg font-semibold">Creatives</h2>
