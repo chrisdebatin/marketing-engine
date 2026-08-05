@@ -71,6 +71,8 @@ create table if not exists public.lead_calls (
   quelle_detail text,
   lead_name   text,
   hub_id      uuid references public.hubs (id) on delete set null,
+
+  
   notiz       text,
   created_at  timestamptz default now()
 );

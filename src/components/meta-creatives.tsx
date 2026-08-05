@@ -19,39 +19,86 @@ export interface CreativeRow {
  * Werbemittel-Galerie: JPG/PNG hochladen (optional mit Notiz, z. B.
  * "Recruiting-Motiv"), der Agent wählt daraus beim Anzeigen-Erstellen.
  */
+// Vercel lehnt Request-Bodies > 4,5 MB ab und Meta braucht keine Druckqualität:
+// große Bilder vor dem Upload im Browser auf max. 2000 px als JPEG verkleinern.
+const DIRECT_UPLOAD_MAX = 1_500_000;
+const MAX_DIMENSION = 2000;
+
+async function shrinkForUpload(file: File): Promise<File> {
+  if (file.size <= DIRECT_UPLOAD_MAX) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, w, h);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.85),
+    );
+    if (!blob) return file;
+    return new File([blob], file.name.replace(/\.(png|jpe?g)$/i, "") + ".jpg", {
+      type: "image/jpeg",
+    });
+  } catch {
+    return file;
+  }
+}
+
 export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
   const [items, setItems] = useState<CreativeRow[]>(initial);
   const [notiz, setNotiz] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function upload(files: FileList | null) {
     if (!files || files.length === 0) return;
+    const list = Array.from(files);
+    const note = notiz.trim();
     setBusy(true);
     setError(null);
-    try {
-      for (const file of Array.from(files)) {
-        const form = new FormData();
-        form.set("file", file);
-        if (notiz.trim()) form.set("notiz", notiz.trim());
-        const res = await fetch("/api/meta-ads/creative", {
-          method: "POST",
-          body: form,
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error ?? "Upload fehlgeschlagen.");
-          break;
+    const failed: string[] = [];
+    let done = 0;
+    const queue = [...list];
+
+    async function worker() {
+      for (;;) {
+        const file = queue.shift();
+        if (!file) return;
+        try {
+          const prepped = await shrinkForUpload(file);
+          const form = new FormData();
+          form.set("file", prepped);
+          if (note) form.set("notiz", note);
+          const res = await fetch("/api/meta-ads/creative", {
+            method: "POST",
+            body: form,
+          });
+          const data = await res.json();
+          if (!res.ok) failed.push(`${file.name}: ${data.error ?? "Fehler"}`);
+          else setItems((cur) => [data.creative as CreativeRow, ...cur]);
+        } catch {
+          failed.push(`${file.name}: Netzwerkfehler`);
         }
-        setItems((cur) => [data.creative as CreativeRow, ...cur]);
+        done++;
+        setProgress(`${done}/${list.length} hochgeladen…`);
       }
-      setNotiz("");
-    } catch {
-      setError("Netzwerkfehler beim Upload.");
-    } finally {
-      setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
+    }
+
+    await Promise.all(Array.from({ length: 3 }, worker));
+    setNotiz("");
+    setBusy(false);
+    setProgress(null);
+    if (fileRef.current) fileRef.current.value = "";
+    if (failed.length > 0) {
+      setError(
+        `${failed.length} von ${list.length} Dateien fehlgeschlagen:\n${failed.join("\n")}`,
+      );
     }
   }
 
@@ -88,7 +135,7 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
           ) : (
             <ImagePlus className="size-4" />
           )}
-          Creative hochladen
+          {busy && progress ? progress : "Creative hochladen"}
         </Button>
         <Input
           value={notiz}
@@ -97,7 +144,9 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
           className="max-w-md"
         />
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p className="text-sm whitespace-pre-wrap text-destructive">{error}</p>
+      )}
 
       {items.length === 0 ? (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
