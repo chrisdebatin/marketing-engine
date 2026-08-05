@@ -33,8 +33,9 @@ export async function metaFetch(
   path: string,
   params: Record<string, string> = {},
   method: "GET" | "POST" = "GET",
+  tokenOverride?: string,
 ): Promise<Record<string, unknown>> {
-  const token = process.env.META_ACCESS_TOKEN ?? "";
+  const token = tokenOverride ?? process.env.META_ACCESS_TOKEN ?? "";
   const url = new URL(`${GRAPH}/${path.replace(/^\//, "")}`);
 
   let init: RequestInit;
@@ -59,6 +60,21 @@ export async function metaFetch(
     throw new MetaApiError(msg);
   }
   return json;
+}
+
+/**
+ * Page Access Token der konfigurierten Seite — nötig für Seiten-Endpunkte
+ * wie leadgen_forms, die den Nutzer-/Systemnutzer-Token nicht akzeptieren.
+ */
+export async function getPageAccessToken(pageId: string): Promise<string> {
+  const r = await metaFetch(pageId, { fields: "access_token" });
+  const token = String(r.access_token ?? "");
+  if (!token) {
+    throw new MetaApiError(
+      "Kein Page Access Token verfügbar — hat der Systemnutzer volle Kontrolle über die Seite?",
+    );
+  }
+  return token;
 }
 
 /**

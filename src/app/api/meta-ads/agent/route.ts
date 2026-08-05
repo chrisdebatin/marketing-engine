@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   MetaApiError,
+  getPageAccessToken,
   getVideoThumbnail,
   metaAdAccountId,
   metaConfigured,
@@ -327,10 +328,14 @@ async function runTool(
   if (name === "list_lead_forms") {
     const pageId = metaPageId();
     if (!pageId) throw new Error("Keine META_PAGE_ID konfiguriert.");
-    const r = await metaFetch(`${pageId}/leadgen_forms`, {
-      fields: "id,name,status,created_time",
-      limit: "50",
-    });
+    // leadgen_forms akzeptiert nur einen Page Access Token.
+    const pageToken = await getPageAccessToken(pageId);
+    const r = await metaFetch(
+      `${pageId}/leadgen_forms`,
+      { fields: "id,name,status,created_time", limit: "50" },
+      "GET",
+      pageToken,
+    );
     return r.data ?? [];
   }
 
@@ -344,6 +349,9 @@ async function runTool(
         status: "PAUSED", // Sicherheitsregel: nie aktiv anlegen
         buying_type: "AUCTION",
         special_ad_categories: JSON.stringify(special === "NONE" ? [] : [special]),
+        // Pflichtfeld bei Kampagnen ohne Kampagnenbudget (Budget liegt bei
+        // uns immer am Ad Set): kein Budget-Sharing zwischen Ad Sets.
+        is_adset_budget_sharing_enabled: "false",
       },
       "POST",
     );
