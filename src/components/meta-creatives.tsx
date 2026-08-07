@@ -216,11 +216,22 @@ export function MetaCreatives({ initial }: { initial: CreativeRow[] }) {
   );
 }
 
-/** Tag ("kunden"/"mitarbeiter") aus dem Notiz-Anfang ziehen. */
-function splitNotiz(notiz: string | null): { tag: string | null; rest: string } {
+/** Tag ("kunden"/"mitarbeiter") + Mitarbeiter-Rolle aus der Notiz ziehen. */
+function splitNotiz(notiz: string | null): {
+  tag: string | null;
+  rolle: string | null;
+  rest: string;
+} {
   const m = /^(kunden|mitarbeiter)\s*[—–-]?\s*/i.exec(notiz ?? "");
-  if (!m) return { tag: null, rest: notiz ?? "" };
-  return { tag: m[1].toLowerCase(), rest: (notiz ?? "").slice(m[0].length) };
+  const rest = m ? (notiz ?? "").slice(m[0].length) : (notiz ?? "");
+  const tag = m ? m[1].toLowerCase() : null;
+  let rolle: string | null = null;
+  if (tag === "mitarbeiter") {
+    if (/pflegefachkraft/i.test(rest)) rolle = "Pflegefachkraft";
+    else if (/pflegehelfer|lg\s*1/i.test(rest)) rolle = "Pflegehelfer LG1/2";
+    else if (/hauswirtschaft/i.test(rest)) rolle = "Hauswirtschaft";
+  }
+  return { tag, rolle, rest };
 }
 
 function CreativeCard({
@@ -235,7 +246,7 @@ function CreativeCard({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(creative.notiz ?? "");
   const [saving, setSaving] = useState(false);
-  const { tag, rest } = splitNotiz(creative.notiz);
+  const { tag, rolle, rest } = splitNotiz(creative.notiz);
 
   async function save() {
     setSaving(true);
@@ -283,6 +294,11 @@ function CreativeCard({
                 )}
               >
                 {tag}
+              </span>
+            )}
+            {rolle && (
+              <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
+                {rolle}
               </span>
             )}
             <span className="truncate text-xs text-muted-foreground" title={creative.name}>
