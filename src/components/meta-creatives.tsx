@@ -227,8 +227,10 @@ function splitNotiz(notiz: string | null): {
   const tag = m ? m[1].toLowerCase() : null;
   let rolle: string | null = null;
   if (tag === "mitarbeiter") {
-    if (/pflegefachkraft/i.test(rest)) rolle = "Pflegefachkraft";
-    else if (/pflegehelfer|lg\s*1/i.test(rest)) rolle = "Pflegehelfer LG1/2";
+    if (/pflegefachkr[aä]ft|examiniert|fachkr[aä]ft/i.test(rest))
+      rolle = "Pflegefachkraft";
+    else if (/pflegehelfer|helfer|lg\s*1|lg\s*2/i.test(rest))
+      rolle = "Pflegehelfer LG1/2";
     else if (/hauswirtschaft/i.test(rest)) rolle = "Hauswirtschaft";
   }
   return { tag, rolle, rest };
