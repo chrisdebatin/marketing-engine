@@ -1,6 +1,7 @@
 import { Users } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { metaConfigured, metaPageId } from "@/lib/meta-api";
+import { isRecruitingLead } from "@/lib/lead-forward";
 import { syncMetaLeads } from "@/lib/meta-lead-sync";
 import { MetaLeadsList, type LeadRow } from "@/components/meta-leads-list";
 
@@ -30,7 +31,8 @@ export async function MetaLeads() {
         Leads
         {(data?.length ?? 0) > 0 && (
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-            {data!.filter((l) => l.status === "offen").length} offen
+            {data!.filter((l) => l.status === "offen" && !isRecruitingLead(l.campaign_name)).length}{" "}
+            offene Kunden-Anfragen
           </span>
         )}
       </h2>
