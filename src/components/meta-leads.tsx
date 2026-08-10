@@ -17,22 +17,25 @@ export async function MetaLeads() {
   const { syncError } = await syncMetaLeads();
 
   const admin = createAdminClient();
-  const { data, error: dbError } = await admin
+  const { data: allLeads, error: dbError } = await admin
     .from("meta_leads")
     .select("*")
     .order("created_time", { ascending: false })
     .limit(200);
   const tableMissing = dbError?.code === "PGRST205" || dbError?.code === "42P01";
+  // Nur Kunden-Anfragen anzeigen — Bewerber laufen automatisch übers
+  // Recruiting-Postfach und tauchen im Dashboard gar nicht mehr auf.
+  const data = (allLeads ?? []).filter((l) => !isRecruitingLead(l.campaign_name));
 
   return (
     <section className="flex flex-col gap-3 border-t pt-5">
       <h2 className="flex items-center gap-2 text-lg font-semibold">
         <Users className="size-4 text-primary" />
         Leads
-        {(data?.length ?? 0) > 0 && (
+        {data.length > 0 && (
           <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-            {data!.filter((l) => l.status === "offen" && !isRecruitingLead(l.campaign_name)).length}{" "}
-            offene Kunden-Anfragen
+            {data.filter((l) => l.status === "offen").length} offene
+            Kunden-Anfragen
           </span>
         )}
       </h2>
@@ -59,14 +62,15 @@ export async function MetaLeads() {
           <code>supabase/apply_all_pending.sql</code> im Supabase SQL-Editor
           ausführen.
         </p>
-      ) : (data?.length ?? 0) === 0 ? (
+      ) : data.length === 0 ? (
         !syncError && (
           <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-            Noch keine Leads eingegangen.
+            Noch keine Kunden-Anfragen eingegangen. (Bewerber-Leads laufen
+            automatisch übers Recruiting-Postfach.)
           </p>
         )
       ) : (
-        <MetaLeadsList initial={(data ?? []) as LeadRow[]} />
+        <MetaLeadsList initial={data as LeadRow[]} />
       )}
     </section>
   );

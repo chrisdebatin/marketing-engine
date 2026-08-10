@@ -205,15 +205,9 @@ function FollowupPanel({
   );
 }
 
-/** Bewerber-Lead (Stellenanzeige)? Gleiche Erkennung wie serverseitig. */
-function isRecruitingCampaign(campaignName: string | null): boolean {
-  return !!campaignName && /mitarbeiter|fachkraft|recruiting|stellen/i.test(campaignName);
-}
-
 export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
   const [leads, setLeads] = useState(initial);
   const [showDone, setShowDone] = useState(false);
-  const [showBewerber, setShowBewerber] = useState(false);
 
   async function setStatus(id: string, status: "offen" | "kontaktiert") {
     setLeads((cur) => cur.map((l) => (l.id === id ? { ...l, status } : l)));
@@ -224,42 +218,25 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
     });
   }
 
-  const bewerberCount = leads.filter((l) => isRecruitingCampaign(l.campaign_name)).length;
-  const scoped = leads.filter((l) => showBewerber || !isRecruitingCampaign(l.campaign_name));
-  const visible = scoped.filter((l) => showDone || l.status === "offen");
-  const doneCount = scoped.length - scoped.filter((l) => l.status === "offen").length;
+  const visible = leads.filter((l) => showDone || l.status === "offen");
+  const doneCount = leads.length - leads.filter((l) => l.status === "offen").length;
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-3">
-        {doneCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowDone((s) => !s)}
-            className="self-start text-xs text-muted-foreground hover:text-foreground"
-          >
-            {showDone
-              ? "Kontaktierte ausblenden"
-              : `${doneCount} kontaktierte anzeigen`}
-          </button>
-        )}
-        {bewerberCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowBewerber((s) => !s)}
-            className="self-start text-xs text-muted-foreground hover:text-foreground"
-          >
-            {showBewerber
-              ? "Bewerber ausblenden"
-              : `${bewerberCount} Bewerber anzeigen (laufen übers Recruiting)`}
-          </button>
-        )}
-      </div>
+      {doneCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowDone((s) => !s)}
+          className="self-start text-xs text-muted-foreground hover:text-foreground"
+        >
+          {showDone
+            ? "Kontaktierte ausblenden"
+            : `${doneCount} kontaktierte anzeigen`}
+        </button>
+      )}
       {visible.length === 0 && (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-          {bewerberCount > 0 && !showBewerber
-            ? "Keine offenen Kunden-Anfragen — Bewerber laufen direkt übers Recruiting."
-            : "Alles abgearbeitet — keine offenen Leads. 🎉"}
+          Alles abgearbeitet — keine offenen Kunden-Anfragen. 🎉
         </p>
       )}
       <ul className="flex flex-col gap-2">
