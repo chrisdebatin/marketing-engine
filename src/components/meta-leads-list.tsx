@@ -16,6 +16,8 @@ export interface LeadRow {
   followup_status?: string | null;
   followup_sent_at?: string | null;
   followup_error?: string | null;
+  forwarded_at?: string | null;
+  forward_error?: string | null;
 }
 
 interface Field {
@@ -279,6 +281,14 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
                     >
                       <Megaphone className="size-3" />
                       {l.campaign_name}
+                    </span>
+                  )}
+                  {l.forwarded_at && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800"
+                      title={`An Recruiting weitergeleitet am ${new Date(l.forwarded_at).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}`}
+                    >
+                      → Recruiting
                     </span>
                   )}
                   {phone && (

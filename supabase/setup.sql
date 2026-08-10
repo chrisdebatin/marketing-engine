@@ -1226,3 +1226,13 @@ alter table public.meta_leads
   add column if not exists followup_error   text;
 
 notify pgrst, 'reload schema';
+
+-- ===== 0049_meta_lead_forward.sql =====
+-- 0049: Automatische Weiterleitung von Mitarbeiter-Leads an das Recruiting-
+-- Postfach (LEAD_FORWARD_TO, Default recruiting@pflegeunion.de). Der Sync
+-- verschickt je Lead genau eine Mail; forwarded_at macht das idempotent.
+alter table public.meta_leads
+  add column if not exists forwarded_at  timestamptz,
+  add column if not exists forward_error text;
+
+notify pgrst, 'reload schema';

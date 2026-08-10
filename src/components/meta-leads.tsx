@@ -8,6 +8,8 @@ import {
   metaPageId,
 } from "@/lib/meta-api";
 import { generateFollowupDraft } from "@/lib/followup-ai";
+import { forwardLead, isRecruitingLead } from "@/lib/lead-forward";
+import { mailConfigured } from "@/lib/mailer";
 import { MetaLeadsList, type LeadRow } from "@/components/meta-leads-list";
 
 /** E-Mail aus den Formularfeldern eines Leads ziehen. */
@@ -129,6 +131,35 @@ export async function MetaLeads() {
   } catch (err) {
     // Spalten fehlen (Migration 0048 nicht eingespielt) o. ä. — Liste trotzdem zeigen.
     console.error("meta-leads: Entwurfs-Erzeugung übersprungen:", err);
+  }
+
+  // Mitarbeiter-Anfragen ans Recruiting-Postfach weiterleiten (einmal pro Lead,
+  // idempotent über forwarded_at; max. 15 pro Seitenaufruf). Ohne eingerichteten
+  // Versandweg bleibt forwarded_at leer, der nächste Lauf holt es nach.
+  if (mailConfigured()) {
+    try {
+      const { data: toForward } = await admin
+        .from("meta_leads")
+        .select("id, campaign_name, ad_name, created_time, field_data")
+        .is("forwarded_at", null)
+        .order("created_time", { ascending: false })
+        .limit(15);
+      for (const l of toForward ?? []) {
+        if (!isRecruitingLead(l.campaign_name)) continue;
+        const res = await forwardLead(l);
+        await admin
+          .from("meta_leads")
+          .update(
+            res.ok
+              ? { forwarded_at: new Date().toISOString(), forward_error: null }
+              : { forward_error: res.error },
+          )
+          .eq("id", l.id);
+        if (!res.ok) break; // Versandweg gestört — nicht 15-mal gegen die Wand
+      }
+    } catch (err) {
+      console.error("meta-leads: Weiterleitung übersprungen:", err);
+    }
   }
 
   const { data, error: dbError } = await admin
