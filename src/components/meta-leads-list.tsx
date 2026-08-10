@@ -54,6 +54,32 @@ function leadName(fd: unknown): string | null {
   return any ? capitalize(any) : null;
 }
 
+/**
+ * Nachname-Vermutung aus der E-Mail, wenn das Formular keinen erhoben hat
+ * (z. B. karolin.nestler@web.de → "Nestler"). Bewusst konservativ: nur wenn
+ * die Adresse erkennbar mit dem Vornamen beginnt. Wird als Vermutung markiert.
+ */
+function guessLastNameFromEmail(firstName: string | null, email: string | null): string | null {
+  if (!firstName || !email) return null;
+  const local = email.split("@")[0]?.toLowerCase() ?? "";
+  const fn = firstName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+  if (!/^[a-z]/.test(fn)) return null; // nicht-lateinische Vornamen: keine Vermutung
+  const tokens = local.split(/[._-]/).filter(Boolean);
+  let rest: string | null = null;
+  if (tokens.length >= 2 && (tokens[0] === fn || fn.startsWith(tokens[0]))) {
+    rest = tokens.slice(1).join(" ");
+  } else if (local.startsWith(fn)) {
+    rest = local.slice(fn.length);
+  }
+  if (!rest) return null;
+  const cleaned = rest.replace(/[0-9]/g, "").trim();
+  if (cleaned.length < 3 || !/^[a-zäöüß -]+$/.test(cleaned)) return null;
+  return capitalize(cleaned);
+}
+
 /** Restliche Formularfelder (ohne Name/Telefon/E-Mail) als Text. */
 function extraFields(fd: unknown): string[] {
   const known = ["name", "phone", "email", "mail", "telefon"];
@@ -116,6 +142,10 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
           const name = leadName(l.field_data) ?? "(ohne Name)";
           const phone = fieldValue(l.field_data, "phone", "telefon", "mobil");
           const email = fieldValue(l.field_data, "email", "mail");
+          const hasLastName = /\s/.test(name);
+          const guessed = hasLastName
+            ? null
+            : guessLastNameFromEmail(leadName(l.field_data), email);
           const done = l.status === "kontaktiert";
           return (
             <li
@@ -127,7 +157,18 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
             >
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="font-medium">{name}</span>
+                  <span className="font-medium">
+                    {name}
+                    {guessed && (
+                      <span
+                        className="font-normal text-muted-foreground"
+                        title="Nachname aus der E-Mail-Adresse vermutet — das Formular fragt keinen Nachnamen ab"
+                      >
+                        {" "}
+                        {guessed}?
+                      </span>
+                    )}
+                  </span>
                   {l.campaign_name && (
                     <span
                       title={l.ad_name ? `Anzeige: ${l.ad_name}` : undefined}
