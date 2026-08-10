@@ -13,6 +13,7 @@ import { mailConfigured } from "@/lib/mailer";
 import {
   cityFromCampaign,
   leadEmail,
+  leadExtraFields,
   leadFirstName,
   leadFullName,
   leadPhone,
@@ -146,6 +147,7 @@ export async function MetaLeads() {
             "Meta-Lead aus Instant-Formular",
             l.campaign_name ? `Kampagne: ${l.campaign_name}` : null,
             l.ad_name ? `Anzeige: ${l.ad_name}` : null,
+            ...leadExtraFields(l.field_data),
           ]
             .filter(Boolean)
             .join(" · "),

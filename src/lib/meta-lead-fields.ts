@@ -46,6 +46,14 @@ export function leadFullName(fd: unknown): string | null {
   return any ? capitalize(any) : null;
 }
 
+/** Zusatzfelder (z. B. Qualifikation) als "Label: Wert"-Liste — alles außer Name/Telefon/E-Mail. */
+export function leadExtraFields(fd: unknown): string[] {
+  const known = ["name", "phone", "telefon", "mail"];
+  return fields(fd)
+    .filter((f) => !known.some((k) => f.name?.toLowerCase().includes(k)))
+    .map((f) => `${(f.name ?? "?").replace(/_/g, " ")}: ${f.values?.join(", ") ?? ""}`);
+}
+
 /**
  * Ort aus dem Kampagnennamen ("Mitarbeiter-Lüdenscheid-Fachkraft-2026-08" →
  * "Lüdenscheid"). Konvention: zweites Segment, sofern nicht numerisch.
