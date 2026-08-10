@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { MetaAdsAgent } from "@/components/meta-ads-agent";
 import { MetaCampaignGrid } from "@/components/meta-campaign-grid";
 import { MetaCampaignOverview } from "@/components/meta-campaign-overview";
+import { MetaLeads } from "@/components/meta-leads";
 import { MetaSpendTable } from "@/components/meta-spend-table";
 import { MetaCreatives, type CreativeRow } from "@/components/meta-creatives";
 
@@ -51,6 +52,8 @@ export default async function MetaAdsPage() {
       <MetaCampaignOverview />
 
       <MetaAdsAgent />
+
+      <MetaLeads />
 
       <MetaCampaignGrid />
 

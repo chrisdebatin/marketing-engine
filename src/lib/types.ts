@@ -563,6 +563,30 @@ export interface Database {
         >;
         Relationships: [];
       };
+      meta_leads: {
+        Row: {
+          id: string;
+          form_id: string | null;
+          campaign_name: string | null;
+          ad_name: string | null;
+          created_time: string | null;
+          field_data: unknown;
+          status: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id: string;
+          form_id?: string | null;
+          campaign_name?: string | null;
+          ad_name?: string | null;
+          created_time?: string | null;
+          field_data?: unknown;
+          status?: string;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
+        Relationships: [];
+      };
       lead_calls: {
         Row: {
           id: string;
