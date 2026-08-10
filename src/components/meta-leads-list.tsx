@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Megaphone, Phone, Undo2 } from "lucide-react";
+import { Check, Mail, Megaphone, Phone, Send, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LeadRow {
@@ -11,6 +11,11 @@ export interface LeadRow {
   created_time: string | null;
   field_data: unknown;
   status: string;
+  followup_subject?: string | null;
+  followup_body?: string | null;
+  followup_status?: string | null;
+  followup_sent_at?: string | null;
+  followup_error?: string | null;
 }
 
 interface Field {
@@ -101,6 +106,101 @@ function campaignTone(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
   return CHIP_TONES[Math.abs(h) % CHIP_TONES.length];
+}
+
+/** Follow-up-Bereich eines Leads: Entwurf editieren + 1-Klick senden/verwerfen. */
+function FollowupPanel({
+  lead,
+  onUpdate,
+}: {
+  lead: LeadRow;
+  onUpdate: (patch: Partial<LeadRow>) => void;
+}) {
+  const [subject, setSubject] = useState(lead.followup_subject ?? "");
+  const [body, setBody] = useState(lead.followup_body ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function act(action: "send" | "discard") {
+    setBusy(true);
+    setError(null);
+    const res = await fetch("/api/meta-ads/lead/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: lead.id, action, subject, body }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    setBusy(false);
+    if (!res.ok) {
+      setError(json.error ?? "Fehler beim Senden.");
+      return;
+    }
+    onUpdate({
+      followup_status: action === "send" ? "gesendet" : "verworfen",
+      followup_subject: subject,
+      followup_body: body,
+      followup_sent_at: new Date().toISOString(),
+    });
+  }
+
+  if (lead.followup_status === "gesendet") {
+    return (
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-sky-700">
+        <Mail className="size-3.5" />
+        Follow-up gesendet
+        {lead.followup_sent_at &&
+          ` am ${new Date(lead.followup_sent_at).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" })}`}
+      </p>
+    );
+  }
+  if (lead.followup_status === "verworfen" || !lead.followup_status) return null;
+
+  return (
+    <details className="mt-2 w-full rounded-lg border bg-muted/30">
+      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        <Mail className="mr-1 inline size-3.5" />
+        Follow-up-Entwurf
+        {lead.followup_status === "fehlgeschlagen" && (
+          <span className="ml-2 text-red-600">Versand fehlgeschlagen — erneut versuchen</span>
+        )}
+      </summary>
+      <div className="flex flex-col gap-2 p-3 pt-1">
+        <input
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm"
+          placeholder="Betreff"
+        />
+        <textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={7}
+          className="w-full rounded-md border bg-background px-2.5 py-1.5 text-sm leading-relaxed"
+        />
+        {(error || lead.followup_error) && (
+          <p className="text-xs text-red-600">{error ?? lead.followup_error}</p>
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act("send")}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          >
+            <Send className="size-3.5" /> {busy ? "Sendet…" : "Follow-up senden"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act("discard")}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" /> verwerfen
+          </button>
+        </div>
+      </div>
+    </details>
+  );
 }
 
 export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
@@ -208,6 +308,14 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
                     : ""}
                   {extraFields(l.field_data).map((x) => ` · ${x}`)}
                 </p>
+                <FollowupPanel
+                  lead={l}
+                  onUpdate={(patch) =>
+                    setLeads((cur) =>
+                      cur.map((x) => (x.id === l.id ? { ...x, ...patch } : x)),
+                    )
+                  }
+                />
               </div>
               {done ? (
                 <div className="flex shrink-0 items-center gap-2">

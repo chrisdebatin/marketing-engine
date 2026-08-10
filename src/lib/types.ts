@@ -573,6 +573,11 @@ export interface Database {
           field_data: unknown;
           status: string;
           created_at: string | null;
+          followup_subject: string | null;
+          followup_body: string | null;
+          followup_status: string | null;
+          followup_sent_at: string | null;
+          followup_error: string | null;
         };
         Insert: {
           id: string;
@@ -583,6 +588,11 @@ export interface Database {
           field_data?: unknown;
           status?: string;
           created_at?: string | null;
+          followup_subject?: string | null;
+          followup_body?: string | null;
+          followup_status?: string | null;
+          followup_sent_at?: string | null;
+          followup_error?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];

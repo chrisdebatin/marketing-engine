@@ -7,7 +7,26 @@ import {
   metaFetch,
   metaPageId,
 } from "@/lib/meta-api";
+import { generateFollowupDraft } from "@/lib/followup-ai";
 import { MetaLeadsList, type LeadRow } from "@/components/meta-leads-list";
+
+/** E-Mail aus den Formularfeldern eines Leads ziehen. */
+function leadEmail(fd: unknown): string | null {
+  if (!Array.isArray(fd)) return null;
+  const f = (fd as { name?: string; values?: string[] }[]).find((x) =>
+    x.name?.toLowerCase().includes("mail"),
+  );
+  return f?.values?.[0] ?? null;
+}
+
+function leadFirstName(fd: unknown): string | null {
+  if (!Array.isArray(fd)) return null;
+  const list = fd as { name?: string; values?: string[] }[];
+  const f =
+    list.find((x) => ["first_name", "vorname"].includes(x.name?.toLowerCase() ?? "")) ??
+    list.find((x) => x.name?.toLowerCase().includes("name"));
+  return f?.values?.[0] ?? null;
+}
 
 interface MetaLead {
   id: string;
@@ -74,6 +93,42 @@ export async function MetaLeads() {
         : err instanceof Error
           ? err.message
           : "Sync-Fehler";
+  }
+
+  // Follow-up-Entwürfe für neue offene Leads mit E-Mail erzeugen (max. 8 pro
+  // Seitenaufruf, parallel). Versand bleibt manuell (1-Klick in der Liste).
+  try {
+    const { data: pending } = await admin
+      .from("meta_leads")
+      .select("id, campaign_name, ad_name, field_data")
+      .eq("status", "offen")
+      .is("followup_status", null)
+      .order("created_time", { ascending: false })
+      .limit(8);
+    await Promise.allSettled(
+      (pending ?? [])
+        .filter((l) => leadEmail(l.field_data))
+        .map(async (l) => {
+          const draft = await generateFollowupDraft({
+            name: leadFirstName(l.field_data),
+            campaignName: l.campaign_name,
+            adName: l.ad_name,
+          });
+          if (draft) {
+            await admin
+              .from("meta_leads")
+              .update({
+                followup_subject: draft.subject,
+                followup_body: draft.body,
+                followup_status: "entwurf",
+              })
+              .eq("id", l.id);
+          }
+        }),
+    );
+  } catch (err) {
+    // Spalten fehlen (Migration 0048 nicht eingespielt) o. ä. — Liste trotzdem zeigen.
+    console.error("meta-leads: Entwurfs-Erzeugung übersprungen:", err);
   }
 
   const { data, error: dbError } = await admin
