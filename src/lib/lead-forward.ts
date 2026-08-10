@@ -6,7 +6,7 @@ import { deliverMail } from "@/lib/mailer";
  * Idempotenz über meta_leads.forwarded_at (setzt der Aufrufer).
  */
 
-export const FORWARD_TO = process.env.LEAD_FORWARD_TO || "recruiting@pflegeunion.de";
+export const FORWARD_TO = process.env.LEAD_FORWARD_TO || "recruiting@igsg.de";
 
 /** Mitarbeiter-Anfrage? Erkennung über den Kampagnennamen. */
 export function isRecruitingLead(campaignName: string | null): boolean {
