@@ -86,8 +86,9 @@ export async function MetaLeads() {
           : "Sync-Fehler";
   }
 
-  // Follow-up-Entwürfe für neue offene Leads mit E-Mail erzeugen (max. 8 pro
-  // Seitenaufruf, parallel). Versand bleibt manuell (1-Klick in der Liste).
+  // Follow-up-Entwürfe NUR für Kunden-Leads erzeugen (max. 8 pro Seitenaufruf,
+  // parallel). Mitarbeiter-Leads bekommen keine Follow-up-Mail — sie werden
+  // stattdessen ans Recruiting weitergeleitet. Versand bleibt manuell.
   try {
     const { data: pending } = await admin
       .from("meta_leads")
@@ -98,7 +99,7 @@ export async function MetaLeads() {
       .limit(8);
     await Promise.allSettled(
       (pending ?? [])
-        .filter((l) => leadEmail(l.field_data))
+        .filter((l) => leadEmail(l.field_data) && !isRecruitingLead(l.campaign_name))
         .map(async (l) => {
           const draft = await generateFollowupDraft({
             name: leadFirstName(l.field_data),
