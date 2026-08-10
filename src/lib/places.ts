@@ -8,6 +8,8 @@ export const PLACE_KINDS = [
   { key: "apotheke", label: "Apotheke" },
   { key: "pflegeeinrichtung", label: "Pflegeeinrichtung" },
   { key: "sanitaetshaus", label: "Sanitätshaus" },
+  { key: "meta_mitarbeiter", label: "Meta-Lead: Bewerber" },
+  { key: "meta_kunde", label: "Meta-Lead: Kunde" },
   { key: "sonstiges", label: "Sonstiges" },
 ] as const;
 

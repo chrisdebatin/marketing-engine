@@ -580,6 +580,7 @@ export interface Database {
           followup_error: string | null;
           forwarded_at: string | null;
           forward_error: string | null;
+          crm_target_id: string | null;
         };
         Insert: {
           id: string;
@@ -597,6 +598,7 @@ export interface Database {
           followup_error?: string | null;
           forwarded_at?: string | null;
           forward_error?: string | null;
+          crm_target_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];

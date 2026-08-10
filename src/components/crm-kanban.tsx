@@ -70,6 +70,12 @@ const KAT_COLORS: Record<string, { border: string; dot: string; label: string }>
     dot: "bg-amber-500",
     label: "Sanitätshaus",
   },
+  meta_mitarbeiter: {
+    border: "border-l-fuchsia-500",
+    dot: "bg-fuchsia-500",
+    label: "Meta-Lead: Bewerber",
+  },
+  meta_kunde: { border: "border-l-teal-500", dot: "bg-teal-500", label: "Meta-Lead: Kunde" },
   sonstiges: { border: "border-l-slate-400", dot: "bg-slate-400", label: "Sonstiges" },
 };
 const katColor = (kategorie: string | null | undefined) =>

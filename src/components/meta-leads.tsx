@@ -10,25 +10,14 @@ import {
 import { generateFollowupDraft } from "@/lib/followup-ai";
 import { forwardLead, isRecruitingLead } from "@/lib/lead-forward";
 import { mailConfigured } from "@/lib/mailer";
+import {
+  cityFromCampaign,
+  leadEmail,
+  leadFirstName,
+  leadFullName,
+  leadPhone,
+} from "@/lib/meta-lead-fields";
 import { MetaLeadsList, type LeadRow } from "@/components/meta-leads-list";
-
-/** E-Mail aus den Formularfeldern eines Leads ziehen. */
-function leadEmail(fd: unknown): string | null {
-  if (!Array.isArray(fd)) return null;
-  const f = (fd as { name?: string; values?: string[] }[]).find((x) =>
-    x.name?.toLowerCase().includes("mail"),
-  );
-  return f?.values?.[0] ?? null;
-}
-
-function leadFirstName(fd: unknown): string | null {
-  if (!Array.isArray(fd)) return null;
-  const list = fd as { name?: string; values?: string[] }[];
-  const f =
-    list.find((x) => ["first_name", "vorname"].includes(x.name?.toLowerCase() ?? "")) ??
-    list.find((x) => x.name?.toLowerCase().includes("name"));
-  return f?.values?.[0] ?? null;
-}
 
 interface MetaLead {
   id: string;
@@ -131,6 +120,49 @@ export async function MetaLeads() {
   } catch (err) {
     // Spalten fehlen (Migration 0048 nicht eingespielt) o. ä. — Liste trotzdem zeigen.
     console.error("meta-leads: Entwurfs-Erzeugung übersprungen:", err);
+  }
+
+  // Leads ins CRM übernehmen (crm_targets + Ansprechperson), als eigene
+  // Kategorien meta_mitarbeiter/meta_kunde — getrennt von den Krankenhäusern.
+  // Idempotent über meta_leads.crm_target_id, max. 25 pro Seitenaufruf.
+  try {
+    const { data: toCrm } = await admin
+      .from("meta_leads")
+      .select("id, campaign_name, ad_name, created_time, field_data")
+      .is("crm_target_id", null)
+      .order("created_time", { ascending: false })
+      .limit(25);
+    for (const l of toCrm ?? []) {
+      const name = leadFullName(l.field_data) ?? leadEmail(l.field_data) ?? "Meta-Lead";
+      const { data: target, error: targetError } = await admin
+        .from("crm_targets")
+        .insert({
+          name,
+          kategorie: isRecruitingLead(l.campaign_name) ? "meta_mitarbeiter" : "meta_kunde",
+          ort: cityFromCampaign(l.campaign_name),
+          ansprechpartner: name,
+          note: [
+            "Meta-Lead aus Instant-Formular",
+            l.campaign_name ? `Kampagne: ${l.campaign_name}` : null,
+            l.ad_name ? `Anzeige: ${l.ad_name}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        })
+        .select("id")
+        .single();
+      if (targetError || !target) break; // Spalten/Tabelle fehlen o. ä. — nächster Lauf
+      await admin.from("crm_persons").insert({
+        target_id: target.id,
+        name,
+        telefon: leadPhone(l.field_data),
+        email: leadEmail(l.field_data),
+        notiz: l.campaign_name ? `Meta-Kampagne ${l.campaign_name}` : "Meta-Lead",
+      });
+      await admin.from("meta_leads").update({ crm_target_id: target.id }).eq("id", l.id);
+    }
+  } catch (err) {
+    console.error("meta-leads: CRM-Übernahme übersprungen:", err);
   }
 
   // Mitarbeiter-Anfragen ans Recruiting-Postfach weiterleiten (einmal pro Lead,
