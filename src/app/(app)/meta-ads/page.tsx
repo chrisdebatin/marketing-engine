@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { MetaAdsAgent } from "@/components/meta-ads-agent";
 import { MetaCampaignGrid } from "@/components/meta-campaign-grid";
 import { MetaCampaignOverview } from "@/components/meta-campaign-overview";
+import { MetaSpendTable } from "@/components/meta-spend-table";
 import { MetaCreatives, type CreativeRow } from "@/components/meta-creatives";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,8 @@ export default async function MetaAdsPage() {
       <MetaAdsAgent />
 
       <MetaCampaignGrid />
+
+      <MetaSpendTable />
 
       <section className="flex flex-col gap-3 border-t pt-5">
         <h2 className="text-lg font-semibold">Creatives</h2>
