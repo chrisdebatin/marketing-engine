@@ -122,6 +122,7 @@ export function CrmKanban({
   const [hubFilter, setHubFilter] = useState<string>(HUB_ALL);
   const [query, setQuery] = useState("");
   const [openCard, setOpenCard] = useState<string | null>(null);
+  const [katFilter, setKatFilter] = useState<string | null>(null);
 
   const today = todayIso();
   const hubName = (id: string | null) =>
@@ -134,6 +135,7 @@ export function CrmKanban({
   const q = query.trim().toLowerCase();
   const filtered = targets.filter((t) => {
     if (hubFilter !== HUB_ALL && t.hub_id !== hubFilter) return false;
+    if (katFilter && (t.kategorie ?? "sonstiges") !== katFilter) return false;
     if (q) {
       const hay = `${t.name} ${t.ort ?? ""} ${t.ansprechpartner ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -187,14 +189,33 @@ export function CrmKanban({
         </span>
       </div>
 
-      {/* Farb-Legende der Kategorien */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        {Object.values(KAT_COLORS).map((k) => (
-          <span key={k.label} className="flex items-center gap-1.5">
+      {/* Farb-Legende der Kategorien — klickbar als Filter */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+        {Object.entries(KAT_COLORS).map(([key, k]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setKatFilter((cur) => (cur === key ? null : key))}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border border-transparent px-2 py-0.5 transition-colors hover:text-foreground",
+              katFilter === key && "border-current bg-muted font-medium text-foreground",
+              katFilter && katFilter !== key && "opacity-40",
+            )}
+            title={katFilter === key ? "Filter aufheben" : `Nur ${k.label} zeigen`}
+          >
             <span className={cn("size-2.5 rounded-full", k.dot)} />
             {k.label}
-          </span>
+          </button>
         ))}
+        {katFilter && (
+          <button
+            type="button"
+            onClick={() => setKatFilter(null)}
+            className="ml-1 underline hover:text-foreground"
+          >
+            alle zeigen
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
