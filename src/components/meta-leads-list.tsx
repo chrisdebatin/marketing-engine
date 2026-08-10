@@ -221,6 +221,19 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
   const visible = leads.filter((l) => showDone || l.status === "offen");
   const doneCount = leads.length - leads.filter((l) => l.status === "offen").length;
 
+  // Nach Anzeigen-Typ (Kampagne) gruppiert, innerhalb der Gruppe neueste zuerst;
+  // Gruppen nach jüngstem Lead sortiert.
+  const groups = new Map<string, LeadRow[]>();
+  for (const l of visible) {
+    const key = l.campaign_name ?? "Ohne Kampagne";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(l);
+  }
+  const grouped = [...groups.entries()].sort(
+    (a, b) =>
+      (b[1][0]?.created_time ?? "").localeCompare(a[1][0]?.created_time ?? ""),
+  );
+
   return (
     <div className="flex flex-col gap-2">
       {doneCount > 0 && (
@@ -239,8 +252,24 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
           Alles abgearbeitet — keine offenen Kunden-Anfragen. 🎉
         </p>
       )}
-      <ul className="flex flex-col gap-2">
-        {visible.map((l) => {
+      {grouped.map(([camp, rows]) => (
+        <div key={camp} className="flex flex-col gap-2">
+          <h3 className="mt-2 flex items-center gap-2 text-sm font-semibold first:mt-0">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                campaignTone(camp),
+              )}
+            >
+              <Megaphone className="size-3" />
+              {camp}
+            </span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {rows.length} Lead{rows.length === 1 ? "" : "s"}
+            </span>
+          </h3>
+          <ul className="flex flex-col gap-2">
+            {rows.map((l) => {
           const name = leadName(l.field_data) ?? "(ohne Name)";
           const phone = fieldValue(l.field_data, "phone", "telefon", "mobil");
           const email = fieldValue(l.field_data, "email", "mail");
@@ -271,18 +300,6 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
                       </span>
                     )}
                   </span>
-                  {l.campaign_name && (
-                    <span
-                      title={l.ad_name ? `Anzeige: ${l.ad_name}` : undefined}
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                        campaignTone(l.campaign_name),
-                      )}
-                    >
-                      <Megaphone className="size-3" />
-                      {l.campaign_name}
-                    </span>
-                  )}
                   {l.forwarded_at && (
                     <span
                       className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800"
@@ -351,8 +368,10 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
               )}
             </li>
           );
-        })}
-      </ul>
+            })}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

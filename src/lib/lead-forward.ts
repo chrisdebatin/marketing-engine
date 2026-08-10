@@ -6,7 +6,11 @@ import { deliverMail } from "@/lib/mailer";
  * Idempotenz über meta_leads.forwarded_at (setzt der Aufrufer).
  */
 
-export const FORWARD_TO = process.env.LEAD_FORWARD_TO || "recruiting@igsg.de";
+/** Empfänger, kommagetrennt konfigurierbar (LEAD_FORWARD_TO). */
+export const FORWARD_TO = (process.env.LEAD_FORWARD_TO || "recruiting@igsg.de")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 /** Mitarbeiter-Anfrage? Erkennung über den Kampagnennamen. */
 export function isRecruitingLead(campaignName: string | null): boolean {
@@ -69,7 +73,7 @@ export async function forwardLead(lead: {
     `<p style="color:#888;font-size:12px">Automatisch weitergeleitet von der Marketing-Engine (Lead ${esc(lead.id)}).</p>`;
 
   return deliverMail({
-    to: [FORWARD_TO],
+    to: FORWARD_TO,
     subject: `Neue Mitarbeiter-Anfrage: ${name}${lead.campaign_name ? ` (${lead.campaign_name})` : ""}`,
     html,
   });
