@@ -361,6 +361,7 @@ export interface Database {
           plz: string;
           inhalt: string;
           note: string | null;
+          ort: string | null;
           hub_id: string | null;
           created_at: string | null;
         };
@@ -371,6 +372,7 @@ export interface Database {
           plz: string;
           inhalt: string;
           note?: string | null;
+          ort?: string | null;
           hub_id?: string | null;
           created_at?: string | null;
         };

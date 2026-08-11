@@ -20,8 +20,9 @@ function parseInput(input: {
   plz?: string;
   inhalt?: string;
   note?: string;
+  ort?: string;
 }):
-  | { ok: true; row: { action_date: string; anzahl: number; plz: string; inhalt: string; note: string | null } }
+  | { ok: true; row: { action_date: string; anzahl: number; plz: string; inhalt: string; note: string | null; ort: string | null } }
   | { ok: false; error: string } {
   const date = (input.action_date ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -50,6 +51,7 @@ function parseInput(input: {
   if (note.length > 1000) {
     return { ok: false, error: "Notiz zu lang (max. 1000 Zeichen)." };
   }
+  const ort = (input.ort ?? "").trim().slice(0, 200);
   return {
     ok: true,
     row: {
@@ -58,6 +60,7 @@ function parseInput(input: {
       plz: plzList.join(", "),
       inhalt,
       note: note || null,
+      ort: ort || null,
     },
   };
 }
@@ -69,6 +72,14 @@ function missingTableError(code?: string): Result | null {
       ok: false,
       error:
         "Die Tabelle flyer_actions fehlt noch — bitte supabase/apply_all_pending.sql im Supabase SQL-Editor ausführen.",
+    };
+  }
+  // PGRST204 / 42703: Spalte fehlt (z. B. ort aus Migration 0048)
+  if (code === "PGRST204" || code === "42703") {
+    return {
+      ok: false,
+      error:
+        "Die Spalte ort fehlt noch — bitte supabase/apply_all_pending.sql im Supabase SQL-Editor ausführen.",
     };
   }
   return null;
@@ -120,9 +131,14 @@ export async function createFlyerActionFromText(
                 description: "Alle ausdrücklich genannten PLZ. Leer, wenn keine im Text stehen.",
               },
               inhalt: { type: "string", description: "Inhalt/Motiv des Flyers." },
+              ort: {
+                type: "string",
+                description:
+                  "Verteilgebiet als Orts-/Stadtteilname (z. B. 'Erkrath', 'Düsseldorf-Süd', 'Dorsten & Schermbeck') — aus dem Text übernehmen; leerer String, wenn keiner genannt ist.",
+              },
               note: { type: "string", description: "Optionale Notiz, sonst leerer String." },
             },
-            required: ["action_date", "anzahl", "plz", "inhalt"],
+            required: ["action_date", "anzahl", "plz", "inhalt", "ort"],
             additionalProperties: false,
           },
         },
@@ -160,6 +176,7 @@ export async function createFlyerActionFromText(
     plz: plzList.join(", "),
     inhalt: String(extracted.inhalt ?? "").trim() || "(kein Motiv angegeben)",
     note: String(extracted.note ?? "").trim(),
+    ort: String(extracted.ort ?? "").trim(),
   });
   if (!parsed.ok) return parsed;
 
@@ -187,6 +204,7 @@ export async function createFlyerAction(input: {
   plz?: string;
   inhalt?: string;
   note?: string;
+  ort?: string;
 }): Promise<Result> {
   await requireSession();
   const parsed = parseInput(input);
@@ -214,6 +232,7 @@ export async function updateFlyerAction(
     plz?: string;
     inhalt?: string;
     note?: string;
+    ort?: string;
   },
 ): Promise<Result> {
   await requireSession();

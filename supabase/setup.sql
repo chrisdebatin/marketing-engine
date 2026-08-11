@@ -1166,6 +1166,66 @@ alter table public.meta_leads disable row level security;
 notify pgrst, 'reload schema';
 
 -- ============================================================
+-- 0048_flyer_actions_ort.sql
+-- ============================================================
+-- 0048: Verteilgebiet (Ort) als eigenes Feld an Flyeraktionen — wird von
+-- der KI-Freitext-Erfassung befüllt und im Titel angezeigt. Backfill für
+-- die bestehenden Einträge (Gebiet stand bisher nur im Notiz-Text).
+alter table public.flyer_actions add column if not exists ort text;
+
+update public.flyer_actions set ort = 'Duisburg'
+  where ort is null and id = 'b2555e3e-7ce3-439b-a84b-8791067194cf';
+update public.flyer_actions set ort = 'Dorsten & Schermbeck'
+  where ort is null and id = '2766ef5d-56af-460a-948c-34c5c7e34374';
+update public.flyer_actions set ort = 'Erkrath'
+  where ort is null and id = '299d9507-f354-4e9b-8ef5-094d6bc6d948';
+update public.flyer_actions set ort = 'Düsseldorf-Süd'
+  where ort is null and id = '870abe2f-c004-4359-bf07-0f76b024f3cb';
+update public.flyer_actions set ort = 'Düsseldorf'
+  where ort is null and id = 'd5190b1f-c44e-4036-a30c-9c0bf5769e8a';
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 0048_meta_lead_followup.sql
+-- ============================================================
+-- 0048: E-Mail-Follow-up je Meta-Lead. Beim Sync wird für neue Leads mit
+-- E-Mail-Adresse automatisch ein personalisierter Entwurf erzeugt (Status
+-- 'entwurf'); Versand erst nach 1-Klick-Freigabe in der Lead-Liste.
+alter table public.meta_leads
+  add column if not exists followup_subject text,
+  add column if not exists followup_body    text,
+  add column if not exists followup_status  text
+    check (followup_status in ('entwurf', 'gesendet', 'fehlgeschlagen', 'verworfen')),
+  add column if not exists followup_sent_at timestamptz,
+  add column if not exists followup_error   text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 0049_meta_lead_forward.sql
+-- ============================================================
+-- 0049: Automatische Weiterleitung von Mitarbeiter-Leads an das Recruiting-
+-- Postfach (LEAD_FORWARD_TO, Default recruiting@igsg.de). Der Sync
+-- verschickt je Lead genau eine Mail; forwarded_at macht das idempotent.
+alter table public.meta_leads
+  add column if not exists forwarded_at  timestamptz,
+  add column if not exists forward_error text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
+-- 0050_meta_lead_crm.sql
+-- ============================================================
+-- 0050: Meta-Leads erscheinen zusätzlich im CRM (crm_targets) — als eigene
+-- Kategorien meta_mitarbeiter / meta_kunde, getrennt von den Krankenhäusern.
+-- crm_target_id verknüpft Lead ↔ CRM-Eintrag und macht den Sync idempotent.
+alter table public.meta_leads
+  add column if not exists crm_target_id uuid references public.crm_targets(id) on delete set null;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data
@@ -1212,36 +1272,3 @@ on conflict (name) do update set responsible_md = excluded.responsible_md;
 --   update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'you@example.com');
 -- ------------------------------------------------------------
-
--- ===== 0048_meta_lead_followup.sql =====
--- 0048: E-Mail-Follow-up je Meta-Lead. Beim Sync wird für neue Leads mit
--- E-Mail-Adresse automatisch ein personalisierter Entwurf erzeugt (Status
--- 'entwurf'); Versand erst nach 1-Klick-Freigabe in der Lead-Liste.
-alter table public.meta_leads
-  add column if not exists followup_subject text,
-  add column if not exists followup_body    text,
-  add column if not exists followup_status  text
-    check (followup_status in ('entwurf', 'gesendet', 'fehlgeschlagen', 'verworfen')),
-  add column if not exists followup_sent_at timestamptz,
-  add column if not exists followup_error   text;
-
-notify pgrst, 'reload schema';
-
--- ===== 0049_meta_lead_forward.sql =====
--- 0049: Automatische Weiterleitung von Mitarbeiter-Leads an das Recruiting-
--- Postfach (LEAD_FORWARD_TO, Default recruiting@igsg.de). Der Sync
--- verschickt je Lead genau eine Mail; forwarded_at macht das idempotent.
-alter table public.meta_leads
-  add column if not exists forwarded_at  timestamptz,
-  add column if not exists forward_error text;
-
-notify pgrst, 'reload schema';
-
--- ===== 0050_meta_lead_crm.sql =====
--- 0050: Meta-Leads erscheinen zusätzlich im CRM (crm_targets) — als eigene
--- Kategorien meta_mitarbeiter / meta_kunde, getrennt von den Krankenhäusern.
--- crm_target_id verknüpft Lead ↔ CRM-Eintrag und macht den Sync idempotent.
-alter table public.meta_leads
-  add column if not exists crm_target_id uuid references public.crm_targets(id) on delete set null;
-
-notify pgrst, 'reload schema';

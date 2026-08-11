@@ -21,6 +21,7 @@ export interface FlyerActionRow {
   plz: string;
   inhalt: string;
   note: string | null;
+  ort: string | null;
 }
 
 function formatDate(iso: string): string {
@@ -41,6 +42,8 @@ function ActionFields({
   setInhalt,
   note,
   setNote,
+  ort,
+  setOrt,
 }: {
   date: string;
   setDate: (v: string) => void;
@@ -52,6 +55,8 @@ function ActionFields({
   setInhalt: (v: string) => void;
   note: string;
   setNote: (v: string) => void;
+  ort: string;
+  setOrt: (v: string) => void;
 }) {
   return (
     <>
@@ -75,6 +80,16 @@ function ActionFields({
             onChange={(e) => setAnzahl(e.target.value)}
             placeholder="z. B. 5000"
             className="w-32"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs">Gebiet / Ort</Label>
+          <Input
+            value={ort}
+            onChange={(e) => setOrt(e.target.value)}
+            placeholder="z. B. Erkrath, Düsseldorf-Süd"
+            autoComplete="off"
+            className="w-48"
           />
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
@@ -125,6 +140,7 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
   const [ePlz, setEPlz] = useState("");
   const [eInhalt, setEInhalt] = useState("");
   const [eNote, setENote] = useState("");
+  const [eOrt, setEOrt] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   function create() {
@@ -148,6 +164,7 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
     setEPlz(a.plz);
     setEInhalt(a.inhalt);
     setENote(a.note ?? "");
+    setEOrt(a.ort ?? "");
     setConfirmDeleteId(null);
   }
 
@@ -160,6 +177,7 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
         plz: ePlz,
         inhalt: eInhalt,
         note: eNote,
+        ort: eOrt,
       });
       if (res.ok) {
         toast.success("Flyeraktion aktualisiert");
@@ -250,6 +268,9 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
                       <p className="font-medium">
                         {formatDate(a.action_date)} ·{" "}
                         {a.anzahl.toLocaleString("de-DE")} Flyer
+                        {a.ort && (
+                          <span className="text-primary"> · {a.ort}</span>
+                        )}
                       </p>
                       <p className="mt-1 text-sm">{a.inhalt}</p>
                       {a.note && (
@@ -318,6 +339,8 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
                         setInhalt={setEInhalt}
                         note={eNote}
                         setNote={setENote}
+                        ort={eOrt}
+                        setOrt={setEOrt}
                       />
                       <div className="flex items-center gap-2">
                         <Button
