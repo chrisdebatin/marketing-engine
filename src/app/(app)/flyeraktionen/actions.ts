@@ -166,9 +166,8 @@ export async function createFlyerActionFromText(
   const admin = createAdminClient();
   const { error } = await admin.from("flyer_actions").insert(parsed.row);
   if (error) {
-    return (
-      missingTableError(error.code) ?? { ok: false, error: "Speichern fehlgeschlagen." }
-    );
+    const mt = missingTableError(error.code);
+    return mt && !mt.ok ? mt : { ok: false, error: "Speichern fehlgeschlagen." };
   }
   revalidate();
   return {
