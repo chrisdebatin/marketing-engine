@@ -265,12 +265,15 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-medium">
-                        {formatDate(a.action_date)} ·{" "}
-                        {a.anzahl.toLocaleString("de-DE")} Flyer
-                        {a.ort && (
-                          <span className="text-primary"> · {a.ort}</span>
-                        )}
+                      <p className="text-base font-semibold">
+                        {a.ort ?? `PLZ ${a.plz.split(/,\s*/)[0]}`}
+                        <span className="font-normal text-muted-foreground">
+                          {" "}
+                          · {a.anzahl.toLocaleString("de-DE")} Flyer
+                        </span>
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatDate(a.action_date)}
                       </p>
                       <p className="mt-1 text-sm">{a.inhalt}</p>
                       {a.note && (
