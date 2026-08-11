@@ -20,6 +20,7 @@ export async function MetaLeads() {
   const { data: allLeads, error: dbError } = await admin
     .from("meta_leads")
     .select("*")
+    .neq("status", "geloescht")
     .order("created_time", { ascending: false })
     .limit(200);
   const tableMissing = dbError?.code === "PGRST205" || dbError?.code === "42P01";

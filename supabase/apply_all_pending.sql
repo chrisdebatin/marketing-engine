@@ -267,3 +267,10 @@ alter table public.meta_leads
   add column if not exists crm_target_id uuid references public.crm_targets(id) on delete set null;
 
 notify pgrst, 'reload schema';
+
+-- ── 0051: Leads löschbar (Soft-Delete, Sync legt sie nicht neu an) ─
+alter table public.meta_leads drop constraint if exists meta_leads_status_check;
+alter table public.meta_leads add constraint meta_leads_status_check
+  check (status in ('offen', 'kontaktiert', 'geloescht'));
+
+notify pgrst, 'reload schema';

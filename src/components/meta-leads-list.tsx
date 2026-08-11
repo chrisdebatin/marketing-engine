@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Mail, Megaphone, Phone, Send, Undo2, X } from "lucide-react";
+import { Check, Mail, Megaphone, Phone, Send, Trash2, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface LeadRow {
@@ -208,6 +208,8 @@ function FollowupPanel({
 export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
   const [leads, setLeads] = useState(initial);
   const [showDone, setShowDone] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function setStatus(id: string, status: "offen" | "kontaktiert") {
     setLeads((cur) => cur.map((l) => (l.id === id ? { ...l, status } : l)));
@@ -216,6 +218,22 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status }),
     });
+  }
+
+  async function removeLead(id: string) {
+    setDeleteError(null);
+    const res = await fetch("/api/meta-ads/lead", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) {
+      setLeads((cur) => cur.filter((l) => l.id !== id));
+      setConfirmDeleteId(null);
+    } else {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setDeleteError(json.error ?? "Löschen fehlgeschlagen.");
+    }
   }
 
   const visible = leads.filter((l) => showDone || l.status === "offen");
@@ -247,6 +265,7 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
             : `${doneCount} kontaktierte anzeigen`}
         </button>
       )}
+      {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
       {visible.length === 0 && (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
           Alles abgearbeitet — keine offenen Kunden-Anfragen. 🎉
@@ -364,6 +383,24 @@ export function MetaLeadsList({ initial }: { initial: LeadRow[] }) {
                   className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800"
                 >
                   <Check className="size-3.5" /> als kontaktiert markieren
+                </button>
+              )}
+              {confirmDeleteId === l.id ? (
+                <button
+                  type="button"
+                  onClick={() => removeLead(l.id)}
+                  className="flex shrink-0 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                >
+                  <Trash2 className="size-3.5" /> Wirklich löschen?
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(l.id)}
+                  aria-label="Lead löschen"
+                  className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
                 </button>
               )}
             </li>
