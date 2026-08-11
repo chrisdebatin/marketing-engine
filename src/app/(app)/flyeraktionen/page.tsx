@@ -4,6 +4,7 @@ import {
   FlyerActionsManager,
   type FlyerActionRow,
 } from "@/components/flyer-actions-manager";
+import { FlyerMap } from "@/components/flyer-map";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function FlyerAktionenPage() {
   // Fallback ?? [] — fehlt Migration 0019, darf die Seite nicht crashen.
   const { data } = await admin
     .from("flyer_actions")
-    .select("id, action_date, anzahl, plz, inhalt, note")
+    .select("id, action_date, anzahl, plz, inhalt, note, ort")
     .order("action_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -30,6 +31,8 @@ export default async function FlyerAktionenPage() {
           Ziel-PLZ und Inhalt.
         </p>
       </div>
+
+      <FlyerMap actions={actions} />
 
       <FlyerActionsManager initial={actions} />
     </div>
