@@ -2,14 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Megaphone, Pencil, Plus, Trash2 } from "lucide-react";
+import { Megaphone, Pencil, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  createFlyerAction,
+  createFlyerActionFromText,
   deleteFlyerAction,
   updateFlyerAction,
 } from "@/app/(app)/flyeraktionen/actions";
@@ -21,10 +21,6 @@ export interface FlyerActionRow {
   plz: string;
   inhalt: string;
   note: string | null;
-}
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 function formatDate(iso: string): string {
@@ -119,12 +115,8 @@ function ActionFields({
 export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) {
   const [pending, startTransition] = useTransition();
 
-  // Anlegen
-  const [date, setDate] = useState(todayIso());
-  const [anzahl, setAnzahl] = useState("");
-  const [plz, setPlz] = useState("");
-  const [inhalt, setInhalt] = useState("");
-  const [note, setNote] = useState("");
+  // Anlegen (Freitext, wird per KI in die Felder zerlegt)
+  const [freitext, setFreitext] = useState("");
 
   // Bearbeiten
   const [editId, setEditId] = useState<string | null>(null);
@@ -135,23 +127,14 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
   const [eNote, setENote] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  const canCreate = date && anzahl.trim() && plz.trim() && inhalt.trim();
-
   function create() {
     startTransition(async () => {
-      const res = await createFlyerAction({
-        action_date: date,
-        anzahl,
-        plz,
-        inhalt,
-        note,
-      });
+      const res = await createFlyerActionFromText(freitext);
       if (res.ok) {
-        toast.success("Flyeraktion gespeichert");
-        setAnzahl("");
-        setPlz("");
-        setInhalt("");
-        setNote("");
+        toast.success(
+          `Gespeichert: ${res.saved.anzahl.toLocaleString("de-DE")} Flyer am ${formatDate(res.saved.action_date)} · PLZ ${res.saved.plz}`,
+        );
+        setFreitext("");
       } else {
         toast.error(res.error);
       }
@@ -210,26 +193,34 @@ export function FlyerActionsManager({ initial }: { initial: FlyerActionRow[] }) 
           <Megaphone className="size-4 text-primary" />
           Neue Flyeraktion loggen
         </h2>
-        <ActionFields
-          date={date}
-          setDate={setDate}
-          anzahl={anzahl}
-          setAnzahl={setAnzahl}
-          plz={plz}
-          setPlz={setPlz}
-          inhalt={inhalt}
-          setInhalt={setInhalt}
-          note={note}
-          setNote={setNote}
+        <Textarea
+          value={freitext}
+          onChange={(e) => setFreitext(e.target.value)}
+          rows={3}
+          maxLength={2000}
+          placeholder={
+            "Einfach beschreiben — die KI erkennt Datum, Anzahl, PLZ, Motiv und Notiz.\nz. B. „Gestern 5000 Flyer in 40210 und 40211 verteilt, Motiv Pflegeberatung mit QR-Code, Verteiler war Firma Müller“"
+          }
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              if (!pending && freitext.trim()) create();
+            }
+          }}
         />
+        <p className="text-xs text-muted-foreground">
+          Wichtig: PLZ und Flyer-Anzahl im Text nennen — ohne sie wird nichts
+          gespeichert. Erkanntes lässt sich danach über das Stift-Icon
+          korrigieren.
+        </p>
         <Button
           type="button"
           className="self-start"
-          disabled={pending || !canCreate}
+          disabled={pending || !freitext.trim()}
           onClick={create}
         >
-          <Plus className="size-4" />
-          {pending ? "Speichere…" : "Aktion speichern"}
+          <Sparkles className="size-4" />
+          {pending ? "KI wertet aus…" : "Mit KI auswerten & speichern"}
         </Button>
       </div>
 
