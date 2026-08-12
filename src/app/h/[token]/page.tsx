@@ -22,6 +22,7 @@ import {
   kontaktArtLabel,
   todayIso,
 } from "@/lib/crm";
+import { normName } from "@/lib/crm-log";
 
 export const dynamic = "force-dynamic";
 
@@ -161,7 +162,36 @@ export default async function HubShareLinkPage({
     .order("created_at", { ascending: false })
     .limit(100);
 
-  const ownTargets = (crmTargets ?? []) as VisitTarget[];
+  // Doppelte Orte über Hub-Grenzen erkennen (gleicher normalisierter Name +
+  // gleicher Ort): am eigenen Eintrag erscheint dann ein Hinweis, welcher
+  // andere Standort denselben Ort auf der Liste hat und wann er dort war.
+  const dupKey = (t: { name: string; ort: string | null }) =>
+    `${normName(t.name)}|${(t.ort ?? "").trim().toLowerCase()}`;
+  const sharedByKey = new Map<
+    string,
+    { hubId: string; hub: string; letzter_besuch: string | null; art: string | null }[]
+  >();
+  for (const t of (allTargets ?? []) as (VisitTarget & { hub_id: string | null })[]) {
+    if (!t.hub_id) continue;
+    const key = dupKey(t);
+    const arr = sharedByKey.get(key) ?? [];
+    arr.push({
+      hubId: t.hub_id,
+      hub: hubNameOf(t.hub_id),
+      letzter_besuch: t.letzter_besuch,
+      art: t.letzte_kontakt_art ?? null,
+    });
+    sharedByKey.set(key, arr);
+  }
+
+  const ownTargets = ((crmTargets ?? []) as VisitTarget[]).map((t) => {
+    const others = (sharedByKey.get(dupKey(t)) ?? []).filter(
+      (s) => s.hubId !== hub.id,
+    );
+    return others.length > 0
+      ? { ...t, geteilt_mit: others.map(({ hub, letzter_besuch, art }) => ({ hub, letzter_besuch, art })) }
+      : t;
+  });
   const dueCount = ownTargets.filter(
     (t) => crmStatus(t, todayIso()) !== "geplant",
   ).length;

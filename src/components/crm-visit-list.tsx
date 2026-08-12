@@ -57,6 +57,12 @@ export interface VisitTarget {
   plan?: string | null;
   relevanz?: number | null;
   note?: string | null;
+  /** Steht auch auf der Liste anderer Standorte (gleicher Name + Ort). */
+  geteilt_mit?: {
+    hub: string;
+    letzter_besuch: string | null;
+    art: string | null;
+  }[];
 }
 
 /** Ein Eintrag im vereinten Aktivitäts-Log (Kontakte + Auslagen). */
@@ -238,7 +244,13 @@ export function CrmVisitList({
     kategorie: string | null;
   } | null>(null);
   const [mapSuggestions, setMapSuggestions] = useState<
-    { name: string; adresse: string | null; ort: string | null; kategorie: string | null }[]
+    {
+      name: string;
+      adresse: string | null;
+      ort: string | null;
+      kategorie: string | null;
+      hinweis?: string | null;
+    }[]
   >([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -812,6 +824,12 @@ export function CrmVisitList({
                             .filter(Boolean)
                             .join(" · ") || "Karten-Treffer"}
                         </span>
+                        {m.hinweis && (
+                          <span className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                            <Users className="size-3 shrink-0" />
+                            {m.hinweis}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1068,6 +1086,26 @@ export function CrmVisitList({
                       {displayNote(t.note) && (
                         <p className="mt-0.5 text-xs text-muted-foreground/80">
                           {displayNote(t.note)}
+                        </p>
+                      )}
+                      {(t.geteilt_mit?.length ?? 0) > 0 && (
+                        <p className="mt-1 flex flex-wrap items-center gap-1 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300">
+                          <Users className="size-3 shrink-0" />
+                          <span>
+                            Auch auf der Liste von{" "}
+                            {t.geteilt_mit!
+                              .map(
+                                (g) =>
+                                  `${g.hub} (${
+                                    g.letzter_besuch
+                                      ? `dort ${kontaktArtLabel(g.art) || "Kontakt"} am ${formatIsoDate(g.letzter_besuch)}`
+                                      : "dort noch kein Kontakt"
+                                  })`,
+                              )
+                              .join(", ")}{" "}
+                            — bitte kurz absprechen, damit niemand doppelt
+                            hinfährt.
+                          </span>
                         </p>
                       )}
                       <p className="mt-0.5 text-xs text-muted-foreground">

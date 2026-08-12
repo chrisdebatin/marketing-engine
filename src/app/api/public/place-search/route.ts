@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { hubCoords } from "@/lib/hub-coords";
+import { normName } from "@/lib/crm-log";
+import { formatIsoDate, kontaktArtLabel } from "@/lib/crm";
 
 export const runtime = "nodejs";
 
@@ -15,6 +17,8 @@ export interface PlaceSuggestion {
   adresse: string | null;
   ort: string | null;
   kategorie: string | null;
+  /** Disclaimer, wenn der Ort schon auf einer Hub-Liste steht ("wer wo schon war"). */
+  hinweis?: string | null;
 }
 
 const OSM_VALUE_MAP: Record<string, string> = {
@@ -90,6 +94,48 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
   }
 
-  const places = await searchPhoton(q, hubCoords(hub.name));
-  return NextResponse.json({ places: places.slice(0, 6) });
+  // Vorschläge gegen die Listen ALLER Standorte abgleichen: Nachbar-Hubs
+  // bekommen von OSM oft dieselben Kliniken vorgeschlagen — der Hinweis
+  // zeigt, wer den Ort schon auf der Liste hat und wann dort Kontakt war.
+  const [places, { data: targetRows }, { data: hubRows }] = await Promise.all([
+    searchPhoton(q, hubCoords(hub.name)),
+    admin
+      .from("crm_targets")
+      .select("name, ort, hub_id, letzter_besuch, letzte_kontakt_art")
+      .not("hub_id", "is", null),
+    admin.from("hubs").select("id, name"),
+  ]);
+  const hubName = (id: string | null) =>
+    (hubRows ?? []).find((h) => h.id === id)?.name ?? "einem anderen Standort";
+
+  const withHint = places.slice(0, 6).map((p) => {
+    const pn = normName(p.name);
+    if (pn.length < 5) return p;
+    const owner = (targetRows ?? []).find((t) => {
+      const tn = normName(t.name);
+      const nameMatch =
+        tn === pn ||
+        (pn.length >= 8 && tn.includes(pn)) ||
+        (tn.length >= 8 && pn.includes(tn));
+      if (!nameMatch) return false;
+      const po = (p.ort ?? "").trim().toLowerCase();
+      const to = (t.ort ?? "").trim().toLowerCase();
+      // Bei widersprüchlichen Orten (z. B. gleichnamige Apotheken in zwei
+      // Städten) kein Treffer; fehlender Ort auf einer Seite zählt als Treffer.
+      if (po && to && !to.includes(po) && !po.includes(to)) return false;
+      return true;
+    });
+    if (!owner) return p;
+    const hinweis =
+      owner.hub_id === hub.id
+        ? "Bereits auf Ihrer Liste"
+        : `Auf der Liste von ${hubName(owner.hub_id)} — ${
+            owner.letzter_besuch
+              ? `dort ${kontaktArtLabel(owner.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(owner.letzter_besuch)}`
+              : "dort noch kein Kontakt"
+          }`;
+    return { ...p, hinweis };
+  });
+
+  return NextResponse.json({ places: withHint });
 }
