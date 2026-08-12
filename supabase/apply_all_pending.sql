@@ -274,3 +274,39 @@ alter table public.meta_leads add constraint meta_leads_status_check
   check (status in ('offen', 'kontaktiert', 'geloescht'));
 
 notify pgrst, 'reload schema';
+
+-- ── 0052: Persönliche Team-Links (Davina/Belinda/Adelina) + Claim/Status ─
+create table if not exists public.team_members (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  team       text not null check (team in ('kundenservice', 'callcenter')),
+  token      text not null unique default replace(gen_random_uuid()::text, '-', ''),
+  active     boolean not null default true,
+  created_at timestamptz default now()
+);
+alter table public.team_members disable row level security;
+
+insert into public.team_members (name, team)
+select v.name, v.team
+from (values
+  ('Belinda', 'kundenservice'),
+  ('Adelina', 'kundenservice'),
+  ('Davina',  'callcenter')
+) as v(name, team)
+where not exists (select 1 from public.team_members m where m.name = v.name);
+
+alter table public.lead_calls add column if not exists bearbeiter text;
+alter table public.lead_calls add column if not exists status text not null default 'offen'
+  check (status in ('offen', 'kontaktiert', 'erstgespraech', 'aufgenommen', 'verloren'));
+alter table public.lead_calls add column if not exists telefon text;
+alter table public.lead_calls add column if not exists email text;
+
+alter table public.meta_leads add column if not exists bearbeiter text;
+alter table public.meta_leads drop constraint if exists meta_leads_status_check;
+alter table public.meta_leads add constraint meta_leads_status_check
+  check (status in ('offen', 'kontaktiert', 'erstgespraech', 'aufgenommen', 'verloren', 'geloescht'));
+
+alter table public.crm_contacts add column if not exists bearbeiter text;
+
+notify pgrst, 'reload schema';
+select name, team, token from public.team_members order by team, name;

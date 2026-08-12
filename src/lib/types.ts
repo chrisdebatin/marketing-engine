@@ -565,6 +565,26 @@ export interface Database {
         >;
         Relationships: [];
       };
+      team_members: {
+        Row: {
+          id: string;
+          name: string;
+          team: string;
+          token: string;
+          active: boolean;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          team: string;
+          token?: string;
+          active?: boolean;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
+        Relationships: [];
+      };
       meta_leads: {
         Row: {
           id: string;
@@ -583,6 +603,7 @@ export interface Database {
           forwarded_at: string | null;
           forward_error: string | null;
           crm_target_id: string | null;
+          bearbeiter: string | null;
         };
         Insert: {
           id: string;
@@ -601,6 +622,7 @@ export interface Database {
           forwarded_at?: string | null;
           forward_error?: string | null;
           crm_target_id?: string | null;
+          bearbeiter?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];
@@ -616,6 +638,10 @@ export interface Database {
           hub_id: string | null;
           target_id: string | null;
           notiz: string | null;
+          bearbeiter: string | null;
+          status: string;
+          telefon: string | null;
+          email: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -628,6 +654,10 @@ export interface Database {
           hub_id?: string | null;
           target_id?: string | null;
           notiz?: string | null;
+          bearbeiter?: string | null;
+          status?: string;
+          telefon?: string | null;
+          email?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_calls"]["Insert"]>;
@@ -706,6 +736,7 @@ export interface Database {
           ansprechpartner: string | null;
           note: string | null;
           contact_date: string;
+          bearbeiter: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -716,6 +747,7 @@ export interface Database {
           ansprechpartner?: string | null;
           note?: string | null;
           contact_date?: string;
+          bearbeiter?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_contacts"]["Insert"]>;

@@ -10,8 +10,13 @@ export const LEAD_QUELLEN = [
   { key: "empfehlung", label: "Empfehlung" },
   { key: "social", label: "Social Media" },
   { key: "presse", label: "Presse/Anzeige" },
+  { key: "telefon0800", label: "0800-Anruf" },
+  { key: "agentur", label: "Lead-Agentur" },
   { key: "sonstiges", label: "Sonstiges" },
 ] as const;
+
+/** Quellen, die das Call-Center (Davina) bearbeitet — Rest: Kundenservice DE. */
+export const CALLCENTER_QUELLEN = new Set(["recare", "agentur"]);
 
 export function leadQuelleLabel(key: string | null | undefined): string {
   if (!key) return "";
