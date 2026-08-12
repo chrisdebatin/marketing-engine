@@ -7,7 +7,14 @@ import {
 } from "@/lib/weekly-mails";
 import { formatIsoDate } from "@/lib/crm";
 import { mailConfigured } from "@/lib/mailer";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { capacityWeekStart } from "@/lib/capacity";
+import { splitPdlNames } from "@/lib/pdl";
 import { KommunikationSend } from "@/components/kommunikation-send";
+import {
+  CapacityRequestList,
+  type CapacityRequestRow,
+} from "@/components/capacity-request-list";
 import { MdDraftList } from "@/components/md-draft-list";
 import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -47,10 +54,26 @@ function Stat({
  */
 export default async function KommunikationPage() {
   await requireSession();
-  const [g, mdDrafts] = await Promise.all([
+  const admin = createAdminClient();
+  const capWeek = capacityWeekStart();
+  const [g, mdDrafts, { data: hubRows }, { data: capRows }] = await Promise.all([
     collectGroupWeekly(),
     buildMdDrafts(),
+    admin.from("hubs").select("id, name, pdl_name, pdl_email").order("name"),
+    admin
+      .from("capacity_reports")
+      .select("hub_id, freie_plaetze")
+      .eq("week_start", capWeek),
   ]);
+  const capByHub = new Map((capRows ?? []).map((r) => [r.hub_id, r]));
+  const capacityRows: CapacityRequestRow[] = (hubRows ?? []).map((h) => ({
+    hubId: h.id,
+    name: h.name,
+    pdl: splitPdlNames(h.pdl_name)[0] ?? null,
+    hasEmail: (h.pdl_email ?? "").includes("@"),
+    reported: capByHub.has(h.id),
+    freiePlaetze: capByHub.get(h.id)?.freie_plaetze ?? null,
+  }));
   const active = g.hubs.filter((h) => h.score > 0);
   const inactive = g.hubs.length - active.length;
   const medals = ["🥇", "🥈", "🥉"];
@@ -77,6 +100,12 @@ export default async function KommunikationPage() {
           trotzdem.
         </p>
       )}
+
+      <CapacityRequestList
+        rows={capacityRows}
+        weekLabel={formatIsoDate(capWeek)}
+        canSend={mailConfigured()}
+      />
 
       {/* Kennzahlen der Woche */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">

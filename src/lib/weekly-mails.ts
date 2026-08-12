@@ -108,7 +108,7 @@ function buildMdHtml(
       const boxen = stats.boxContacts.get(h.id) ?? 0;
       const auslagen = stats.placements.get(h.id) ?? 0;
       const bestellungen = stats.orderCounts.get(h.id) ?? 0;
-      return `<tr><td style="${TD}">${esc(h.name)}</td><td style="${TD}">${kontakte}${boxen ? ` (davon ${boxen} Box${boxen === 1 ? "" : "en"})` : ""}</td><td style="${TD}">${auslagen}</td><td style="${TD}">${bestellungen}</td></tr>`;
+      return `<tr><td style="${TD}"><a href="${appUrl()}/h/${h.share_token}">${esc(h.name)}</a></td><td style="${TD}">${kontakte}${boxen ? ` (davon ${boxen} Box${boxen === 1 ? "" : "en"})` : ""}</td><td style="${TD}">${auslagen}</td><td style="${TD}">${bestellungen}</td></tr>`;
     })
     .join("");
   const totals = mdHubs.reduce(
@@ -130,6 +130,8 @@ ${note?.trim() ? `<p>${esc(note.trim()).replace(/\n/g, "<br>")}</p>` : ""}
 ${rows}
 <tr><td style="${TH}">Gesamt</td><td style="${TH}">${totals.kontakte}</td><td style="${TH}">${totals.auslagen}</td><td style="${TH}">${totals.bestellungen}</td></tr>
 </table>
+<p style="color:#666;font-size:13px">Tipp: Die Standort-Namen in der Tabelle
+sind Links zur jeweiligen Standort-Seite (Orte-Liste, Kapazität, Material).</p>
 <p>Details im Dashboard: <a href="${appUrl()}/hubs">${appUrl()}/hubs</a></p>
 <p>Viele Grüße<br>Ihr Marketing-Team<br>
 Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
@@ -537,6 +539,53 @@ export async function sendGroupReport(
 // ── Kapazitäts-Erinnerung: PDLs ohne Meldung für die laufende Woche ──
 
 /** Erinnerung an alle PDLs, die diese Woche noch keine Kapazität gemeldet haben. */
+/** Kapazitäts-Aufforderung an EINEN Standort (aus der Übersicht im Kommunikations-Tab). */
+export async function sendCapacityReminderFor(hubId: string): Promise<MailRunResult> {
+  const { capacityWeekStart } = await import("@/lib/capacity");
+  const { splitPdlNames } = await import("@/lib/pdl");
+  const admin = createAdminClient();
+  const result: MailRunResult = { sent: [], skipped: [], errors: [] };
+
+  const week = capacityWeekStart();
+  const { data: h } = await admin
+    .from("hubs")
+    .select("*")
+    .eq("id", hubId)
+    .maybeSingle();
+  if (!h) {
+    result.errors.push("Standort nicht gefunden.");
+    return result;
+  }
+  const emails = splitPdlEmails(h.pdl_email);
+  if (emails.length === 0) {
+    result.skipped.push(`${h.name}: keine PDL-E-Mail hinterlegt.`);
+    return result;
+  }
+  const anrede = splitPdlNames(h.pdl_name)[0] ?? "";
+  const link = `${appUrl()}/h/${h.share_token}`;
+  const html = `<div style="${MAIL_STYLE}">
+<p>Guten Morgen${anrede ? ` ${esc(anrede)}` : ""},</p>
+<p>kurze Erinnerung: Für <strong>${esc(h.name)}</strong> fehlt diese Woche
+noch die <strong>Kapazitäts-Meldung</strong> — wie viele Patienten Sie
+aktuell aufnehmen können (gesamt, Beatmung, WG, Kinder, frühester Termin).</p>
+<p>Dauert keine Minute — Reiter „Kapazität&rdquo; auf Ihrer Standort-Seite:</p>
+<p><a href="${link}" style="display:inline-block;background:#5b5bd6;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Kapazität jetzt melden</a></p>
+<p>Warum das wichtig ist: Mit aktuellen Zahlen können wir Klinik- und
+Recare-Anfragen für Ihren Standort sofort beantworten — das bringt
+Patienten.</p>
+<p>Viele Grüße<br>Ihr Marketing-Team<br>
+Tel. 0177 2988 173 · <a href="mailto:marketing@igs-holding.de">marketing@igs-holding.de</a></p>
+</div>`;
+  const res = await deliverMail({
+    to: emails,
+    subject: `Bitte Kapazität melden — ${h.name} (Woche ab ${formatIsoDate(week)})`,
+    html,
+  });
+  if (res.ok) result.sent.push(`${h.name} <${emails.join(", ")}>`);
+  else result.errors.push(`${h.name}: ${res.error}`);
+  return result;
+}
+
 export async function sendCapacityReminders(): Promise<MailRunResult> {
   const { capacityWeekStart } = await import("@/lib/capacity");
   const { splitPdlNames } = await import("@/lib/pdl");
