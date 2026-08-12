@@ -17,7 +17,7 @@ export interface PlaceSuggestion {
   adresse: string | null;
   ort: string | null;
   kategorie: string | null;
-  /** Disclaimer, wenn der Ort schon auf einer Hub-Liste steht ("wer wo schon war"). */
+  /** Disclaimer, wer (PDL/Standort) schon dort war bzw. den Ort auf der Liste hat. */
   hinweis?: string | null;
 }
 
@@ -103,10 +103,15 @@ export async function GET(req: Request) {
       .from("crm_targets")
       .select("name, ort, hub_id, letzter_besuch, letzte_kontakt_art")
       .not("hub_id", "is", null),
-    admin.from("hubs").select("id, name"),
+    admin.from("hubs").select("id, name, pdl_name"),
   ]);
   const hubName = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.name ?? "einem anderen Standort";
+  // "PDL Sabine M. (Hameln)" — Name macht die Absprache leichter als nur der Standort.
+  const wer = (id: string | null) => {
+    const h = (hubRows ?? []).find((x) => x.id === id);
+    return h?.pdl_name ? `${h.pdl_name} (${h.name})` : hubName(id);
+  };
 
   const withHint = places.slice(0, 6).map((p) => {
     const pn = normName(p.name);
@@ -126,15 +131,21 @@ export async function GET(req: Request) {
       return true;
     });
     if (!owner) return p;
-    const hinweis =
-      owner.hub_id === hub.id
-        ? "Bereits auf Ihrer Liste"
-        : `Auf der Liste von ${hubName(owner.hub_id)} — ${
-            owner.letzter_besuch
-              ? `dort ${kontaktArtLabel(owner.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(owner.letzter_besuch)}`
-              : "dort noch kein Kontakt"
-          }`;
-    return { ...p, hinweis };
+    if (owner.hub_id === hub.id) {
+      return { ...p, hinweis: "Bereits auf Ihrer Liste" };
+    }
+    // Anderer Standort war schon dort → bleibt wählbar, aber mit klarem
+    // "wer wo schon war"-Disclaimer (PDL-Name, Kontaktart, Datum).
+    if (owner.letzter_besuch) {
+      return {
+        ...p,
+        hinweis: `Schon von ${wer(owner.hub_id)} besucht — ${kontaktArtLabel(owner.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(owner.letzter_besuch)}`,
+      };
+    }
+    return {
+      ...p,
+      hinweis: `Steht auf der Liste von ${wer(owner.hub_id)} — dort noch kein Kontakt, bitte kurz absprechen`,
+    };
   });
 
   return NextResponse.json({ places: withHint });

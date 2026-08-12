@@ -80,7 +80,7 @@ export default async function HubShareLinkPage({
     admin.from("crm_targets").select("*").eq("hub_id", hub.id).order("name"),
     // Für den Blick auf die anderen Standorte (nur Kliniken-Status, DSGVO ok).
     admin.from("crm_targets").select("*").not("hub_id", "is", null).order("name"),
-    admin.from("hubs").select("id, name"),
+    admin.from("hubs").select("id, name, pdl_name"),
   ]);
 
   const catalog = catalogData ?? [];
@@ -175,9 +175,12 @@ export default async function HubShareLinkPage({
     if (!t.hub_id) continue;
     const key = dupKey(t);
     const arr = sharedByKey.get(key) ?? [];
+    const owner = (allHubs ?? []).find((h) => h.id === t.hub_id);
     arr.push({
       hubId: t.hub_id,
-      hub: hubNameOf(t.hub_id),
+      hub: owner?.pdl_name
+        ? `${owner.pdl_name} (${owner.name})`
+        : hubNameOf(t.hub_id),
       letzter_besuch: t.letzter_besuch,
       art: t.letzte_kontakt_art ?? null,
     });
