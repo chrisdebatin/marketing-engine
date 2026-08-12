@@ -5,7 +5,6 @@ import {
   Building2,
   ChartColumn,
   Rocket,
-  Headset,
   Home,
   Inbox,
   Map,
@@ -43,7 +42,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Standorte",
     items: [
       { href: "/hubs", label: "Hubs", Icon: Building2 },
-      { href: "/ziele", label: "CRM & Call-Center", Icon: Target },
+      { href: "/crm", label: "CRM & Leads", Icon: Target },
       { href: "/kapazitaet", label: "Kapazität", Icon: BedDouble },
       { href: "/themen", label: "Themen", Icon: BookOpen },
     ],
@@ -51,7 +50,6 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Marketing",
     items: [
-      { href: "/frontoffice", label: "Frontoffice", Icon: Headset },
       { href: "/lieferungen", label: "Lieferungen", Icon: Truck },
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
       { href: "/online-anzeigen", label: "Online Anzeigen", Icon: Rocket },

@@ -42,10 +42,12 @@ function todoRows(
 
 function revalidateFrontoffice() {
   revalidatePath("/frontoffice");
+  revalidatePath("/crm");
   revalidatePath("/callcenter");
   revalidatePath("/f/[token]", "page");
   revalidatePath("/c/[token]", "page");
   revalidatePath("/ziele");
+  revalidatePath("/crm");
 }
 
 /**
@@ -432,5 +434,6 @@ export async function deleteLeadCall(id: string): Promise<Result> {
   const { error } = await admin.from("lead_calls").delete().eq("id", cleanId);
   if (error) return { ok: false, error: "Löschen fehlgeschlagen." };
   revalidatePath("/frontoffice");
+  revalidatePath("/crm");
   return { ok: true };
 }

@@ -13,6 +13,7 @@ type Result = { ok: true } | { ok: false; error: string };
 
 function revalidate() {
   revalidatePath("/ziele");
+  revalidatePath("/crm");
   revalidatePath("/hubs/[id]", "page");
   revalidatePath("/f/[token]", "page");
 }
