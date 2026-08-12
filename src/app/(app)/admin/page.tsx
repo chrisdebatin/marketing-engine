@@ -112,6 +112,14 @@ export default async function AdminPage() {
   }
 
   const supabase = await createClient();
+  // team_members hat RLS disabled → Service-Role-Client.
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const { data: teamRows } = await createAdminClient()
+    .from("team_members")
+    .select("id, name, team, token, active")
+    .order("team")
+    .order("name");
+  const teamMembers = (teamRows ?? []).filter((t) => t.active);
   const [{ data: hubsData }, { data: deliveries }, { data: placements }] =
     await Promise.all([
       supabase
@@ -222,6 +230,40 @@ export default async function AdminPage() {
       </div>
 
       <CreateHubForm />
+
+      {teamMembers.length > 0 && (
+        <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
+          <p className="font-semibold">
+            Team-Links (Kundenservice &amp; Call-Center)
+          </p>
+          <p className="-mt-1 text-sm text-muted-foreground">
+            Persönliche Arbeitslisten — jede Aktion (Claim, Status, Anruf-Log)
+            wird unter dem jeweiligen Namen gespeichert. Link einfach per
+            WhatsApp/Mail an die Mitarbeiterin schicken.
+          </p>
+          <ul className="flex flex-col">
+            {teamMembers.map((m) => (
+              <li
+                key={m.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t py-2 text-sm first:border-t-0"
+              >
+                <span className="min-w-0 flex-1 font-medium">
+                  {m.name}
+                  <span className="font-normal text-muted-foreground">
+                    {" "}
+                    · {m.team === "callcenter" ? "Call-Center" : "Kundenservice"}
+                  </span>
+                </span>
+                <CopyLink
+                  token={m.token}
+                  prefix="/t"
+                  label="Link kopieren"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {hubs.length > 0 && (
         <details className="group rounded-xl border bg-card shadow-sm">
