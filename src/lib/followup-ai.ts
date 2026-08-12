@@ -3,13 +3,15 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 /**
- * Erzeugt den E-Mail-Follow-up-Entwurf für einen Meta-Lead (SERVER ONLY).
- * Ziel laut Vorgabe: Anruf ankündigen — der Lead muss nichts tun, die Mail
- * wärmt für den Anruf vor. Versand erst nach 1-Klick-Freigabe im UI.
+ * Erzeugt den E-Mail-Follow-up-Entwurf für einen Meta-KUNDEN-Lead (SERVER
+ * ONLY) — Menschen, die über eine Anzeige Pflege/Betreuung für sich oder
+ * Angehörige angefragt haben (Bewerber-Leads laufen separat übers
+ * Recruiting). Ziel: bedanken + Anruf ankündigen — der Lead muss nichts
+ * tun, die Mail wärmt für den Anruf vor. Versand erst nach 1-Klick-Freigabe.
  *
  * Optional per Env anpassbar:
- * - FOLLOWUP_SIGNATURE  Grußformel/Absender (Default: "Ihr Recruiting-Team")
- * - FOLLOWUP_COMPANY    Firmenname im Text (Default: "unser Pflegedienst")
+ * - FOLLOWUP_SIGNATURE  Grußformel/Absender (Default: "Ihr Team der Pflegeunion")
+ * - FOLLOWUP_COMPANY    Firmenname im Text (Default: "die Pflegeunion")
  */
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-5";
@@ -33,8 +35,8 @@ export async function generateFollowupDraft(
   input: FollowupInput,
 ): Promise<{ subject: string; body: string } | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
-  const signature = process.env.FOLLOWUP_SIGNATURE || "Ihr Recruiting-Team";
-  const company = process.env.FOLLOWUP_COMPANY || "unser Pflegedienst";
+  const signature = process.env.FOLLOWUP_SIGNATURE || "Ihr Team der Pflegeunion";
+  const company = process.env.FOLLOWUP_COMPANY || "die Pflegeunion";
 
   try {
     const client = new Anthropic();
@@ -47,16 +49,21 @@ export async function generateFollowupDraft(
       },
       system:
         "Du schreibst kurze, warme Follow-up-Mails an Menschen, die über eine " +
-        `Facebook-/Instagram-Anzeige Interesse an einer Stelle bei ${company} gezeigt ` +
-        "haben (Pflege/Betreuung). Zweck der Mail: bedanken, Interesse bestätigen und " +
-        "ankündigen, dass wir in den nächsten 1–2 Werktagen TELEFONISCH anrufen — der " +
-        "Empfänger muss nichts tun, darf aber gern antworten. Aus dem Kampagnennamen " +
-        "kannst du oft Ort und Rolle ablesen (z. B. 'Mitarbeiter-Lüdenscheid-Fachkraft' " +
-        "→ Pflegefachkraft in Lüdenscheid) — nutze das für einen konkreten Bezug, aber " +
-        "erfinde nichts darüber hinaus (kein Gehalt, keine Vertragsdetails, keine " +
-        "Firmengeschichte). Ton: menschlich, respektvoll, kurz — 60 bis 100 Wörter, " +
-        "Sie-Form, keine Floskeln-Kaskaden, keine Ausrufezeichen-Häufung, keine Emojis. " +
-        `Anrede mit Vornamen ("Hallo Karolin,"), Grußformel: "${signature}".`,
+        `Facebook-/Instagram-Anzeige eine PFLEGE-ANFRAGE an ${company} gestellt haben — ` +
+        "meist Angehörige, die Unterstützung für Mutter, Vater oder Partner suchen, " +
+        "manchmal Betroffene selbst. Zweck der Mail: herzlich bedanken, ein kostenloses " +
+        "und unverbindliches Beratungsgespräch bestätigen und ankündigen, dass wir in den " +
+        "nächsten 1–2 Werktagen TELEFONISCH anrufen — der Empfänger muss nichts tun, darf " +
+        "aber gern antworten (z. B. mit einer Wunschzeit für den Anruf). Aus dem " +
+        "Kampagnennamen kannst du den Ort ablesen (z. B. 'Kunden-Rinteln' → Rinteln) — " +
+        "nutze das für lokalen Bezug ('unser Pflegeteam in Rinteln'). WICHTIG: Die " +
+        "Situation ist oft belastend und privat — einfühlsam, aber nicht mitleidig; " +
+        "KEINE Annahmen über Gesundheitszustand, Diagnose oder wer gepflegt wird; keine " +
+        "Preise, keine Leistungsversprechen, nichts erfinden. Ton: menschlich, " +
+        "respektvoll, entlastend ('Sie müssen sich um nichts kümmern'), kurz — 60 bis " +
+        "100 Wörter, Sie-Form, normale deutsche Umlaute (ä/ö/ü/ß — niemals ae/oe/ue), " +
+        "keine Floskel-Kaskaden, keine Ausrufezeichen-Häufung, keine Emojis. Anrede mit " +
+        `Vornamen ("Hallo Irmgard,"), Grußformel: "${signature}".`,
       messages: [
         {
           role: "user",
