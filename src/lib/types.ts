@@ -567,6 +567,30 @@ export interface Database {
         >;
         Relationships: [];
       };
+      lead_todos: {
+        Row: {
+          id: string;
+          lead_kind: string;
+          lead_id: string;
+          text: string;
+          faellig_am: string | null;
+          erledigt_at: string | null;
+          erstellt_von: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          lead_kind: string;
+          lead_id: string;
+          text: string;
+          faellig_am?: string | null;
+          erledigt_at?: string | null;
+          erstellt_von?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_todos"]["Insert"]>;
+        Relationships: [];
+      };
       team_members: {
         Row: {
           id: string;

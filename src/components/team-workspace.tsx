@@ -12,6 +12,7 @@ import {
   Phone,
   PhoneCall,
   Undo2,
+  Users,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,8 @@ export interface InboundLead {
   vorschlag_pdl_phone: string | null;
   /** Düsseldorf/Gevelsberg: Team bucht Termin selbst + legt in MediFox (DUS) an. */
   direct_booking: boolean;
+  /** Offene To-dos mit Deadline — fällige heben den Lead in die Wiedervorlage. */
+  todos: { id: string; text: string; faellig_am: string | null }[];
 }
 
 export interface OutboundTarget {
@@ -313,11 +316,11 @@ export function TeamWorkspace({
   editable?: boolean;
   /** "tabs" = eigener Umschalter (persönliche Seiten); "inbound"/"outbound"
    * = nur eine Ansicht, Umschalter kommt von außen (/crm-Board). */
-  view?: "tabs" | "inbound" | "outbound";
+  view?: "tabs" | "inbound" | "outbound" | "kontakte";
   /** false = keine Inbound-Anruf-Box (Davina bekommt keine Inbound-Anrufe). */
   inboundLog?: boolean;
 }) {
-  const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
+  const [tab, setTab] = useState<"inbound" | "outbound" | "kontakte">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
@@ -357,12 +360,25 @@ export function TeamWorkspace({
     sourceCounts.set(l.quelle, (sourceCounts.get(l.quelle) ?? 0) + 1);
   }
   const shownInbound = showDone ? inbound : openInbound;
+  // Wiedervorlage: Leads mit fälligem To-do poppen ganz oben auf — egal wie
+  // alt sie sind. Der Rest bleibt chronologisch in Tages-Gruppen.
+  const heute = todayIso();
+  const hatFaelligesTodo = (l: InboundLead) =>
+    l.todos.some((t) => t.faellig_am !== null && t.faellig_am <= heute);
+  const wiedervorlage = inbound.filter(
+    (l) => hatFaelligesTodo(l) && l.status !== "verloren",
+  );
+  const wvIds = new Set(wiedervorlage.map((l) => l.id));
   const dayGroups: { key: string; leads: InboundLead[] }[] = [];
   for (const l of shownInbound) {
+    if (wvIds.has(l.id)) continue;
     const key = dayKey(l.datum);
     const last = dayGroups[dayGroups.length - 1];
     if (last && last.key === key) last.leads.push(l);
     else dayGroups.push({ key, leads: [l] });
+  }
+  if (wiedervorlage.length > 0) {
+    dayGroups.unshift({ key: "__wiedervorlage__", leads: wiedervorlage });
   }
 
   const today = todayIso();
@@ -461,6 +477,19 @@ export function TeamWorkspace({
             </span>
           )}
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("kontakte")}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+            tab === "kontakte"
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          <Users className="size-4" />
+          Kontakte
+        </button>
       </div>
       )}
 
@@ -521,8 +550,17 @@ export function TeamWorkspace({
           )}
           {dayGroups.map((g) => (
             <div key={g.key} className="flex flex-col gap-2">
-              <p className="mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:mt-0">
-                {dayLabel(g.key)}
+              <p
+                className={cn(
+                  "mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide uppercase first:mt-0",
+                  g.key === "__wiedervorlage__"
+                    ? "text-amber-700"
+                    : "text-muted-foreground",
+                )}
+              >
+                {g.key === "__wiedervorlage__"
+                  ? "📌 Wiedervorlage fällig"
+                  : dayLabel(g.key)}
                 <span className="h-px flex-1 bg-border" />
                 <span className="font-normal normal-case">
                   {g.leads.length} Anfrage{g.leads.length === 1 ? "" : "n"}
@@ -626,6 +664,16 @@ export function TeamWorkspace({
                   onSaved={(notiz) =>
                     setInbound((cur) =>
                       cur.map((x) => (x.id === l.id ? { ...x, notiz } : x)),
+                    )
+                  }
+                />
+                <LeadTodos
+                  lead={l}
+                  canAct={canAct}
+                  token={token}
+                  onChanged={(todos) =>
+                    setInbound((cur) =>
+                      cur.map((x) => (x.id === l.id ? { ...x, todos } : x)),
                     )
                   }
                 />
@@ -781,6 +829,10 @@ export function TeamWorkspace({
         </div>
       )}
 
+      {(view === "kontakte" || (view === "tabs" && !monitor && tab === "kontakte")) && (
+        <KontakteView inbound={inbound} outbound={outbound} />
+      )}
+
       {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
         <div className="flex flex-col gap-3">
           <OutboundMap
@@ -871,6 +923,7 @@ function InboundCallLog({
         vorschlag_pdl: null,
         vorschlag_pdl_phone: null,
         direct_booking: false,
+        todos: [],
       });
       setName("");
       setTelefon("");
@@ -937,6 +990,343 @@ function InboundCallLog({
       >
         {busy ? "Speichere…" : "Als Lead anlegen"}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * To-dos mit Deadline am Lead ("ruf mich in 1 Woche zurück") — fällige
+ * To-dos heben den Lead oben in die Wiedervorlage-Gruppe.
+ */
+function LeadTodos({
+  lead,
+  canAct,
+  token,
+  onChanged,
+}: {
+  lead: InboundLead;
+  canAct: boolean;
+  token: string;
+  onChanged: (todos: InboundLead["todos"]) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState("");
+  const [datum, setDatum] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const heute = todayIso();
+
+  async function add() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await teamAction(token, {
+        action: "todo-add",
+        kind: lead.kind,
+        id: lead.id,
+        notiz: text,
+        status: datum,
+      });
+      const todo = res.todo as { id: string; text: string; faellig_am: string | null };
+      onChanged([...lead.todos, todo]);
+      setText("");
+      setDatum("");
+      setAdding(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function done(todoId: string) {
+    try {
+      await teamAction(token, { action: "todo-done", id: todoId });
+      onChanged(lead.todos.filter((t) => t.id !== todoId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    }
+  }
+
+  if (lead.todos.length === 0 && !canAct) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      {lead.todos.map((t) => {
+        const faellig = t.faellig_am !== null && t.faellig_am <= heute;
+        return (
+          <p key={t.id} className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 font-semibold",
+                faellig
+                  ? "bg-amber-100 text-amber-800"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              To-do{t.faellig_am ? ` · ${formatIsoDate(t.faellig_am)}` : ""}
+              {faellig ? " · fällig" : ""}
+            </span>
+            <span className="min-w-0">{t.text}</span>
+            {canAct && (
+              <button
+                type="button"
+                onClick={() => done(t.id)}
+                className="text-muted-foreground hover:text-emerald-700"
+                title="To-do erledigt"
+              >
+                <Check className="size-3.5" />
+              </button>
+            )}
+          </p>
+        );
+      })}
+      {canAct &&
+        (adding ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Was ist zu tun? (z. B. Rückruf)"
+              className="h-8 min-w-40 flex-1 rounded-lg border bg-background px-2 text-xs"
+            />
+            <input
+              type="date"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+              className="h-8 rounded-lg border bg-background px-2 text-xs"
+              title="Wiedervorlage-Datum — an dem Tag poppt der Lead oben auf"
+            />
+            <Button type="button" size="sm" disabled={busy || !text.trim()} onClick={add}>
+              {busy ? "…" : "Speichern"}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setAdding(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Abbrechen
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="self-start text-xs text-primary hover:underline"
+          >
+            + To-do mit Wiedervorlage
+          </button>
+        ))}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+
+/**
+ * Kontakte-Verzeichnis: alle Institutionen (Krankenhäuser, Praxen …) und
+ * Klienten (Leads) des Teams, kategorisiert und durchsuchbar — daneben die
+ * Spalte mit allen offenen To-dos (Kontakte, bei denen etwas ansteht).
+ */
+function KontakteView({
+  inbound,
+  outbound,
+}: {
+  inbound: InboundLead[];
+  outbound: OutboundTarget[];
+}) {
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<string>("alle");
+  const heute = todayIso();
+
+  const leadKategorie = (l: InboundLead) =>
+    l.quelle === "recare"
+      ? "Recare-Patient"
+      : l.status === "aufgenommen"
+        ? "Klient"
+        : "Interessent";
+
+  const kategorien = [
+    { key: "alle", label: "Alle" },
+    { key: "klienten", label: "Klienten & Interessenten" },
+    ...[...new Set(outbound.map((t) => t.kategorie))]
+      .sort()
+      .map((k) => ({ key: k, label: placeKindLabel(k) })),
+  ];
+
+  const norm = (x: string) => x.toLowerCase();
+  const matches = (text: string) => !q.trim() || norm(text).includes(norm(q));
+
+  const insts = outbound.filter(
+    (t) =>
+      (filter === "alle" || filter === t.kategorie) &&
+      filter !== "klienten" &&
+      matches(`${t.name} ${t.ort ?? ""} ${t.hub ?? ""}`),
+  );
+  const klienten = inbound.filter(
+    (l) =>
+      (filter === "alle" || filter === "klienten") &&
+      matches(`${l.name} ${l.telefon ?? ""} ${l.quelle_detail ?? ""}`),
+  );
+
+  // Offene To-dos über alle Leads, fällige zuerst.
+  const offeneTodos = inbound
+    .flatMap((l) => l.todos.map((t) => ({ lead: l, todo: t })))
+    .sort((a, b) =>
+      (a.todo.faellig_am ?? "9999").localeCompare(b.todo.faellig_am ?? "9999"),
+    );
+
+  return (
+    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-5">
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Suchen (Name, Ort, Telefon)…"
+            className="h-9 w-full max-w-xs rounded-lg border bg-background px-3 text-sm"
+          />
+          {kategorien.map((k) => (
+            <button
+              key={k.key}
+              type="button"
+              onClick={() => setFilter(k.key)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs font-medium",
+                filter === k.key
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "bg-card text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+
+        {klienten.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Klienten &amp; Interessenten ({klienten.length})
+            </p>
+            <ul className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+              {klienten.map((l) => (
+                <li
+                  key={`${l.kind}-${l.id}`}
+                  className="flex flex-col gap-1 rounded-xl border bg-card p-3 text-sm shadow-sm"
+                >
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium">{l.name}</span>
+                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      {leadKategorie(l)}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {STATUS_LABEL[l.status] ?? l.status}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    {l.telefon && (
+                      <a href={`tel:${l.telefon}`} className="text-primary hover:underline">
+                        {l.telefon}
+                      </a>
+                    )}
+                    {l.zugewiesen_hub && <span>→ {l.zugewiesen_hub}</span>}
+                    <span>{leadQuelleLabel(l.quelle) || l.quelle}</span>
+                  </span>
+                  {l.todos.length > 0 && (
+                    <span className="text-xs text-amber-700">
+                      {l.todos.length} offenes To-do
+                      {l.todos.length === 1 ? "" : "s"}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {insts.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Institutionen ({insts.length})
+            </p>
+            <ul className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
+              {insts.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex flex-col gap-1 rounded-xl border bg-card p-3 text-sm shadow-sm"
+                >
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-medium">{t.name}</span>
+                    <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {placeKindLabel(t.kategorie)}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    {t.ort && <span>{t.ort}</span>}
+                    {t.hub && (
+                      <span>
+                        {t.hub}
+                        {t.hub_pdl ? ` · PDL ${t.hub_pdl}` : ""}
+                      </span>
+                    )}
+                    <span>
+                      {t.letzter_besuch
+                        ? `zuletzt ${formatIsoDate(t.letzter_besuch)}`
+                        : "kein Kontakt"}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {insts.length === 0 && klienten.length === 0 && (
+          <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+            Keine Treffer.
+          </p>
+        )}
+      </div>
+
+      {/* Spalte: offene To-dos */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm lg:sticky lg:top-4">
+        <p className="text-sm font-semibold">
+          Offene To-dos ({offeneTodos.length})
+        </p>
+        {offeneTodos.length === 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Nichts offen. To-dos legst du direkt an der Lead-Karte an („+ To-do
+            mit Wiedervorlage&ldquo;).
+          </p>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {offeneTodos.map(({ lead, todo }) => {
+              const faellig = todo.faellig_am !== null && todo.faellig_am <= heute;
+              return (
+                <li
+                  key={todo.id}
+                  className={cn(
+                    "rounded-lg border p-2 text-xs",
+                    faellig && "border-amber-500/50 bg-amber-500/[0.06]",
+                  )}
+                >
+                  <p className="font-medium">{lead.name}</p>
+                  <p className="text-muted-foreground">{todo.text}</p>
+                  {todo.faellig_am && (
+                    <p className={cn("mt-0.5 font-semibold", faellig ? "text-amber-700" : "text-muted-foreground")}>
+                      {faellig ? "fällig seit " : "fällig am "}
+                      {formatIsoDate(todo.faellig_am)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

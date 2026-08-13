@@ -106,6 +106,17 @@ export async function buildTeamInbound(
     return null;
   };
 
+  // Offene To-dos je Lead (Wiedervorlage) — tolerant, falls Migration 0057 fehlt.
+  const { data: todoRows } = await admin
+    .from("lead_todos")
+    .select("id, lead_kind, lead_id, text, faellig_am")
+    .is("erledigt_at", null)
+    .limit(500);
+  const todosFor = (kind: "call" | "meta", id: string) =>
+    (todoRows ?? [])
+      .filter((t) => t.lead_kind === kind && t.lead_id === id)
+      .map((t) => ({ id: t.id, text: t.text, faellig_am: t.faellig_am }));
+
   const inbound: InboundLead[] = [];
   for (const c of callRows ?? []) {
     const mine = isCallcenter
@@ -146,6 +157,7 @@ export async function buildTeamInbound(
       direct_booking: isDirectBookingHub(
         hubName(c.zugewiesen_hub_id ?? null) ?? hubName(vorschlagId),
       ),
+      todos: todosFor("call", c.id),
     });
   }
   if (!isCallcenter) {
@@ -178,6 +190,7 @@ export async function buildTeamInbound(
           hubName(m.zugewiesen_hub_id ?? null) ??
             hubName(suggestHub(m.campaign_name ?? "") ?? null),
         ),
+        todos: todosFor("meta", m.id),
       });
     }
   }

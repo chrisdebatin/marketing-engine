@@ -188,6 +188,50 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // To-do mit Deadline am Lead anlegen ("ruf mich in 1 Woche zurück").
+  if (action === "todo-add") {
+    const id = (body.id ?? "").trim();
+    const text = (body.notiz ?? "").trim().slice(0, 300);
+    const faellig = (body.status ?? "").trim(); // Feld-Wiederverwendung: Datum JJJJ-MM-TT
+    if (!id || !text) {
+      return NextResponse.json({ error: "To-do-Text fehlt." }, { status: 400 });
+    }
+    const { data: row, error } = await admin
+      .from("lead_todos")
+      .insert({
+        lead_kind: kind,
+        lead_id: id,
+        text,
+        faellig_am: /^\d{4}-\d{2}-\d{2}$/.test(faellig) ? faellig : null,
+        erstellt_von: member.name,
+      })
+      .select("id, text, faellig_am")
+      .single();
+    if (error || !row) {
+      const missing = error?.code === "PGRST205" || error?.code === "42P01";
+      return NextResponse.json(
+        {
+          error: missing
+            ? "Tabelle lead_todos fehlt — bitte supabase/apply_all_pending.sql ausführen."
+            : "Speichern fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true, todo: row });
+  }
+
+  if (action === "todo-done") {
+    const todoId = (body.id ?? "").trim();
+    if (!todoId) return NextResponse.json({ error: "To-do fehlt." }, { status: 400 });
+    const { error } = await admin
+      .from("lead_todos")
+      .update({ erledigt_at: new Date().toISOString() })
+      .eq("id", todoId);
+    if (error) return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action === "assign-hub") {
     const id = (body.id ?? "").trim();
     const hubId = (body.target_id ?? "").trim(); // target_id = Hub bei dieser Aktion

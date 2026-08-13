@@ -24,10 +24,20 @@ export default async function CrmAdminPage() {
       </div>
       <CrmAdminSection />
 
-      <div className="mt-2 border-t pt-5">
-        <h2 className="mb-3 text-lg font-semibold">Institutionen-CRM (Verwaltung)</h2>
-        <ZieleSection mode="full" />
-      </div>
+      {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —
+          hier nur noch Stats. Import & Einstellungen bleiben eingeklappt
+          erreichbar. */}
+      <details className="group rounded-xl border bg-card shadow-sm">
+        <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+          Verwaltung (CSV-Import, Follow-up-Einstellungen, Institutionen)
+          <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+            aufklappen
+          </span>
+        </summary>
+        <div className="border-t p-4">
+          <ZieleSection mode="full" />
+        </div>
+      </details>
     </div>
   );
 }

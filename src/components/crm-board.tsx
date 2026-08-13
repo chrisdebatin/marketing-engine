@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Inbox, PhoneCall } from "lucide-react";
+import { Inbox, PhoneCall, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CrmBoardTeam {
@@ -11,6 +11,7 @@ export interface CrmBoardTeam {
   outboundBadge?: number;
   leads: React.ReactNode;
   outbound: React.ReactNode;
+  kontakte: React.ReactNode;
 }
 
 /**
@@ -20,7 +21,7 @@ export interface CrmBoardTeam {
  */
 export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
   const [teamId, setTeamId] = useState(teams[0]?.id);
-  const [tab, setTab] = useState<"leads" | "outbound">("leads");
+  const [tab, setTab] = useState<"leads" | "outbound" | "kontakte">("leads");
   const team = teams.find((t) => t.id === teamId) ?? teams[0];
 
   return (
@@ -62,6 +63,7 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
           [
             { key: "leads", label: "Anstehende Leads", Icon: Inbox, badge: team?.leadsBadge },
             { key: "outbound", label: "Outbound-Anrufe", Icon: PhoneCall, badge: team?.outboundBadge },
+            { key: "kontakte", label: "Kontakte", Icon: Users, badge: undefined },
           ] as const
         ).map((t) => (
           <button
@@ -96,6 +98,7 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
         <div key={t.id} className={cn(t.id !== teamId && "hidden")}>
           <div className={cn(tab !== "leads" && "hidden")}>{t.leads}</div>
           <div className={cn(tab !== "outbound" && "hidden")}>{t.outbound}</div>
+          <div className={cn(tab !== "kontakte" && "hidden")}>{t.kontakte}</div>
         </div>
       ))}
     </div>

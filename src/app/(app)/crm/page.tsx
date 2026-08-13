@@ -41,7 +41,7 @@ export default async function CrmPage() {
 
   const workspace = (
     team: "kundenservice" | "callcenter",
-    view: "inbound" | "outbound",
+    view: "inbound" | "outbound" | "kontakte",
   ) => (
     <TeamWorkspace
       monitor
@@ -92,6 +92,7 @@ export default async function CrmPage() {
               </div>
             ),
             outbound: workspace("kundenservice", "outbound"),
+            kontakte: workspace("kundenservice", "kontakte"),
           },
           {
             id: "callcenter",
@@ -100,6 +101,7 @@ export default async function CrmPage() {
             outboundBadge: dueCount(ccOutbound),
             leads: workspace("callcenter", "inbound"),
             outbound: workspace("callcenter", "outbound"),
+            kontakte: workspace("callcenter", "kontakte"),
           },
         ]}
       />
