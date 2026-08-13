@@ -1,8 +1,9 @@
 import { requireSession } from "@/lib/auth";
 import { buildTeamInbound } from "@/lib/team-leads";
 import { PdlTabs } from "@/components/pdl-tabs";
+import { LeadTeamSwitch } from "@/components/lead-team-switch";
 import { CrmIntro } from "@/components/crm-intro";
-import { CrmHandoverStats } from "@/components/crm-handover-stats";
+import { CrmAdminSection } from "@/components/crm-admin-section";
 import { TeamWorkspace } from "@/components/team-workspace";
 import { FrontofficeSection } from "./frontoffice-section";
 import { ZieleSection } from "./ziele-section";
@@ -44,65 +45,84 @@ export default async function CrmPage() {
 
       <CrmIntro />
 
-      {session.isAdmin && <CrmHandoverStats />}
-
       <PdlTabs
+        defaultId="leads"
         tabs={[
+          ...(session.isAdmin
+            ? [
+                {
+                  id: "admin",
+                  label: "CRM-Admin",
+                  content: <CrmAdminSection />,
+                },
+              ]
+            : []),
           {
-            id: "kundenservice",
-            label: "Belinda & Adelina",
-            badge: openCount(ksInbound),
+            id: "leads",
+            label: "Anstehende Leads",
+            badge: openCount(ksInbound) + openCount(ccInbound),
             content: (
-              <div className="flex flex-col gap-6">
-                <TeamWorkspace
-                  monitor
-                  editable={editable}
-                  token=""
-                  memberName={editorName}
-                  inbound={ksInbound}
-                  outbound={[]}
-                  hubs={hubs}
-                />
-                <details className="group rounded-xl border bg-card shadow-sm">
-                  <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
-                    Anruf manuell erfassen &amp; Quellen-Auswertung
-                    <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
-                      aufklappen
-                    </span>
-                  </summary>
-                  <div className="border-t p-4">
-                    <FrontofficeSection />
-                  </div>
-                </details>
-              </div>
+              <LeadTeamSwitch
+                teams={[
+                  {
+                    id: "kundenservice",
+                    label: "Belinda & Adelina",
+                    badge: openCount(ksInbound),
+                    content: (
+                      <div className="flex flex-col gap-6">
+                        <TeamWorkspace
+                          monitor
+                          editable={editable}
+                          token=""
+                          memberName={editorName}
+                          inbound={ksInbound}
+                          outbound={[]}
+                          hubs={hubs}
+                        />
+                        <details className="group rounded-xl border bg-card shadow-sm">
+                          <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+                            Anruf manuell erfassen &amp; Quellen-Auswertung
+                            <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                              aufklappen
+                            </span>
+                          </summary>
+                          <div className="border-t p-4">
+                            <FrontofficeSection />
+                          </div>
+                        </details>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "callcenter",
+                    label: "Davina",
+                    badge: openCount(ccInbound),
+                    content: (
+                      <div className="flex flex-col gap-3">
+                        <TeamWorkspace
+                          monitor
+                          editable={editable}
+                          token=""
+                          memberName={editorName}
+                          inbound={ccInbound}
+                          outbound={[]}
+                          hubs={hubs}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Davinas Krankenhaus-Anrufliste läuft über ihren
+                          persönlichen Link; die zentrale Liste steht im Tab
+                          „Outbound-Anrufe&ldquo;.
+                        </p>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
             ),
           },
           {
-            id: "callcenter",
-            label: "Davina",
-            badge: openCount(ccInbound),
-            content: (
-              <div className="flex flex-col gap-3">
-                <TeamWorkspace
-                  monitor
-                  editable={editable}
-                  token=""
-                  memberName={editorName}
-                  inbound={ccInbound}
-                  outbound={[]}
-                  hubs={hubs}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Davinas Krankenhaus-Anrufliste läuft über ihren persönlichen
-                  Link; die zentrale Liste steht im Tab „Institutionen &amp;
-                  Anrufe&ldquo;.
-                </p>
-              </div>
-            ),
-          },
-          {
-            id: "institutionen",
-            label: "Institutionen & Anrufe",
+            id: "outbound",
+            label: "Outbound-Anrufe",
             content: <ZieleSection />,
           },
         ]}

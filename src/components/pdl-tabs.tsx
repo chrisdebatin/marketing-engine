@@ -11,8 +11,8 @@ export interface PdlTab {
 }
 
 /** Reiter-Navigation für das PDL-Dashboard (Inhalte kommen vom Server). */
-export function PdlTabs({ tabs }: { tabs: PdlTab[] }) {
-  const [active, setActive] = useState(tabs[0]?.id);
+export function PdlTabs({ tabs, defaultId }: { tabs: PdlTab[]; defaultId?: string }) {
+  const [active, setActive] = useState(defaultId ?? tabs[0]?.id);
 
   return (
     <div className="flex flex-col gap-5">

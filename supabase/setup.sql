@@ -1360,3 +1360,18 @@ on conflict (name) do update set responsible_md = excluded.responsible_md;
 --   update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'you@example.com');
 -- ------------------------------------------------------------
+
+-- ===== 0055_lead_first_touch.sql =====
+-- 0055: Zeitstempel der ersten Bearbeitung (Übernehmen/Status/Ergebnis) —
+-- Grundlage für die Admin-Auswertung "wie lange lag der Lead im System,
+-- bevor ihn jemand angefasst hat". Wird von der Team-API beim ersten
+-- Eingriff gesetzt; Altbestand bleibt null (dort unbekannt).
+alter table public.lead_calls
+  add column if not exists erstbearbeitet_at timestamptz;
+alter table public.meta_leads
+  add column if not exists erstbearbeitet_at timestamptz;
+
+notify pgrst, 'reload schema';
+
+-- 0055-Addendum: ergebnis auch an meta_leads (Verloren-Grund)
+alter table public.meta_leads add column if not exists ergebnis text;

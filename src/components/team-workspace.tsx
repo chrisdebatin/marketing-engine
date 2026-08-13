@@ -313,13 +313,21 @@ export function TeamWorkspace({
     }
   }
 
-  async function setStatus(l: InboundLead, status: string) {
+  async function setStatus(l: InboundLead, status: string, ergebnis?: string) {
     setError(null);
     try {
-      await teamAction(token, { action: "lead-status", kind: l.kind, id: l.id, status });
+      await teamAction(token, {
+        action: "lead-status",
+        kind: l.kind,
+        id: l.id,
+        status,
+        ...(ergebnis ? { ergebnis } : {}),
+      });
       setInbound((cur) =>
         cur.map((x) =>
-          x.id === l.id ? { ...x, status, bearbeiter: memberName } : x,
+          x.id === l.id
+            ? { ...x, status, bearbeiter: memberName, ...(ergebnis ? { ergebnis } : {}) }
+            : x,
         ),
       );
     } catch (e) {
@@ -579,15 +587,9 @@ export function TeamWorkspace({
                               <Check className="size-3.5" /> Erstgespräch vereinbart
                             </Button>
                           )}
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="text-muted-foreground"
-                            onClick={() => setStatus(l, "verloren")}
-                          >
-                            <X className="size-3.5" /> verloren
-                          </Button>
+                          <LostReason
+                            onSave={(grund) => setStatus(l, "verloren", grund)}
+                          />
                         </>
                       )}
                     </>
@@ -634,6 +636,93 @@ export function TeamWorkspace({
             />
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "verloren" fragt nach dem Grund: nicht erreicht / doch kein Interesse /
+ * eigene Angabe. Der Grund landet als Ergebnis am Lead (Admin-Auswertung).
+ */
+function LostReason({ onSave }: { onSave: (grund: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState(false);
+  const [text, setText] = useState("");
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-muted-foreground"
+        onClick={() => setOpen(true)}
+      >
+        <X className="size-3.5" /> verloren
+      </Button>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5">
+      <p className="text-xs font-medium text-muted-foreground">Warum verloren?</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onSave("Nicht erreicht")}
+        >
+          <PhoneCall className="size-3.5" /> Nicht erreicht
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onSave("Doch kein Interesse")}
+        >
+          <X className="size-3.5" /> Doch kein Interesse
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={() => setCustom((s) => !s)}
+        >
+          Eigene Angabe…
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="ml-auto text-muted-foreground"
+          onClick={() => {
+            setOpen(false);
+            setCustom(false);
+          }}
+        >
+          Abbrechen
+        </Button>
+      </div>
+      {custom && (
+        <div className="flex flex-col gap-1.5">
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            placeholder="Grund (z. B. bereits versorgt, falsche Region …)"
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="self-start"
+            disabled={!text.trim()}
+            onClick={() => onSave(text.trim())}
+          >
+            <Check className="size-3.5" /> Als verloren speichern
+          </Button>
+        </div>
       )}
     </div>
   );

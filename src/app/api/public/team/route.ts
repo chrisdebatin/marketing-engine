@@ -66,6 +66,15 @@ export async function POST(req: Request) {
   const kind = body.kind === "meta" ? "meta" : "call";
   const table = kind === "meta" ? "meta_leads" : "lead_calls";
 
+  /** Erste Bearbeitung stempeln (nur wenn noch leer) — Basis der Admin-Auswertung. */
+  async function markFirstTouch(id: string) {
+    await admin
+      .from(table)
+      .update({ erstbearbeitet_at: new Date().toISOString() })
+      .eq("id", id)
+      .is("erstbearbeitet_at", null);
+  }
+
   if (action === "claim") {
     const id = (body.id ?? "").trim();
     if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
@@ -74,6 +83,7 @@ export async function POST(req: Request) {
       .update({ bearbeiter: member.name })
       .eq("id", id);
     if (error) return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    await markFirstTouch(id).catch(() => {});
     return NextResponse.json({ ok: true, bearbeiter: member.name });
   }
 
@@ -83,10 +93,12 @@ export async function POST(req: Request) {
     if (!id || !LEAD_STATUS.has(status)) {
       return NextResponse.json({ error: "Ungültiger Status." }, { status: 400 });
     }
+    // Optionaler Grund (v. a. bei "verloren": nicht erreicht / kein Interesse / Freitext)
+    const ergebnis = (body.ergebnis ?? "").trim().slice(0, 300);
     // Statuswechsel gilt als Bearbeitung → Claim implizit mitsetzen.
     const { error } = await admin
       .from(table)
-      .update({ status, bearbeiter: member.name })
+      .update({ status, bearbeiter: member.name, ...(ergebnis ? { ergebnis } : {}) })
       .eq("id", id);
     if (error) {
       const constraint = error.code === "23514";
@@ -99,6 +111,7 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    await markFirstTouch(id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 
@@ -230,6 +243,7 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
         { status: 500 },
       );
     }
+    await markFirstTouch(id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 

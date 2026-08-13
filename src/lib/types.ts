@@ -608,6 +608,8 @@ export interface Database {
           zugewiesen_at: string | null;
           pdl_bestaetigt_at: string | null;
           pdl_ergebnis: string | null;
+          ergebnis: string | null;
+          erstbearbeitet_at: string | null;
         };
         Insert: {
           id: string;
@@ -631,6 +633,8 @@ export interface Database {
           zugewiesen_at?: string | null;
           pdl_bestaetigt_at?: string | null;
           pdl_ergebnis?: string | null;
+          ergebnis?: string | null;
+          erstbearbeitet_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];
@@ -655,6 +659,7 @@ export interface Database {
           zugewiesen_at: string | null;
           pdl_bestaetigt_at: string | null;
           pdl_ergebnis: string | null;
+          erstbearbeitet_at: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -676,6 +681,7 @@ export interface Database {
           zugewiesen_at?: string | null;
           pdl_bestaetigt_at?: string | null;
           pdl_ergebnis?: string | null;
+          erstbearbeitet_at?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_calls"]["Insert"]>;
