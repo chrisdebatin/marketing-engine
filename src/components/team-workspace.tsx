@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { LEAD_QUELLEN, leadQuelleLabel, leadShortId } from "@/lib/leads";
+import { LEAD_QUELLEN, leadBereichLabel, leadQuelleLabel, leadShortId } from "@/lib/leads";
 import { OutboundMap } from "@/components/outbound-map";
 import { placeKindLabel } from "@/lib/places";
 import { formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
@@ -31,6 +31,8 @@ export interface InboundLead {
   telefon: string | null;
   email: string | null;
   adresse: string | null;
+  /** Interesse des Anrufers (alltagshilfe/ambulant/intensiv) — null bei Altbestand/Meta. */
+  bereich: string | null;
   quelle: string;
   quelle_detail: string | null;
   datum: string;
@@ -243,8 +245,9 @@ function LeadIdChip({ id }: { id: string }) {
 function UnansweredTimer({ since }: { since: string }) {
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
-    setNow(Date.now());
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    // Erster Tick nach dem Mount (kein SSR-Hydration-Konflikt, kein
+    // synchrones setState im Effect-Body).
+    const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, []);
   if (now == null) return null;
@@ -367,12 +370,17 @@ export function TeamWorkspace({
   editable = false,
   view = "tabs",
   inboundLog = true,
+  kontakteInbound,
+  kontakteOutbound,
 }: {
   token: string;
   memberName: string;
   inbound: InboundLead[];
   outbound: OutboundTarget[];
   hubs: { id: string; name: string }[];
+  /** Gemeinsames Kontakte-Verzeichnis (beide Teams) — Fallback: eigene Daten. */
+  kontakteInbound?: InboundLead[];
+  kontakteOutbound?: OutboundTarget[];
   /** true = Gesamtsicht (z. B. /crm): kein Auto-Reload, keine Anrufliste. Mit
    * editable=true bleiben die Lead-Aktionen trotzdem nutzbar (Admin-Session). */
   monitor?: boolean;
@@ -387,7 +395,6 @@ export function TeamWorkspace({
   const [inbound, setInbound] = useState(initialInbound);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
-  const [showDone, setShowDone] = useState(false);
   const canAct = !monitor || editable;
 
   const router = useRouter();
@@ -412,17 +419,21 @@ export function TeamWorkspace({
   useEffect(() => setInbound(initialInbound), [initialInbound]);
   useEffect(() => setOutbound(initialOutbound), [initialOutbound]);
 
+  // Aktiv = alles, was noch Arbeit braucht (auch Erstgespräch: Übergabe
+  // steht aus). Aufgenommen/verloren wandern in "Alte & abgelehnte Leads".
   const openInbound = inbound.filter((l) =>
-    ["offen", "kontaktiert"].includes(l.status),
+    ["offen", "kontaktiert", "erstgespraech"].includes(l.status),
   );
-  const doneInbound = inbound.length - openInbound.length;
+  const doneLeads = inbound.filter(
+    (l) => !["offen", "kontaktiert", "erstgespraech"].includes(l.status),
+  );
 
   // Zähler je Quelle (nur offene) + Tages-Gruppen, neueste zuerst.
   const sourceCounts = new Map<string, number>();
   for (const l of openInbound) {
     sourceCounts.set(l.quelle, (sourceCounts.get(l.quelle) ?? 0) + 1);
   }
-  const shownInbound = showDone ? inbound : openInbound;
+  const shownInbound = openInbound;
   // Wiedervorlage: Leads mit fälligem To-do poppen ganz oben auf — egal wie
   // alt sie sind. Der Rest bleibt chronologisch in Tages-Gruppen.
   const heute = todayIso();
@@ -629,17 +640,6 @@ export function TeamWorkspace({
             <span className="ml-auto text-xs text-muted-foreground">
               neueste zuerst · aktualisiert sich automatisch
             </span>
-            {doneInbound > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowDone((s) => !s)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                {showDone
-                  ? "Abgeschlossene ausblenden"
-                  : `${doneInbound} abgeschlossene anzeigen`}
-              </button>
-            )}
           </div>
           {shownInbound.length === 0 && (
             <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
@@ -698,6 +698,11 @@ export function TeamWorkspace({
                     {leadQuelleLabel(l.quelle) || l.quelle}
                     {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
                   </span>
+                  {l.bereich && l.bereich !== "pflege" && (
+                    <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800">
+                      {leadBereichLabel(l.bereich)}
+                    </span>
+                  )}
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-[11px] font-semibold",
@@ -912,12 +917,72 @@ export function TeamWorkspace({
               </ul>
             </div>
           ))}
+
+          {/* Alte Leads: abgelehnte (verloren) und aufgenommene — kompakt,
+              damit die aktive Liste oben schlank bleibt. */}
+          {doneLeads.length > 0 && (
+            <details className="group mt-3 rounded-xl border bg-card shadow-sm">
+              <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+                Alte &amp; abgelehnte Leads ({doneLeads.length})
+                <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                  aufklappen — abgelehnte und aufgenommene Leads
+                </span>
+              </summary>
+              <ul className="divide-y border-t">
+                {doneLeads.map((l) => (
+                  <li
+                    key={`${l.kind}-${l.id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
+                  >
+                    <span className="w-24 shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {exactStamp(l.datum) || "—"}
+                    </span>
+                    <span className="font-medium">{l.name}</span>
+                    <LeadIdChip id={l.id} />
+                    <span className="text-xs text-muted-foreground">
+                      {leadQuelleLabel(l.quelle) || l.quelle}
+                      {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {STATUS_LABEL[l.status] ?? l.status}
+                    </span>
+                    {l.ergebnis && (
+                      <span className="text-xs text-muted-foreground">{l.ergebnis}</span>
+                    )}
+                    {l.bearbeiter && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {l.bearbeiter}
+                      </span>
+                    )}
+                    {canAct && l.status === "verloren" && (
+                      <button
+                        type="button"
+                        title="Zurück in die offene Liste"
+                        onClick={() => setStatus(l, "offen")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        wieder öffnen
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
           </div>
         </div>
       )}
 
       {(view === "kontakte" || (view === "tabs" && !monitor && tab === "kontakte")) && (
-        <KontakteView inbound={inbound} outbound={outbound} />
+        <KontakteView
+          inbound={kontakteInbound ?? inbound}
+          outbound={kontakteOutbound ?? outbound}
+        />
       )}
 
       {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
@@ -1017,7 +1082,9 @@ function InboundCallLog({
 }) {
   const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
+  const [adresse, setAdresse] = useState("");
   const [quelle, setQuelle] = useState("");
+  const [bereich, setBereich] = useState("");
   const [notiz, setNotiz] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1030,7 +1097,9 @@ function InboundCallLog({
         action: "log-inbound",
         ansprechpartner: name,
         telefon,
+        adresse,
         quelle,
+        bereich,
         notiz,
       });
       onCreated({
@@ -1039,7 +1108,8 @@ function InboundCallLog({
         name: name || "Inbound-Anruf",
         telefon: telefon || null,
         email: null,
-        adresse: null,
+        adresse: adresse.trim() || null,
+        bereich: bereich || null,
         quelle,
         quelle_detail: null,
         datum: String(res.created_at ?? new Date().toISOString()),
@@ -1062,6 +1132,8 @@ function InboundCallLog({
       });
       setName("");
       setTelefon("");
+      setAdresse("");
+      setBereich("");
       setNotiz("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -1091,6 +1163,25 @@ function InboundCallLog({
         placeholder="Telefonnummer"
         className="h-9 rounded-lg border bg-background px-2.5 text-sm"
       />
+      <input
+        value={adresse}
+        onChange={(e) => setAdresse(e.target.value)}
+        placeholder="Adresse / Ort (optional)"
+        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+      />
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        Wofür interessiert sich der Anrufer?
+        <select
+          value={bereich}
+          onChange={(e) => setBereich(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-2 text-sm font-normal text-foreground"
+        >
+          <option value="">Bitte wählen…</option>
+          <option value="intensiv">Intensivpflege</option>
+          <option value="ambulant">Ambulante Pflege</option>
+          <option value="alltagshilfe">Hauswirtschaft / Alltagshilfe</option>
+        </select>
+      </label>
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         Wie sind sie auf uns aufmerksam geworden?
         <select
@@ -1303,7 +1394,9 @@ function KontakteView({
   const klienten = inbound.filter(
     (l) =>
       (filter === "alle" || filter === "klienten") &&
-      matches(`${l.name} ${l.telefon ?? ""} ${l.quelle_detail ?? ""}`),
+      matches(
+        `${l.name} ${l.telefon ?? ""} ${l.email ?? ""} ${l.adresse ?? ""} ${l.quelle_detail ?? ""}`,
+      ),
   );
 
   // Offene To-dos über alle Leads, fällige zuerst.
@@ -1316,11 +1409,15 @@ function KontakteView({
   return (
     <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-5">
       <div className="flex min-w-0 flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          Gemeinsames Verzeichnis beider Teams — wenn jemand anruft, hier
+          nachschlagen: die Karte zeigt den letzten Status zum Kontakt.
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Suchen (Name, Ort, Telefon)…"
+            placeholder="Suchen (Name, Telefon, E-Mail, Ort)…"
             className="h-9 w-full max-w-xs rounded-lg border bg-background px-3 text-sm"
           />
           {kategorien.map((k) => (
@@ -1371,9 +1468,17 @@ function KontakteView({
                         {l.telefon}
                       </a>
                     )}
+                    {l.adresse && <span>{l.adresse}</span>}
                     {l.zugewiesen_hub && <span>→ {l.zugewiesen_hub}</span>}
                     <span>{leadQuelleLabel(l.quelle) || l.quelle}</span>
+                    <span>Eingang {formatIsoDate(l.datum.slice(0, 10))}</span>
                   </span>
+                  {(l.ergebnis || l.pdl_ergebnis) && (
+                    <span className="text-xs text-muted-foreground">
+                      Zuletzt: {l.pdl_ergebnis ?? l.ergebnis}
+                      {l.bearbeiter ? ` (${l.bearbeiter})` : ""}
+                    </span>
+                  )}
                   {l.todos.length > 0 && (
                     <span className="text-xs text-amber-700">
                       {l.todos.length} offenes To-do

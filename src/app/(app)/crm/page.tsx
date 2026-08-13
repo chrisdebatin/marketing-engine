@@ -31,10 +31,21 @@ export default async function CrmPage() {
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { data: hubRows } = await createAdminClient().from("hubs").select("id, name");
   const hubs = (hubRows ?? []).map((h) => ({ id: h.id, name: h.name }));
+  // Kontakte-Verzeichnis: bei beiden Teams identisch (alle Leads + alle
+  // Institutionen, dedupliziert) — zum Nachschlagen bei Inbound-Anrufen.
+  const kontakteInbound = [...ksInbound, ...ccInbound].sort((a, b) =>
+    (b.datum ?? "").localeCompare(a.datum ?? ""),
+  );
+  const seenTargets = new Set<string>();
+  const kontakteOutbound = [...ksOutbound, ...ccOutbound].filter((t) => {
+    if (seenTargets.has(t.id)) return false;
+    seenTargets.add(t.id);
+    return true;
+  });
   const editable = session.isAdmin;
   const editorName = session.profile?.name?.trim() || "Admin";
   const openCount = (l: { status: string }[]) =>
-    l.filter((x) => ["offen", "kontaktiert"].includes(x.status)).length;
+    l.filter((x) => ["offen", "kontaktiert", "erstgespraech"].includes(x.status)).length;
   const today = new Date().toISOString().slice(0, 10);
   const dueCount = (l: { letzter_besuch: string | null; naechster_besuch: string | null }[]) =>
     l.filter((t) => !t.letzter_besuch || (t.naechster_besuch !== null && t.naechster_besuch <= today)).length;
@@ -52,6 +63,8 @@ export default async function CrmPage() {
       memberName={editorName}
       inbound={team === "kundenservice" ? ksInbound : ccInbound}
       outbound={team === "kundenservice" ? ksOutbound : ccOutbound}
+      kontakteInbound={kontakteInbound}
+      kontakteOutbound={kontakteOutbound}
       hubs={hubs}
     />
   );

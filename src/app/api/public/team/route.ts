@@ -45,6 +45,7 @@ export async function POST(req: Request) {
     adresse?: string;
     erreicht?: boolean;
     wiedervorlage?: string;
+    bereich?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -131,6 +132,12 @@ export async function POST(req: Request) {
     const telefon = (body.telefon ?? "").trim().slice(0, 60);
     const quelle = (body.quelle ?? "").trim() || "telefon0800";
     const notiz = (body.notiz ?? "").trim().slice(0, 1000);
+    const adresse = (body.adresse ?? "").trim().slice(0, 200);
+    // Interesse des Anrufers: Intensiv / Ambulant / Hauswirtschaft (Alltagshilfe)
+    const bereichRaw = (body.bereich ?? "").trim();
+    const bereich = ["alltagshilfe", "ambulant", "intensiv"].includes(bereichRaw)
+      ? bereichRaw
+      : "pflege";
     if (!name && !telefon) {
       return NextResponse.json({ error: "Name oder Telefonnummer angeben." }, { status: 400 });
     }
@@ -138,7 +145,7 @@ export async function POST(req: Request) {
     const values = {
       call_date: now.slice(0, 10),
       quelle,
-      bereich: "pflege",
+      bereich,
       lead_name: name || "Inbound-Anruf",
       telefon: telefon || null,
       notiz: notiz || null,
@@ -147,11 +154,11 @@ export async function POST(req: Request) {
     };
     let { data: row, error } = await admin
       .from("lead_calls")
-      .insert({ ...values, erstbearbeitet_at: now })
+      .insert({ ...values, adresse: adresse || null, erstbearbeitet_at: now })
       .select("id, created_at")
       .single();
     if (error && (error.code === "PGRST204" || error.code === "42703")) {
-      // Migration 0055 noch nicht eingespielt — ohne Stempel loggen.
+      // Migration 0055/0058 noch nicht eingespielt — ohne die neuen Spalten loggen.
       ({ data: row, error } = await admin
         .from("lead_calls")
         .insert(values)

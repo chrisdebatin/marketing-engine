@@ -43,11 +43,26 @@ export default async function TeamMemberPage({
   }
 
   const team = isCallcenter ? ("callcenter" as const) : ("kundenservice" as const);
-  const [inbound, outbound, { data: hubRows }] = await Promise.all([
-    buildTeamInbound(team),
-    buildTeamOutbound(team),
-    admin.from("hubs").select("id, name"),
-  ]);
+  const otherTeam = isCallcenter ? ("kundenservice" as const) : ("callcenter" as const);
+  const [inbound, outbound, otherInbound, otherOutbound, { data: hubRows }] =
+    await Promise.all([
+      buildTeamInbound(team),
+      buildTeamOutbound(team),
+      buildTeamInbound(otherTeam),
+      buildTeamOutbound(otherTeam),
+      admin.from("hubs").select("id, name"),
+    ]);
+  // Kontakte-Verzeichnis: bei allen gleich — Leads + Institutionen beider
+  // Teams (dedupliziert), damit man bei einem Anruf den letzten Status findet.
+  const kontakteInbound = [...inbound, ...otherInbound].sort((a, b) =>
+    (b.datum ?? "").localeCompare(a.datum ?? ""),
+  );
+  const seenTargets = new Set<string>();
+  const kontakteOutbound = [...outbound, ...otherOutbound].filter((t) => {
+    if (seenTargets.has(t.id)) return false;
+    seenTargets.add(t.id);
+    return true;
+  });
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">
@@ -81,6 +96,8 @@ export default async function TeamMemberPage({
         inboundLog={!isCallcenter}
         inbound={inbound}
         outbound={outbound}
+        kontakteInbound={kontakteInbound}
+        kontakteOutbound={kontakteOutbound}
         hubs={(hubRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
       />
     </main>

@@ -143,6 +143,7 @@ export async function buildTeamInbound(
         (("adresse" in c ? (c as { adresse?: string | null }).adresse : null) ??
           /(?:^|· )Ort: ([^·]+)/.exec(c.notiz ?? "")?.[1]?.trim()) ||
         null,
+      bereich: c.bereich ?? null,
       quelle: c.quelle,
       quelle_detail: c.quelle_detail ?? null,
       datum: c.created_at ?? c.call_date,
@@ -178,6 +179,7 @@ export async function buildTeamInbound(
         adresse:
           ("adresse" in m ? (m as { adresse?: string | null }).adresse : null) ??
           leadAddress(m.field_data),
+        bereich: null,
         quelle: "meta",
         quelle_detail: m.campaign_name,
         datum: m.created_time ?? m.created_at ?? "",
