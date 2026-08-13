@@ -78,7 +78,7 @@ const Arrow = () => (
 
 export function CrmIntro() {
   return (
-    <details className="group rounded-xl border border-primary/20 bg-primary/[0.03] open:pb-4" open>
+    <details className="group rounded-xl border border-primary/20 bg-primary/[0.03] open:pb-4">
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold select-none">
         <Users className="size-4 text-primary" />
         So funktioniert unser CRM — wer bearbeitet was?

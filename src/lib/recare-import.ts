@@ -21,13 +21,18 @@ export interface RecareSyncResult {
   error: string | null;
 }
 
-type LeadMailKind = "recare" | "anruf";
+type LeadMailKind = "recare" | "anruf" | "website";
+
+/** Offensichtlicher System-Noise (Kontosicherheit, Bounces) — nie ein Lead. */
+const NOISE_SENDERS =
+  /accounts\.google\.com|mailer-daemon|postmaster@|noreply@google|no-reply@accounts/i;
 
 /**
  * Mail-Klassifizierung: "Customer Call" im Betreff = verpasster 0800-Anruf
  * (Weiterleitung der Telefonanlage); "recare"/"nachversorgung" irgendwo im
  * GANZEN Text = Recare-Anfrage (Weiterleitungen tragen das Stichwort oft
- * erst tief im Mail-Body).
+ * erst tief im Mail-Body). Alles andere (außer System-Noise) sind
+ * weitergeleitete Website-/Kontaktanfragen — die sortiert Claude fein.
  */
 function classifyMail(m: {
   subject: string;
@@ -35,10 +40,11 @@ function classifyMail(m: {
   preview: string;
   body?: string | null;
 }): LeadMailKind | null {
+  if (NOISE_SENDERS.test(m.fromAddress)) return null;
   if (m.subject.toLowerCase().includes("customer call")) return "anruf";
   const hay = `${m.subject} ${m.fromAddress} ${m.body ?? m.preview}`.toLowerCase();
   if (hay.includes("recare") || hay.includes("nachversorg")) return "recare";
-  return null;
+  return "website";
 }
 
 /** HTML grob zu Text (Graph liefert meist HTML-Bodies). */
@@ -184,6 +190,64 @@ const KATEGORIE_LABEL: Record<string, string> = {
   sonstiges: "Sonstiges",
 };
 
+interface ExtractedWebsite {
+  name: string;
+  telefon: string;
+  email: string;
+  ort: string;
+  anliegen: string;
+  kategorie: "kundenanfrage" | "bewerbung" | "sonstiges";
+}
+
+/**
+ * Website-/Kontaktformular-Mail → Kontaktdaten + Einordnung:
+ * kundenanfrage = potenzielle(r) neue(r) Pflegekunde/-in bzw. Angehörige;
+ * bewerbung = Stellengesuch/Bewerbung (wird ans Recruiting weitergeleitet);
+ * sonstiges = Newsletter, Vertrieb, Spam, Unzustellbares.
+ */
+async function extractWebsite(text: string): Promise<ExtractedWebsite | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system:
+        "Du bearbeitest eine (oft weitergeleitete) E-Mail an einen Pflegedienst — meist eine Kontaktanfrage über das Website-Formular. Extrahiere die Daten der anfragenden Person und ordne die Mail ein. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. name = Name der Person; telefon = Rufnummer; email = E-Mail-Adresse der Person (NICHT die Formular-/Weiterleitungsadresse); ort = Stadt/PLZ falls genannt; anliegen = 1–2 Sätze Kern der Anfrage. kategorie: 'kundenanfrage' = Interesse an Pflege/Betreuung für sich oder Angehörige (im Zweifel kundenanfrage wählen!); 'bewerbung' = Stellengesuch, Bewerbung, Frage nach Arbeit/Job/Praktikum; 'sonstiges' = Vertrieb, Newsletter, Spam, technische Mails ohne Anliegen.",
+      tools: [
+        {
+          name: "website_anfrage",
+          description: "Extrahierte Website-Anfrage mit Einordnung.",
+          input_schema: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              telefon: { type: "string" },
+              email: { type: "string" },
+              ort: { type: "string" },
+              anliegen: { type: "string" },
+              kategorie: {
+                type: "string",
+                enum: ["kundenanfrage", "bewerbung", "sonstiges"],
+              },
+            },
+            required: ["name", "telefon", "email", "ort", "anliegen", "kategorie"],
+            additionalProperties: false,
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "website_anfrage" },
+      messages: [{ role: "user", content: text.slice(0, 6000) }],
+    });
+    const tu = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    return tu ? (tu.input as unknown as ExtractedWebsite) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function syncRecareMails(): Promise<RecareSyncResult> {
   const admin = createAdminClient();
 
@@ -279,6 +343,89 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
         ergebnis: interessent
           ? null
           : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
+      });
+      if (insErr) skipped++;
+      else imported++;
+      continue;
+    }
+
+    // Website-/Kontaktformular-Anfrage: Claude ordnet ein.
+    // Kundenanfrage → offener Lead (Kundenservice-Team); Bewerbung → Mail ans
+    // Recruiting + als abgeschlossen abgelegt; Sonstiges → nur vermerken.
+    if (m.kind === "website") {
+      const w = await extractWebsite(`Von: ${m.fromAddress}\nBetreff: ${m.subject}\n\n${body}`);
+      if (!w) {
+        skipped++;
+        continue;
+      }
+      if (w.kategorie === "sonstiges") {
+        skipped++;
+        continue;
+      }
+      if (w.kategorie === "bewerbung") {
+        const { deliverMail } = await import("@/lib/mailer");
+        const { FORWARD_TO } = await import("@/lib/lead-forward");
+        const esc = (s: string) =>
+          s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const sent = await deliverMail({
+          to: FORWARD_TO,
+          subject: `Bewerbung über Website: ${w.name || "(ohne Name)"}`,
+          html:
+            `<p>Bewerbung über das Website-Kontaktformular:</p>` +
+            `<table cellpadding="4" style="border-collapse:collapse">` +
+            [
+              ["Name", w.name],
+              ["Telefon", w.telefon],
+              ["E-Mail", w.email],
+              ["Ort", w.ort],
+              ["Anliegen", w.anliegen],
+            ]
+              .filter(([, v]) => v)
+              .map(
+                ([k, v]) =>
+                  `<tr><td style="color:#666;padding-right:12px;vertical-align:top">${k}</td><td><strong>${esc(v)}</strong></td></tr>`,
+              )
+              .join("") +
+            `</table>` +
+            `<p style="color:#888;font-size:12px">Original-Mail:</p><pre style="white-space:pre-wrap;font-size:12px">${esc(body.slice(0, 4000))}</pre>`,
+        });
+        const { error: insErr } = await admin.from("lead_calls").insert({
+          call_date: m.receivedAt.slice(0, 10),
+          quelle: "website",
+          lead_name: w.name.slice(0, 200) || "(ohne Name)",
+          telefon: w.telefon.slice(0, 60) || null,
+          email: w.email.slice(0, 200) || null,
+          notiz: [w.anliegen, w.ort ? `Ort: ${w.ort}` : ""].filter(Boolean).join(" · ").slice(0, 1000) || null,
+          status: sent.ok ? "verloren" : "offen",
+          ergebnis: sent.ok
+            ? "Bewerbung — automatisch an Recruiting weitergeleitet"
+            : null,
+          ...(sent.ok
+            ? {}
+            : {
+                notiz: [
+                  "BEWERBUNG — Weiterleitung ans Recruiting fehlgeschlagen, bitte manuell weiterleiten!",
+                  w.anliegen,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+                  .slice(0, 1000),
+              }),
+        });
+        if (insErr) skipped++;
+        else imported++;
+        continue;
+      }
+      // kundenanfrage → offener Lead fürs Kundenservice-Team
+      const { error: insErr } = await admin.from("lead_calls").insert({
+        call_date: m.receivedAt.slice(0, 10),
+        quelle: "website",
+        bereich: "pflege",
+        lead_name: w.name.slice(0, 200) || "(ohne Name)",
+        telefon: w.telefon.slice(0, 60) || null,
+        email: w.email.slice(0, 200) || null,
+        notiz: [w.anliegen, w.ort ? `Ort: ${w.ort}` : ""].filter(Boolean).join(" · ").slice(0, 1000) || null,
+        status: "offen",
       });
       if (insErr) skipped++;
       else imported++;
