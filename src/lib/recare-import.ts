@@ -21,9 +21,24 @@ export interface RecareSyncResult {
   error: string | null;
 }
 
-function isRecareMail(m: { subject: string; fromAddress: string; preview: string }): boolean {
-  const hay = `${m.subject} ${m.fromAddress} ${m.preview}`.toLowerCase();
-  return hay.includes("recare");
+type LeadMailKind = "recare" | "anruf";
+
+/**
+ * Mail-Klassifizierung: "Customer Call" im Betreff = verpasster 0800-Anruf
+ * (Weiterleitung der Telefonanlage); "recare"/"nachversorgung" irgendwo im
+ * GANZEN Text = Recare-Anfrage (Weiterleitungen tragen das Stichwort oft
+ * erst tief im Mail-Body).
+ */
+function classifyMail(m: {
+  subject: string;
+  fromAddress: string;
+  preview: string;
+  body?: string | null;
+}): LeadMailKind | null {
+  if (m.subject.toLowerCase().includes("customer call")) return "anruf";
+  const hay = `${m.subject} ${m.fromAddress} ${m.body ?? m.preview}`.toLowerCase();
+  if (hay.includes("recare") || hay.includes("nachversorg")) return "recare";
+  return null;
 }
 
 /** HTML grob zu Text (Graph liefert meist HTML-Bodies). */
@@ -108,6 +123,52 @@ async function extract(text: string): Promise<Extracted | null> {
 const LAST_SYNC_KEY = "recare_last_sync_at";
 const SYNC_MIN_INTERVAL_MS = 60_000;
 
+interface ExtractedCall {
+  telefon: string;
+  name: string;
+  zeitpunkt: string;
+  notiz: string;
+}
+
+/** Verpasster-Anruf-Mail (Telefonanlage) → Anrufernummer/Name/Zeit. */
+async function extractCall(text: string): Promise<ExtractedCall | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system:
+        "Du extrahierst aus einer Benachrichtigungs-Mail der Telefonanlage über einen verpassten Anruf die Daten des Anrufers. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. telefon = Rufnummer des Anrufers; name = Name falls genannt; zeitpunkt = Datum/Uhrzeit des Anrufs; notiz = sonstige nützliche Info (z. B. gewählte Nummer, Wartezeit).",
+      tools: [
+        {
+          name: "verpasster_anruf",
+          description: "Extrahierte Anrufer-Daten.",
+          input_schema: {
+            type: "object",
+            properties: {
+              telefon: { type: "string" },
+              name: { type: "string" },
+              zeitpunkt: { type: "string" },
+              notiz: { type: "string" },
+            },
+            required: ["telefon", "name", "zeitpunkt", "notiz"],
+            additionalProperties: false,
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "verpasster_anruf" },
+      messages: [{ role: "user", content: text.slice(0, 4000) }],
+    });
+    const tu = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    return tu ? (tu.input as unknown as ExtractedCall) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function syncRecareMails(): Promise<RecareSyncResult> {
   const admin = createAdminClient();
 
@@ -169,13 +230,40 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
     Array.isArray(setting?.value) ? (setting.value as string[]) : [],
   );
 
-  const candidates = mails.filter((m) => !processed.has(m.id) && isRecareMail(m));
+  const candidates = mails
+    .map((m) => ({ ...m, kind: classifyMail(m) }))
+    .filter((m) => !processed.has(m.id) && m.kind !== null);
   let imported = 0;
   let skipped = 0;
 
   for (const m of candidates) {
     processed.add(m.id);
     const body = m.body ?? (await fetchBody(m.id)) ?? m.preview;
+
+    // Verpasster 0800-Anruf: Nummer/Name/Zeit rausziehen, Lead fürs DE-Team.
+    if (m.kind === "anruf") {
+      const call = await extractCall(`Betreff: ${m.subject}\n\n${body}`);
+      const { error: insErr } = await admin.from("lead_calls").insert({
+        call_date: m.receivedAt.slice(0, 10),
+        quelle: "telefon0800",
+        lead_name: call?.name?.trim() || "Verpasster Anruf",
+        telefon: call?.telefon?.trim().slice(0, 60) || null,
+        notiz:
+          [
+            "Verpasster Anruf",
+            call?.zeitpunkt ? `um ${call.zeitpunkt}` : "",
+            call?.notiz ?? "",
+          ]
+            .filter(Boolean)
+            .join(" · ")
+            .slice(0, 1000) || null,
+        status: "offen",
+      });
+      if (insErr) skipped++;
+      else imported++;
+      continue;
+    }
+
     const data = await extract(`Betreff: ${m.subject}\n\n${body}`);
     if (!data) {
       skipped++;
