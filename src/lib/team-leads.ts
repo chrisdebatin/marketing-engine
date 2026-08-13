@@ -198,14 +198,12 @@ export async function buildTeamOutbound(
   const [{ data: targetRows }, { data: hubRows }] = await Promise.all([
     admin
       .from("crm_targets")
-      .select(
-        "id, name, kategorie, ort, adresse, hub_id, relevanz, letzter_besuch, letzte_kontakt_art, naechster_besuch, besuchs_notiz, intervall_wochen",
-      )
+      .select("*")
       .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
-    admin.from("hubs").select("id, name"),
+    admin.from("hubs").select("id, name, pdl_name, pdl_phone"),
   ]);
-  const hubName = (id: string | null) =>
-    (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
+  const hubOf = (id: string | null) => (hubRows ?? []).find((h) => h.id === id);
+  const hubName = (id: string | null) => hubOf(id)?.name ?? null;
   const exclusive = isCallcenter ? "krankenhaus" : "praxis";
   const excluded = isCallcenter ? "praxis" : "krankenhaus";
   return (targetRows ?? [])
@@ -217,6 +215,9 @@ export async function buildTeamOutbound(
       ort: t.ort ?? null,
       relevanz: t.relevanz ?? null,
       hub: hubName(t.hub_id),
+      hub_pdl: hubOf(t.hub_id)?.pdl_name ?? null,
+      hub_pdl_phone: hubOf(t.hub_id)?.pdl_phone ?? null,
+      kurzinfo: ("kurzinfo" in t ? (t as { kurzinfo?: string | null }).kurzinfo : null) ?? null,
       letzter_besuch: t.letzter_besuch ?? null,
       letzte_kontakt_art: t.letzte_kontakt_art ?? null,
       naechster_besuch: t.naechster_besuch ?? null,

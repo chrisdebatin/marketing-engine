@@ -446,6 +446,7 @@ export interface Database {
           plan: string | null;
           relevanz: number | null;
           geo_tag: string | null;
+          kurzinfo: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -466,6 +467,7 @@ export interface Database {
           plan?: string | null;
           relevanz?: number | null;
           geo_tag?: string | null;
+          kurzinfo?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["crm_targets"]["Insert"]>;

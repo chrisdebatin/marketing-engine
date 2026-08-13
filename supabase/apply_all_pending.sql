@@ -346,3 +346,8 @@ notify pgrst, 'reload schema';
 -- 0055-Addendum: ergebnis auch an meta_leads (Verloren-Grund)
 alter table public.meta_leads add column if not exists ergebnis text;
 alter table public.meta_leads add column if not exists notiz text;
+
+-- ── 0056: KI-Kurzinfo je Institution (Anruflisten-Karten) ──────────
+alter table public.crm_targets add column if not exists kurzinfo text;
+
+notify pgrst, 'reload schema';

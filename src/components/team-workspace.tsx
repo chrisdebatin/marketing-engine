@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { LEAD_QUELLEN, leadQuelleLabel, leadShortId } from "@/lib/leads";
+import { OutboundMap } from "@/components/outbound-map";
 import { placeKindLabel } from "@/lib/places";
 import { formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
 
@@ -56,6 +57,10 @@ export interface OutboundTarget {
   ort: string | null;
   relevanz: number | null;
   hub: string | null;
+  hub_pdl: string | null;
+  hub_pdl_phone: string | null;
+  /** KI-generierte Kurz-Info (z. B. "Maximalversorger, ~1.400 Betten"). */
+  kurzinfo: string | null;
   letzter_besuch: string | null;
   letzte_kontakt_art: string | null;
   naechster_besuch: string | null;
@@ -777,22 +782,35 @@ export function TeamWorkspace({
       )}
 
       {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
-        <ul className="flex flex-col gap-2">
-          {sortedOutbound.map((t) => (
-            <OutboundRow
-              key={t.id}
-              target={t}
-              token={token}
-              memberName={memberName}
-              isDue={due(t)}
-              onLogged={(patch) =>
-                setOutbound((cur) =>
-                  cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
-                )
-              }
-            />
-          ))}
-        </ul>
+        <div className="flex flex-col gap-3">
+          <OutboundMap
+            targets={sortedOutbound.map((t) => ({
+              id: t.id,
+              name: t.name,
+              ort: t.ort,
+              hub: t.hub,
+              hub_pdl: t.hub_pdl,
+              faellig: due(t),
+              letzter_besuch: t.letzter_besuch,
+            }))}
+          />
+          <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            {sortedOutbound.map((t) => (
+              <OutboundRow
+                key={t.id}
+                target={t}
+                token={token}
+                memberName={memberName}
+                isDue={due(t)}
+                onLogged={(patch) =>
+                  setOutbound((cur) =>
+                    cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                  )
+                }
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );
@@ -1379,37 +1397,61 @@ function OutboundRow({
   return (
     <li
       className={cn(
-        "flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm",
+        "flex h-full flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm",
         isDue && "border-amber-500/50 bg-amber-500/[0.05]",
       )}
     >
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-medium">{t.name}</span>
-        <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {placeKindLabel(t.kategorie)}
-          {t.exklusiv ? "" : " · gemeinsamer Pool"}
+      <div className="flex items-start justify-between gap-2">
+        <span className="min-w-0 font-semibold leading-snug">{t.name}</span>
+        <span className="flex shrink-0 flex-wrap justify-end gap-1">
+          {t.relevanz != null && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              Prio {t.relevanz}
+            </span>
+          )}
+          {isDue && (
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              fällig
+            </span>
+          )}
         </span>
-        {t.relevanz != null && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-            Prio {t.relevanz}
-          </span>
-        )}
-        {isDue && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-            fällig
-          </span>
-        )}
       </div>
+      {t.kurzinfo && (
+        <p className="-mt-1 text-xs text-muted-foreground italic">{t.kurzinfo}</p>
+      )}
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <MapPin className="size-3 shrink-0" />
-        {[t.ort, t.hub ? `Standort ${t.hub}` : null].filter(Boolean).join(" · ") || "—"}
+        {[
+          t.ort,
+          placeKindLabel(t.kategorie) + (t.exklusiv ? "" : " · gemeinsamer Pool"),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
       </p>
+      {t.hub && (
+        <p className="flex flex-wrap items-center gap-x-1.5 rounded-lg bg-primary/[0.05] px-2 py-1 text-xs">
+          <span className="font-semibold text-primary">Standort {t.hub}:</span>
+          <span className="font-medium">
+            {t.hub_pdl ? `PDL ${t.hub_pdl}` : "keine PDL hinterlegt"}
+          </span>
+          {t.hub_pdl_phone && (
+            <a
+              href={`tel:${t.hub_pdl_phone}`}
+              className="flex items-center gap-1 font-medium text-primary hover:underline"
+            >
+              <Phone className="size-3" />
+              {t.hub_pdl_phone}
+            </a>
+          )}
+        </p>
+      )}
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
         <CalendarClock className="size-3 shrink-0" />
         {t.letzter_besuch
           ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder fällig ab ${formatIsoDate(t.naechster_besuch)}`
           : "Noch kein Kontakt"}
       </p>
+      <span className="flex-1" />
       {open ? (
         <div className="flex flex-col gap-2">
           <Textarea
