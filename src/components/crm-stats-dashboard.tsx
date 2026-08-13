@@ -248,6 +248,7 @@ export function CrmStatsDashboard({
         </p>
         <div className="flex gap-0.5 rounded-full border bg-card p-0.5 shadow-sm">
           {[
+            { v: 1, label: "Heute" },
             { v: 7, label: "7 Tage" },
             { v: 30, label: "30 Tage" },
             { v: 90, label: "90 Tage" },

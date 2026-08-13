@@ -235,6 +235,48 @@ function LeadIdChip({ id }: { id: string }) {
   );
 }
 
+/**
+ * Live-Timer "unbeantwortet seit …" oben rechts an offenen Leads — tickt
+ * sekündlich und eskaliert farblich (ab 15 Min amber, ab 1 Std rot).
+ * Startet erst nach dem Mount (kein Server/Client-Hydration-Konflikt).
+ */
+function UnansweredTimer({ since }: { since: string }) {
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  if (now == null) return null;
+  const ms = now - new Date(since).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const label =
+    h >= 48
+      ? `${Math.floor(h / 24)} Tage ${h % 24} Std`
+      : h > 0
+        ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+        : `${m}:${String(s).padStart(2, "0")}`;
+  return (
+    <span
+      title={`unbeantwortet seit ${exactStamp(since)}`}
+      className={cn(
+        "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums",
+        ms >= 3_600_000
+          ? "bg-red-100 text-red-800"
+          : ms >= 900_000
+            ? "bg-amber-100 text-amber-800"
+            : "bg-emerald-100 text-emerald-800",
+      )}
+    >
+      ⏱ {label}
+    </span>
+  );
+}
+
 /** Frisch = jünger als 1 Std und noch offen — nur dann darf etwas pulsieren. */
 function isFresh(l: InboundLead): boolean {
   const t = new Date(l.datum).getTime();
@@ -669,6 +711,7 @@ export function TeamWorkspace({
                       {l.bearbeiter}
                     </span>
                   )}
+                  {l.status === "offen" && <UnansweredTimer since={l.datum} />}
                 </div>
                 <LeadStammdaten
                   lead={l}
