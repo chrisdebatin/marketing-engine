@@ -438,7 +438,7 @@ export function TeamWorkspace({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {(view === "inbound" || (view === "tabs" && (monitor || tab === "inbound"))) && (
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-4">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-5">
           {canAct && inboundLog && (
             <div className="lg:sticky lg:top-4">
               <InboundCallLog
