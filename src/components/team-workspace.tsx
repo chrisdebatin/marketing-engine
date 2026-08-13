@@ -831,7 +831,7 @@ function InboundCallLog({
 }) {
   const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
-  const [quelle, setQuelle] = useState("telefon0800");
+  const [quelle, setQuelle] = useState("");
   const [notiz, setNotiz] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -910,7 +910,12 @@ function InboundCallLog({
           onChange={(e) => setQuelle(e.target.value)}
           className="h-9 rounded-lg border bg-background px-2 text-sm font-normal text-foreground"
         >
-          {LEAD_QUELLEN.map((q) => (
+          <option value="">Bitte wählen…</option>
+          {LEAD_QUELLEN.filter(
+            // Kanäle mit eigenem automatischen Eingang sind hier keine
+            // Antwort auf "wie aufmerksam geworden".
+            (q) => !["telefon0800", "recare", "agentur"].includes(q.key),
+          ).map((q) => (
             <option key={q.key} value={q.key}>
               {q.label}
             </option>
@@ -927,7 +932,7 @@ function InboundCallLog({
       <Button
         type="button"
         size="sm"
-        disabled={busy || (!name.trim() && !telefon.trim())}
+        disabled={busy || !quelle || (!name.trim() && !telefon.trim())}
         onClick={save}
       >
         {busy ? "Speichere…" : "Als Lead anlegen"}
