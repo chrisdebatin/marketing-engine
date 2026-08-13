@@ -8,7 +8,9 @@ import { simpleParser } from "mailparser";
  * weitergeleitet; die App holt ungelesene Mails ab und markiert sie gelesen.
  *
  * Env: LEADS_IMAP_USER (Gmail-Adresse), LEADS_IMAP_PASS (App-Passwort),
- * optional LEADS_IMAP_HOST (Default imap.gmail.com).
+ * optional LEADS_IMAP_HOST (Default imap.gmail.com) und LEADS_IMAP_FOLDER
+ * (Default INBOX) — mit einem Gmail-Filter "recare → Label leads" liest die
+ * App NUR dieses Label und lässt den restlichen Posteingang unangetastet.
  */
 
 export interface InboundMail {
@@ -36,10 +38,11 @@ export async function fetchUnseenMails(limit = 20): Promise<InboundMail[]> {
     logger: false,
   });
 
+  const folder = process.env.LEADS_IMAP_FOLDER || "INBOX";
   const mails: InboundMail[] = [];
   await client.connect();
   try {
-    const lock = await client.getMailboxLock("INBOX");
+    const lock = await client.getMailboxLock(folder);
     try {
       const unseen = await client.search({ seen: false });
       const uids = (Array.isArray(unseen) ? unseen : []).slice(-limit);
