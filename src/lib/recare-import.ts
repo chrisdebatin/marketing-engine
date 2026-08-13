@@ -1,0 +1,192 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getAccessToken, inboxMails } from "@/lib/outlook";
+import { normName } from "@/lib/crm-log";
+
+/**
+ * Recare-Mail-Import (SERVER ONLY): liest das angebundene Outlook-Postfach,
+ * erkennt (weitergeleitete) Recare-Anfragen, extrahiert die Falldaten per
+ * Claude und legt sie als lead_calls (quelle 'recare', status offen) an —
+ * sie erscheinen damit automatisch in Davinas Anfragen-Liste. Zusätzlich
+ * wird die Anfrage als Kontakt an der jeweiligen Klinik im CRM geloggt.
+ * Idempotenz über gemerkte Mail-IDs in app_settings.
+ */
+
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-8";
+const PROCESSED_KEY = "recare_processed_mail_ids";
+
+export interface RecareSyncResult {
+  imported: number;
+  skipped: number;
+  error: string | null;
+}
+
+function isRecareMail(m: { subject: string; fromAddress: string; preview: string }): boolean {
+  const hay = `${m.subject} ${m.fromAddress} ${m.preview}`.toLowerCase();
+  return hay.includes("recare");
+}
+
+/** HTML grob zu Text (Graph liefert meist HTML-Bodies). */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h\d)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function fetchBody(id: string): Promise<string | null> {
+  const token = await getAccessToken();
+  if (!token) return null;
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/messages/${encodeURIComponent(id)}?$select=body`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return null;
+  const body = (await res.json()) as { body?: { content?: string; contentType?: string } };
+  const content = body.body?.content ?? "";
+  return body.body?.contentType === "html" ? htmlToText(content) : content;
+}
+
+interface Extracted {
+  patient: string;
+  klinik: string;
+  ort: string;
+  versorgung: string;
+  telefon: string;
+  zusammenfassung: string;
+}
+
+async function extract(text: string): Promise<Extracted | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system:
+        "Du extrahierst Falldaten aus einer (weitergeleiteten) Recare-Anfrage einer Klinik an einen Pflegedienst. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. patient = Name oder Kürzel des Patienten; klinik = anfragendes Krankenhaus; ort = Stadt/PLZ der Versorgung; versorgung = Art (z. B. Intensivpflege, Grundpflege, Beatmung); telefon = Rückrufnummer falls genannt; zusammenfassung = 1–2 Sätze Kern der Anfrage.",
+      tools: [
+        {
+          name: "recare_anfrage",
+          description: "Extrahierte Recare-Anfrage.",
+          input_schema: {
+            type: "object",
+            properties: {
+              patient: { type: "string" },
+              klinik: { type: "string" },
+              ort: { type: "string" },
+              versorgung: { type: "string" },
+              telefon: { type: "string" },
+              zusammenfassung: { type: "string" },
+            },
+            required: ["patient", "klinik", "ort", "versorgung", "telefon", "zusammenfassung"],
+            additionalProperties: false,
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "recare_anfrage" },
+      messages: [{ role: "user", content: text.slice(0, 6000) }],
+    });
+    const tu = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    return tu ? (tu.input as unknown as Extracted) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function syncRecareMails(): Promise<RecareSyncResult> {
+  const admin = createAdminClient();
+
+  const mails = await inboxMails(50);
+  if (mails === null) {
+    return { imported: 0, skipped: 0, error: "outlook_not_connected" };
+  }
+
+  const { data: setting } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", PROCESSED_KEY)
+    .maybeSingle();
+  const processed = new Set<string>(
+    Array.isArray(setting?.value) ? (setting.value as string[]) : [],
+  );
+
+  const candidates = mails.filter((m) => !processed.has(m.id) && isRecareMail(m));
+  let imported = 0;
+  let skipped = 0;
+
+  for (const m of candidates) {
+    processed.add(m.id);
+    const body = (await fetchBody(m.id)) ?? m.preview;
+    const data = await extract(`Betreff: ${m.subject}\n\n${body}`);
+    if (!data) {
+      skipped++;
+      continue;
+    }
+
+    const notizTeile = [
+      data.zusammenfassung,
+      data.versorgung ? `Versorgung: ${data.versorgung}` : "",
+      data.ort ? `Ort: ${data.ort}` : "",
+    ].filter(Boolean);
+    const { error: insErr } = await admin.from("lead_calls").insert({
+      call_date: m.receivedAt.slice(0, 10),
+      quelle: "recare",
+      bereich: "pflege",
+      quelle_detail: data.klinik.slice(0, 200) || null,
+      lead_name: data.patient.slice(0, 200) || "(ohne Name)",
+      telefon: data.telefon.slice(0, 60) || null,
+      notiz: notizTeile.join(" · ").slice(0, 1000) || null,
+      status: "offen",
+    });
+    if (insErr) {
+      skipped++;
+      continue;
+    }
+    imported++;
+
+    // Recare-Anfrage sagt auch etwas über die Klinik-Beziehung: als
+    // Kontakt (art 'lead') am passenden CRM-Ziel mitloggen.
+    if (data.klinik) {
+      const { data: targets } = await admin
+        .from("crm_targets")
+        .select("id, hub_id, name")
+        .eq("kategorie", "krankenhaus");
+      const kn = normName(data.klinik);
+      const hit = (targets ?? []).find((t) => {
+        const tn = normName(t.name);
+        return tn === kn || (kn.length >= 8 && tn.includes(kn)) || (tn.length >= 8 && kn.includes(tn));
+      });
+      if (hit) {
+        await admin.from("crm_contacts").insert({
+          target_id: hit.id,
+          hub_id: hit.hub_id,
+          kontakt_art: "lead",
+          note: `Recare-Anfrage: ${data.zusammenfassung}`.slice(0, 500),
+          contact_date: m.receivedAt.slice(0, 10),
+          bearbeiter: "Recare-Import",
+        });
+      }
+    }
+  }
+
+  // Verarbeitete IDs merken (Kappe bei 300 — Posteingang liest eh nur 50).
+  await admin.from("app_settings").upsert({
+    key: PROCESSED_KEY,
+    value: [...processed].slice(-300),
+    updated_at: new Date().toISOString(),
+  });
+
+  return { imported, skipped, error: null };
+}

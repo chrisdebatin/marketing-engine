@@ -1284,6 +1284,15 @@ alter table public.crm_contacts add column if not exists bearbeiter text;
 notify pgrst, 'reload schema';
 
 -- ============================================================
+-- 0053_lead_ergebnis.sql
+-- ============================================================
+-- 0053: Ergebnis-Feld an Leads — v. a. für Recare-Anfragen: "Patient
+-- aufgenommen", "Keine Kapazität", "PDL nicht erreicht" oder Freitext.
+alter table public.lead_calls add column if not exists ergebnis text;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================
 -- seed.sql
 -- ============================================================
 -- Marketing-Engine – seed data

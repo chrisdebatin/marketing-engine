@@ -310,3 +310,8 @@ alter table public.crm_contacts add column if not exists bearbeiter text;
 
 notify pgrst, 'reload schema';
 select name, team, token from public.team_members order by team, name;
+
+-- ── 0053: Ergebnis-Feld an Leads (Recare: aufgenommen / keine Kapazität / …) ─
+alter table public.lead_calls add column if not exists ergebnis text;
+
+notify pgrst, 'reload schema';

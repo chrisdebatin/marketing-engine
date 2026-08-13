@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     target_id?: string;
     ansprechpartner?: string;
     notiz?: string;
+    ergebnis?: string;
   };
   const token = (body.token ?? "").trim();
   if (!token) return NextResponse.json({ error: "Token fehlt." }, { status: 400 });
@@ -76,6 +77,31 @@ export async function POST(req: Request) {
         {
           error: constraint
             ? "Status-Werte fehlen noch — bitte supabase/apply_all_pending.sql ausführen."
+            : "Speichern fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "recare-ergebnis") {
+    const id = (body.id ?? "").trim();
+    const ergebnis = (body.ergebnis ?? "").trim().slice(0, 300);
+    const status = (body.status ?? "").trim();
+    if (!id || !ergebnis || !["aufgenommen", "verloren", "kontaktiert"].includes(status)) {
+      return NextResponse.json({ error: "Ungültige Angaben." }, { status: 400 });
+    }
+    const { error } = await admin
+      .from("lead_calls")
+      .update({ ergebnis, status, bearbeiter: member.name })
+      .eq("id", id);
+    if (error) {
+      const colMissing = error.code === "PGRST204" || error.code === "42703";
+      return NextResponse.json(
+        {
+          error: colMissing
+            ? "Spalte ergebnis fehlt noch — bitte supabase/apply_all_pending.sql ausführen."
             : "Speichern fehlgeschlagen.",
         },
         { status: 500 },

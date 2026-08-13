@@ -642,6 +642,7 @@ export interface Database {
           status: string;
           telefon: string | null;
           email: string | null;
+          ergebnis: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -658,6 +659,7 @@ export interface Database {
           status?: string;
           telefon?: string | null;
           email?: string | null;
+          ergebnis?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_calls"]["Insert"]>;

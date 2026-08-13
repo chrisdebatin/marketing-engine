@@ -8,6 +8,7 @@ import {
   leadFullName,
   leadPhone,
 } from "@/lib/meta-lead-fields";
+import { syncRecareMails } from "@/lib/recare-import";
 import {
   TeamWorkspace,
   type InboundLead,
@@ -38,6 +39,17 @@ export default async function TeamMemberPage({
     .maybeSingle();
   if (!member || !member.active) notFound();
   const isCallcenter = member.team === "callcenter";
+
+  // Recare-Mails aus dem angebundenen Postfach einsammeln (idempotent) —
+  // neue Anfragen erscheinen direkt in der Liste. Fehler blockieren nichts.
+  let recareHint: string | null = null;
+  if (isCallcenter) {
+    const sync = await syncRecareMails().catch(() => null);
+    if (sync?.error === "outlook_not_connected") {
+      recareHint =
+        "Recare-Import: kein Outlook-Postfach angebunden (Admin → E-Mail-Anbindung).";
+    }
+  }
 
   const [{ data: callRows }, { data: metaRows }, { data: targetRows }, { data: hubRows }] =
     await Promise.all([
@@ -85,6 +97,7 @@ export default async function TeamMemberPage({
       status: c.status ?? "offen",
       bearbeiter: c.bearbeiter ?? null,
       notiz: c.notiz ?? null,
+      ergebnis: c.ergebnis ?? null,
       hub: hubName(c.hub_id),
     });
   }
@@ -103,6 +116,7 @@ export default async function TeamMemberPage({
         status: m.status,
         bearbeiter: m.bearbeiter ?? null,
         notiz: null,
+        ergebnis: null,
         hub: null,
       });
     }
@@ -148,6 +162,12 @@ export default async function TeamMemberPage({
           Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert.
         </p>
       </div>
+
+      {recareHint && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {recareHint}
+        </p>
+      )}
 
       <TeamWorkspace
         token={token}

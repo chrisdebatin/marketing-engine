@@ -31,6 +31,7 @@ export interface InboundLead {
   status: string;
   bearbeiter: string | null;
   notiz: string | null;
+  ergebnis: string | null;
   hub: string | null;
 }
 
@@ -259,6 +260,11 @@ export function TeamWorkspace({
                 {l.notiz && (
                   <p className="text-xs text-muted-foreground">„{l.notiz}“</p>
                 )}
+                {l.ergebnis && (
+                  <p className="text-xs font-medium text-emerald-800">
+                    Ergebnis: {l.ergebnis}
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {!l.bearbeiter && (
                     <Button type="button" size="sm" onClick={() => claim(l)}>
@@ -266,44 +272,57 @@ export function TeamWorkspace({
                       Übernehmen
                     </Button>
                   )}
-                  {l.status === "offen" && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setStatus(l, "kontaktiert")}
-                    >
-                      <Check className="size-3.5" /> kontaktiert
-                    </Button>
-                  )}
-                  {["offen", "kontaktiert"].includes(l.status) && (
-                    <>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-                        onClick={() =>
-                          setStatus(
-                            l,
-                            l.quelle === "recare" ? "aufgenommen" : "erstgespraech",
+                  {l.quelle === "recare" ? (
+                    ["offen", "kontaktiert"].includes(l.status) && (
+                      <RecareOutcome
+                        lead={l}
+                        token={token}
+                        memberName={memberName}
+                        onDone={(patch) =>
+                          setInbound((cur) =>
+                            cur.map((x) =>
+                              x.id === l.id
+                                ? { ...x, ...patch, bearbeiter: memberName }
+                                : x,
+                            ),
                           )
                         }
-                      >
-                        <Check className="size-3.5" />
-                        {l.quelle === "recare"
-                          ? "aufgenommen"
-                          : "Erstgespräch vereinbart"}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-muted-foreground"
-                        onClick={() => setStatus(l, "verloren")}
-                      >
-                        <X className="size-3.5" /> verloren
-                      </Button>
+                      />
+                    )
+                  ) : (
+                    <>
+                      {l.status === "offen" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setStatus(l, "kontaktiert")}
+                        >
+                          <Check className="size-3.5" /> kontaktiert
+                        </Button>
+                      )}
+                      {["offen", "kontaktiert"].includes(l.status) && (
+                        <>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                            onClick={() => setStatus(l, "erstgespraech")}
+                          >
+                            <Check className="size-3.5" /> Erstgespräch vereinbart
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-muted-foreground"
+                            onClick={() => setStatus(l, "verloren")}
+                          >
+                            <X className="size-3.5" /> verloren
+                          </Button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -331,6 +350,112 @@ export function TeamWorkspace({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Recare-Ausgang: vier Optionen — aufgenommen / keine Kapazität /
+ * PDL nicht erreicht / Freitext. Setzt Ergebnis + passenden Status.
+ */
+function RecareOutcome({
+  lead,
+  token,
+  memberName,
+  onDone,
+}: {
+  lead: InboundLead;
+  token: string;
+  memberName: string;
+  onDone: (patch: Partial<InboundLead>) => void;
+}) {
+  const [freitextOpen, setFreitextOpen] = useState(false);
+  const [freitext, setFreitext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  void memberName;
+
+  async function set(ergebnis: string, status: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await teamAction(token, {
+        action: "recare-ergebnis",
+        id: lead.id,
+        ergebnis,
+        status,
+      });
+      onDone({ ergebnis, status });
+      setFreitextOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+          onClick={() => set("Patient aufgenommen", "aufgenommen")}
+        >
+          <Check className="size-3.5" /> Patient aufgenommen
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => set("Keine Kapazität", "verloren")}
+        >
+          <X className="size-3.5" /> Keine Kapazität
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => set("PDL nicht erreicht", "kontaktiert")}
+        >
+          <PhoneCall className="size-3.5" /> PDL nicht erreicht
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          className="text-muted-foreground"
+          onClick={() => setFreitextOpen((s) => !s)}
+        >
+          Anderes…
+        </Button>
+      </div>
+      {freitextOpen && (
+        <div className="flex w-full flex-col gap-1.5">
+          <Textarea
+            value={freitext}
+            onChange={(e) => setFreitext(e.target.value)}
+            rows={2}
+            placeholder="Was ist passiert? (z. B. Klinik hat zurückgezogen)"
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="self-start"
+            disabled={busy || !freitext.trim()}
+            onClick={() => set(freitext.trim(), "kontaktiert")}
+          >
+            {busy ? "Speichere…" : "Ergebnis speichern"}
+          </Button>
+        </div>
+      )}
+      {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );
 }
