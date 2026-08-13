@@ -3,7 +3,6 @@ import { buildTeamInbound } from "@/lib/team-leads";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { LeadTeamSwitch } from "@/components/lead-team-switch";
 import { CrmIntro } from "@/components/crm-intro";
-import { CrmAdminSection } from "@/components/crm-admin-section";
 import { TeamWorkspace } from "@/components/team-workspace";
 import { FrontofficeSection } from "./frontoffice-section";
 import { ZieleSection } from "./ziele-section";
@@ -48,15 +47,6 @@ export default async function CrmPage() {
       <PdlTabs
         defaultId="leads"
         tabs={[
-          ...(session.isAdmin
-            ? [
-                {
-                  id: "admin",
-                  label: "CRM-Admin",
-                  content: <CrmAdminSection />,
-                },
-              ]
-            : []),
           {
             id: "leads",
             label: "Anstehende Leads",

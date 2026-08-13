@@ -68,16 +68,33 @@ export const ADMIN_NAV_ITEM: NavItem = {
   label: "Admin",
   Icon: Settings,
 };
+/** Nur für Admins sichtbar: Auswertung direkt unter "CRM & Leads". */
+export const CRM_ADMIN_NAV_ITEM: NavItem = {
+  href: "/crm-admin",
+  label: "CRM-Admin",
+  Icon: ChartColumn,
+};
 export function navGroups(isAdmin: boolean): NavGroup[] {
   if (!isAdmin) return NAV_GROUPS;
-  return NAV_GROUPS.map((g) =>
-    g.title === "System" ? { ...g, items: [...g.items, ADMIN_NAV_ITEM] } : g,
-  );
+  return NAV_GROUPS.map((g) => {
+    if (g.title === "System") return { ...g, items: [...g.items, ADMIN_NAV_ITEM] };
+    if (g.title === "Standorte") {
+      return {
+        ...g,
+        items: g.items.flatMap((i) =>
+          i.href === "/crm" ? [i, CRM_ADMIN_NAV_ITEM] : [i],
+        ),
+      };
+    }
+    return g;
+  });
 }
 /** Flache Liste für die mobile Top-Bar. */
 export function navItems(isAdmin: boolean): NavItem[] {
   return navGroups(isAdmin).flatMap((g) => g.items);
 }
 export function isNavActive(href: string, pathname: string): boolean {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+  if (href === "/") return pathname === "/";
+  // exakt oder als Pfad-Segment — sonst wäre /crm auch auf /crm-admin aktiv
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
