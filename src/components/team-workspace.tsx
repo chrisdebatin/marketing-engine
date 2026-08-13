@@ -435,14 +435,22 @@ export function TeamWorkspace({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {(view === "inbound" || (view === "tabs" && (monitor || tab === "inbound"))) && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-4">
           {canAct && (
-            <InboundCallLog
-              token={token}
-              memberName={memberName}
-              onCreated={(lead) => setInbound((cur) => [lead, ...cur])}
-            />
+            <div className="lg:sticky lg:top-4">
+              <InboundCallLog
+                token={token}
+                memberName={memberName}
+                onCreated={(lead) => setInbound((cur) => [lead, ...cur])}
+              />
+            </div>
           )}
+          <div
+            className={cn(
+              "flex min-w-0 flex-col gap-2",
+              !canAct && "lg:col-span-2",
+            )}
+          >
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
           <div className="flex flex-wrap items-center gap-2">
             {[...sourceCounts.entries()]
@@ -735,6 +743,7 @@ export function TeamWorkspace({
               </ul>
             </div>
           ))}
+          </div>
         </div>
       )}
 
@@ -773,7 +782,6 @@ function InboundCallLog({
   memberName: string;
   onCreated: (lead: InboundLead) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [telefon, setTelefon] = useState("");
   const [quelle, setQuelle] = useState("telefon0800");
@@ -820,7 +828,6 @@ function InboundCallLog({
       setName("");
       setTelefon("");
       setNotiz("");
-      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler");
     } finally {
@@ -828,47 +835,38 @@ function InboundCallLog({
     }
   }
 
-  if (!open) {
-    return (
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="self-start"
-        onClick={() => setOpen(true)}
-      >
-        <PhoneCall className="size-3.5" /> Inbound-Anruf loggen
-      </Button>
-    );
-  }
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm">
-      <p className="text-sm font-semibold">Inbound-Anruf loggen</p>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Name des Anrufers"
-          className="h-9 rounded-lg border bg-background px-2.5 text-sm"
-        />
-        <input
-          value={telefon}
-          onChange={(e) => setTelefon(e.target.value)}
-          placeholder="Telefonnummer"
-          className="h-9 rounded-lg border bg-background px-2.5 text-sm"
-        />
-        <select
-          value={quelle}
-          onChange={(e) => setQuelle(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm"
-        >
-          {LEAD_QUELLEN.map((q) => (
-            <option key={q.key} value={q.key}>
-              {q.label}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5 shadow-sm">
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <PhoneCall className="size-4 text-primary" />
+        Inbound-Anruf loggen
+      </p>
+      <p className="-mt-1 text-xs text-muted-foreground">
+        Anruf angenommen? Hier eintragen — erscheint sofort als offener Lead.
+      </p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name des Anrufers"
+        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+      />
+      <input
+        value={telefon}
+        onChange={(e) => setTelefon(e.target.value)}
+        placeholder="Telefonnummer"
+        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+      />
+      <select
+        value={quelle}
+        onChange={(e) => setQuelle(e.target.value)}
+        className="h-9 rounded-lg border bg-background px-2 text-sm"
+      >
+        {LEAD_QUELLEN.map((q) => (
+          <option key={q.key} value={q.key}>
+            {q.label}
+          </option>
+        ))}
+      </select>
       <Textarea
         value={notiz}
         onChange={(e) => setNotiz(e.target.value)}
@@ -876,14 +874,14 @@ function InboundCallLog({
         placeholder="Worum ging es? (optional)"
       />
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex gap-2">
-        <Button type="button" size="sm" disabled={busy || (!name.trim() && !telefon.trim())} onClick={save}>
-          {busy ? "Speichere…" : "Als Lead anlegen"}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Abbrechen
-        </Button>
-      </div>
+      <Button
+        type="button"
+        size="sm"
+        disabled={busy || (!name.trim() && !telefon.trim())}
+        onClick={save}
+      >
+        {busy ? "Speichere…" : "Als Lead anlegen"}
+      </Button>
     </div>
   );
 }
