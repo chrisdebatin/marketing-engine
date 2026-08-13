@@ -2,7 +2,59 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
+import { hubCoords } from "@/lib/hub-coords";
 import type { InboundLead, OutboundTarget } from "@/components/team-workspace";
+
+// PLZ → Koordinaten (zippopotam.us, in-memory gecacht) → nächstgelegener
+// Hub. Wichtig für Recare: die Klinik steht oft in einer Stadt ohne Hub,
+// entscheidend ist die Patienten-PLZ aus der Anfrage.
+const plzCache = new Map<string, [number, number] | null>();
+async function plzToCoords(plz: string): Promise<[number, number] | null> {
+  if (plzCache.has(plz)) return plzCache.get(plz)!;
+  let coords: [number, number] | null = null;
+  try {
+    const res = await fetch(`https://api.zippopotam.us/de/${plz}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (res.ok) {
+      const json = (await res.json()) as {
+        places?: { latitude: string; longitude: string }[];
+      };
+      const p = json.places?.[0];
+      if (p) coords = [Number(p.latitude), Number(p.longitude)];
+    }
+  } catch {
+    /* offline/Timeout → kein Vorschlag */
+  }
+  plzCache.set(plz, coords);
+  return coords;
+}
+
+function distKm(a: [number, number], b: [number, number]): number {
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a[0] * Math.PI) / 180) * Math.cos((b[0] * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.sqrt(s));
+}
+
+/** Nächster Hub zur PLZ (max. 60 km, sonst kein Vorschlag). */
+async function nearestHubByPlz(
+  plz: string,
+  hubRows: { id: string; name: string }[],
+): Promise<string | null> {
+  const coords = await plzToCoords(plz);
+  if (!coords) return null;
+  let best: { id: string; km: number } | null = null;
+  for (const h of hubRows) {
+    const hc = hubCoords(h.name);
+    if (!hc) continue;
+    const km = distKm(coords, hc);
+    if (!best || km < best.km) best = { id: h.id, km };
+  }
+  return best && best.km <= 60 ? best.id : null;
+}
 
 /**
  * Inbound-Leads eines Teams zusammensetzen (SERVER ONLY) — gemeinsam
@@ -31,13 +83,15 @@ export async function buildTeamInbound(
             .order("created_time", { ascending: false })
             .limit(200)
         : Promise.resolve({ data: [] as never[] }),
-      admin.from("hubs").select("id, name, pdl_name"),
+      admin.from("hubs").select("id, name, pdl_name, pdl_phone"),
     ]);
 
   const hubName = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
   const hubPdl = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.pdl_name ?? null;
+  const hubPdlPhone = (id: string | null) =>
+    (hubRows ?? []).find((h) => h.id === id)?.pdl_phone ?? null;
 
   // Standort-Vorschlag: normalisierter Hub-Name im Lead-Text (Kampagne,
   // Klinik, Notiz) — "Kunden-BadOeynhausen-…" trifft "Bad Oeynhausen".
@@ -58,6 +112,14 @@ export async function buildTeamInbound(
       ? CALLCENTER_QUELLEN.has(c.quelle)
       : !CALLCENTER_QUELLEN.has(c.quelle);
     if (!mine) continue;
+    // Vorschlag: erst Namens-Match, bei Recare zusätzlich über die
+    // Patienten-PLZ aus der Notiz ("Ort: 41189") → nächstgelegener Hub.
+    const text = `${c.quelle_detail ?? ""} ${c.notiz ?? ""} ${c.lead_name ?? ""}`;
+    let vorschlagId = suggestHub(text);
+    if (!vorschlagId && c.quelle === "recare") {
+      const plz = /\b(\d{5})\b/.exec(c.notiz ?? "")?.[1];
+      if (plz) vorschlagId = await nearestHubByPlz(plz, hubRows ?? []);
+    }
     inbound.push({
       kind: "call",
       id: c.id,
@@ -77,12 +139,12 @@ export async function buildTeamInbound(
       zugewiesen_at: c.zugewiesen_at ?? null,
       pdl_bestaetigt_at: c.pdl_bestaetigt_at ?? null,
       pdl_ergebnis: c.pdl_ergebnis ?? null,
-      vorschlag_hub_id: suggestHub(
-        `${c.quelle_detail ?? ""} ${c.notiz ?? ""} ${c.lead_name ?? ""}`,
-      ),
+      vorschlag_hub_id: vorschlagId,
+      vorschlag_hub: hubName(vorschlagId),
+      vorschlag_pdl: hubPdl(vorschlagId),
+      vorschlag_pdl_phone: hubPdlPhone(vorschlagId),
       direct_booking: isDirectBookingHub(
-        hubName(c.zugewiesen_hub_id ?? null) ??
-          hubName(suggestHub(`${c.quelle_detail ?? ""} ${c.notiz ?? ""}`) ?? null),
+        hubName(c.zugewiesen_hub_id ?? null) ?? hubName(vorschlagId),
       ),
     });
   }
@@ -109,6 +171,9 @@ export async function buildTeamInbound(
         pdl_bestaetigt_at: m.pdl_bestaetigt_at ?? null,
         pdl_ergebnis: m.pdl_ergebnis ?? null,
         vorschlag_hub_id: suggestHub(m.campaign_name ?? ""),
+        vorschlag_hub: hubName(suggestHub(m.campaign_name ?? "")),
+        vorschlag_pdl: hubPdl(suggestHub(m.campaign_name ?? "")),
+        vorschlag_pdl_phone: hubPdlPhone(suggestHub(m.campaign_name ?? "")),
         direct_booking: isDirectBookingHub(
           hubName(m.zugewiesen_hub_id ?? null) ??
             hubName(suggestHub(m.campaign_name ?? "") ?? null),

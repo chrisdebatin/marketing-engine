@@ -17,6 +17,11 @@ export const maxDuration = 60;
  */
 export default async function CrmPage() {
   const session = await requireSession();
+  // Lead-Mails (Recare, verpasste Anrufe) auch beim /crm-Aufruf einsammeln —
+  // sonst erscheinen neue Mails erst, wenn jemand eine /t-Seite öffnet.
+  // Gedrosselt (1×/Minute) und fehler-tolerant.
+  const { syncRecareMails } = await import("@/lib/recare-import");
+  await syncRecareMails().catch(() => null);
   const [ksInbound, ccInbound, ksOutbound, ccOutbound] = await Promise.all([
     buildTeamInbound("kundenservice"),
     buildTeamInbound("callcenter"),

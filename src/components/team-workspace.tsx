@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Building2,
   CalendarClock,
@@ -45,6 +46,10 @@ export interface InboundLead {
   pdl_bestaetigt_at: string | null;
   pdl_ergebnis: string | null;
   vorschlag_hub_id: string | null;
+  /** Vorgeschlagener Standort samt PDL-Kontakt — spart den Blick in den Hubs-Reiter. */
+  vorschlag_hub: string | null;
+  vorschlag_pdl: string | null;
+  vorschlag_pdl_phone: string | null;
   /** Düsseldorf/Gevelsberg: Team bucht Termin selbst + legt in MediFox (DUS) an. */
   direct_booking: boolean;
 }
@@ -64,11 +69,11 @@ export interface OutboundTarget {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  offen: "offen",
-  kontaktiert: "kontaktiert",
-  erstgespraech: "Erstgespräch ✓",
-  aufgenommen: "aufgenommen ✓",
-  verloren: "verloren",
+  offen: "Offen",
+  kontaktiert: "Kontaktiert",
+  erstgespraech: "Erstgespräch",
+  aufgenommen: "Aufgenommen",
+  verloren: "Verloren",
 };
 
 const STATUS_TONE: Record<string, string> = {
@@ -99,111 +104,18 @@ const QUELLE_ICON: Record<string, LucideIcon> = {
   agentur: Mail,
 };
 
-/**
- * Herkunfts-Kästchen links neben der Karte: Quellen-Icon + geschwungene
- * Linie in die Karte — "der kommt von Meta" auf einen Blick.
- */
-function SourceRail({ quelle }: { quelle: string }) {
+/** Herkunfts-Icon in der Karte: "der kommt von Meta" auf einen Blick. */
+function SourceBadge({ quelle }: { quelle: string }) {
   const Icon = QUELLE_ICON[quelle] ?? Inbox;
   return (
-    <div className="hidden w-11 shrink-0 flex-col items-center pt-2 sm:flex">
-      <div
-        className={cn(
-          "flex size-9 items-center justify-center rounded-xl border shadow-sm",
-          QUELLE_TONE[quelle] ?? "border-border bg-muted text-muted-foreground",
-        )}
-        title={leadQuelleLabel(quelle) || quelle}
-      >
-        <Icon className="size-4" />
-      </div>
-      <svg viewBox="0 0 24 30" className="mt-0.5 h-8 w-6 text-border" fill="none" aria-hidden>
-        <path
-          d="M12 0 v8 q0 14 12 14"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
-    </div>
-  );
-}
-
-/**
- * Vertikale Timeline im rechten Kartenbereich: dieselben Schritte wie der
- * Prozess, mit Zeitstempeln, wo bekannt (Eingang, Übergabe, PDL-Bestätigung).
- */
-function CardTimeline({ lead }: { lead: InboundLead }) {
-  const { steps, lost } = processInfo(lead);
-  const zeit = (iso: string | null) =>
-    iso
-      ? new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) +
-        " " +
-        new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
-      : null;
-  const stampFor = (label: string): string | null => {
-    if (label === "Eingegangen") return zeit(lead.datum);
-    if (label === "Übergeben") return zeit(lead.zugewiesen_at);
-    if (label === "Aufgenommen") return zeit(lead.pdl_bestaetigt_at);
-    return null;
-  };
-  return (
-    <div className="hidden w-44 shrink-0 border-l pl-4 lg:block">
-      <ol className="flex flex-col">
-        {steps.map((s, i) => (
-          <li key={s.label} className="relative flex gap-2.5 pb-3 last:pb-0">
-            {i < steps.length - 1 && (
-              <span
-                className={cn(
-                  "absolute top-4 left-[5px] h-[calc(100%-0.5rem)] w-px",
-                  s.done && !lost ? "bg-emerald-300" : "bg-border",
-                )}
-              />
-            )}
-            <span
-              className={cn(
-                "z-10 mt-1 size-[11px] shrink-0 rounded-full border-2",
-                lost
-                  ? "border-muted-foreground/30 bg-muted"
-                  : s.done
-                    ? "border-emerald-500 bg-emerald-500"
-                    : s.current
-                      ? "animate-pulse border-primary bg-background"
-                      : "border-border bg-background",
-              )}
-            />
-            <div className="min-w-0">
-              <p
-                className={cn(
-                  "text-xs leading-4",
-                  lost
-                    ? "text-muted-foreground/60"
-                    : s.done
-                      ? "font-medium text-emerald-800"
-                      : s.current
-                        ? "font-semibold text-primary"
-                        : "text-muted-foreground/70",
-                )}
-              >
-                {s.label}
-              </p>
-              {stampFor(s.label) && (
-                <p className="text-[10px] text-muted-foreground">{stampFor(s.label)}</p>
-              )}
-              {s.label === "Übergeben" && lead.zugewiesen_hub && (
-                <p className="truncate text-[10px] text-muted-foreground">
-                  {lead.zugewiesen_hub}
-                  {lead.zugewiesen_pdl ? ` · ${lead.zugewiesen_pdl}` : ""}
-                </p>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-      {lost && (
-        <p className="mt-1 text-[10px] font-medium text-muted-foreground">
-          verloren{lead.ergebnis ? ` — ${lead.ergebnis}` : ""}
-        </p>
+    <div
+      className={cn(
+        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border",
+        QUELLE_TONE[quelle] ?? "border-border bg-muted text-muted-foreground",
       )}
+      title={leadQuelleLabel(quelle) || quelle}
+    >
+      <Icon className="size-4" />
     </div>
   );
 }
@@ -247,7 +159,7 @@ function processInfo(l: InboundLead): {
 
   let next: string | null = null;
   if (lost) next = null;
-  else if (aufgenommen) next = "abgeschlossen ✓";
+  else if (aufgenommen) next = "Abgeschlossen";
   else if (uebergeben) next = "Auf Rückmeldung der PDL warten";
   else if (l.quelle === "recare")
     next = "PDL anrufen & Kapazität klären, dann übergeben";
@@ -270,10 +182,9 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
   const { steps, next, lost } = processInfo(lead);
   return (
     <div className="flex flex-col gap-1">
-      {/* horizontaler Stepper nur auf kleinen Screens — ab lg übernimmt die Karten-Timeline rechts */}
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] lg:hidden">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs">
         {steps.map((s, i) => (
-          <span key={s.label} className="flex items-center gap-1">
+          <span key={s.label} className="flex items-center gap-1" title={stampFor(lead, s.label) ?? undefined}>
             {i > 0 && <span className="text-muted-foreground/40">›</span>}
             <span
               className={cn(
@@ -301,14 +212,29 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
       {next && (
         <p className="text-xs">
           <span className="font-semibold text-primary">Nächster Schritt:</span>{" "}
-          <span className={next === "abgeschlossen ✓" ? "text-emerald-700" : ""}>{next}</span>
+          <span className={next === "Abgeschlossen" ? "text-emerald-700" : ""}>{next}</span>
         </p>
       )}
     </div>
   );
 }
 
-/** Verstrichene Zeit seit Eingang — groß auf der Karte („vor 23 Min"). */
+/** Zeitstempel je Prozessschritt (für Tooltips am Stepper). */
+function stampFor(lead: InboundLead, label: string): string | null {
+  const zeit = (iso: string | null) => (iso ? exactStamp(iso) : null);
+  if (label === "Eingegangen") return zeit(lead.datum);
+  if (label === "Übergeben") return zeit(lead.zugewiesen_at);
+  if (label === "Aufgenommen") return zeit(lead.pdl_bestaetigt_at);
+  return null;
+}
+
+/** Frisch = jünger als 1 Std und noch offen — nur dann darf etwas pulsieren. */
+function isFresh(l: InboundLead): boolean {
+  const t = new Date(l.datum).getTime();
+  return l.status === "offen" && !Number.isNaN(t) && Date.now() - t < 3_600_000;
+}
+
+/** Verstrichene Zeit seit Eingang („vor 23 Min"). */
 function elapsedLabel(iso: string): string {
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return "—";
@@ -411,9 +337,11 @@ export function TeamWorkspace({
   const [showDone, setShowDone] = useState(false);
   const canAct = !monitor || editable;
 
-  // Auto-Aktualisierung: alle 20 Sekunden neu laden — neue Anfragen ploppen
-  // oben auf. Pausiert beim Tippen und in Hintergrund-Tabs; der Mail-Abruf
-  // selbst ist serverseitig auf 1×/Minute gedrosselt.
+  const router = useRouter();
+
+  // Auto-Aktualisierung: sanftes Server-Refresh (Scroll, Fokus und offene
+  // Panels bleiben erhalten) statt Full-Reload. Pausiert beim Tippen und in
+  // Hintergrund-Tabs; der Mail-Abruf ist serverseitig gedrosselt.
   useEffect(() => {
     if (monitor) return;
     const id = setInterval(() => {
@@ -421,11 +349,15 @@ export function TeamWorkspace({
       const typing =
         el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
       if (!typing && document.visibilityState === "visible") {
-        window.location.reload();
+        router.refresh();
       }
-    }, 20 * 1000);
+    }, 45 * 1000);
     return () => clearInterval(id);
-  }, [monitor]);
+  }, [monitor, router]);
+
+  // Frische Server-Daten nach refresh in den lokalen State übernehmen.
+  useEffect(() => setInbound(initialInbound), [initialInbound]);
+  useEffect(() => setOutbound(initialOutbound), [initialOutbound]);
 
   const openInbound = inbound.filter((l) =>
     ["offen", "kontaktiert"].includes(l.status),
@@ -571,7 +503,7 @@ export function TeamWorkspace({
                   {n} × {leadQuelleLabel(q) || q}
                 </span>
               ))}
-            <span className="ml-auto text-[11px] text-muted-foreground">
+            <span className="ml-auto text-xs text-muted-foreground">
               neueste zuerst · aktualisiert sich automatisch
             </span>
             {doneInbound > 0 && (
@@ -603,46 +535,44 @@ export function TeamWorkspace({
               </p>
               <ul className="flex flex-col gap-2">
                 {g.leads.map((l) => (
-              <li key={`${l.kind}-${l.id}`} className="flex items-stretch gap-2">
-                <SourceRail quelle={l.quelle} />
-                <div className="flex min-w-0 flex-1 gap-4 rounded-xl border bg-card p-3.5 shadow-sm">
+              <li
+                key={`${l.kind}-${l.id}`}
+                className="flex min-w-0 gap-3 rounded-xl border bg-card p-4 shadow-sm"
+              >
+                <SourceBadge quelle={l.quelle} />
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-2 text-xl leading-6 font-bold tabular-nums">
-                    {relTime(l.datum) && l.status === "offen" && (
-                      <span
-                        className="size-2 animate-pulse rounded-full bg-primary"
-                        title="neu"
-                      />
-                    )}
-                    {elapsedLabel(l.datum)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    eingegangen {exactStamp(l.datum)}
-                  </span>
-                  <span className="text-base font-semibold">{l.name}</span>
-                  <span
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                      QUELLE_TONE[l.quelle] ?? "text-muted-foreground",
-                    )}
-                  >
+                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                  <span className="text-base font-semibold text-foreground">{l.name}</span>
+                  <span className="rounded-full border px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {leadQuelleLabel(l.quelle) || l.quelle}
                     {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
                   </span>
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium",
                       STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
                     )}
                   >
+                    <span className="size-1.5 rounded-full bg-current opacity-70" />
                     {STATUS_LABEL[l.status] ?? l.status}
                   </span>
                   {l.bearbeiter && (
-                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground/80">
                       {l.bearbeiter}
                     </span>
                   )}
+                  <span
+                    title={`eingegangen ${exactStamp(l.datum)}`}
+                    className={cn(
+                      "ml-auto flex items-center gap-1.5 text-sm font-medium tabular-nums",
+                      isFresh(l) ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    {isFresh(l) && (
+                      <span className="size-1.5 animate-pulse rounded-full bg-primary" title="neu" />
+                    )}
+                    {elapsedLabel(l.datum)}
+                  </span>
                 </div>
                 <p className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm">
                   {l.telefon && (
@@ -667,6 +597,27 @@ export function TeamWorkspace({
                     <span className="text-xs text-muted-foreground">{l.hub}</span>
                   )}
                 </p>
+                {!l.zugewiesen_hub && l.vorschlag_hub && l.vorschlag_pdl && (
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-primary/[0.05] px-2.5 py-1.5 text-xs">
+                    <span className="font-semibold text-primary">
+                      Ansprechpartner {l.vorschlag_hub}:
+                    </span>
+                    <span className="font-medium">PDL {l.vorschlag_pdl}</span>
+                    {l.vorschlag_pdl_phone ? (
+                      <a
+                        href={`tel:${l.vorschlag_pdl_phone}`}
+                        className="flex items-center gap-1 font-medium text-primary hover:underline"
+                      >
+                        <Phone className="size-3" />
+                        {l.vorschlag_pdl_phone}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        (keine Nummer hinterlegt — Admin → Hub)
+                      </span>
+                    )}
+                  </p>
+                )}
                 <LeadNote
                   lead={l}
                   canAct={canAct}
@@ -774,7 +725,7 @@ export function TeamWorkspace({
                           variant="outline"
                           onClick={() => setStatus(l, "kontaktiert")}
                         >
-                          <Check className="size-3.5" /> kontaktiert
+                          <Check className="size-3.5" /> Kontaktiert
                         </Button>
                       )}
                       {["offen", "kontaktiert"].includes(l.status) && (
@@ -802,7 +753,8 @@ export function TeamWorkspace({
                     </>
                   ))}
                 </div>
-                {canAct && !l.zugewiesen_hub && l.status !== "verloren" && (
+                {canAct && !l.zugewiesen_hub && l.status !== "verloren" &&
+                  (l.status === "erstgespraech" || l.quelle === "recare") && (
                   <AssignHub
                     lead={l}
                     hubs={hubs}
@@ -818,8 +770,6 @@ export function TeamWorkspace({
                     }
                   />
                 )}
-                </div>
-                <CardTimeline lead={l} />
                 </div>
               </li>
                 ))}
@@ -903,6 +853,9 @@ function InboundCallLog({
         pdl_bestaetigt_at: null,
         pdl_ergebnis: null,
         vorschlag_hub_id: null,
+        vorschlag_hub: null,
+        vorschlag_pdl: null,
+        vorschlag_pdl_phone: null,
         direct_booking: false,
       });
       setName("");
@@ -1071,7 +1024,7 @@ function LostReason({ onSave }: { onSave: (grund: string) => void }) {
         className="text-muted-foreground"
         onClick={() => setOpen(true)}
       >
-        <X className="size-3.5" /> verloren
+        <X className="size-3.5" /> Verloren
       </Button>
     );
   }
@@ -1268,7 +1221,13 @@ function AssignHub({
             </option>
           ))}
         </select>
-        <Button type="button" size="sm" disabled={busy || !hubId} onClick={assign}>
+        <Button
+          type="button"
+          size="sm"
+          variant={lead.status === "erstgespraech" || lead.quelle === "recare" ? "default" : "outline"}
+          disabled={busy || !hubId}
+          onClick={assign}
+        >
           {busy ? "Übergebe…" : "Übergeben + PDL informieren"}
         </Button>
       </div>
@@ -1425,17 +1384,17 @@ function OutboundRow({
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="font-medium">{t.name}</span>
-        <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="rounded-full border px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {placeKindLabel(t.kategorie)}
           {t.exklusiv ? "" : " · gemeinsamer Pool"}
         </span>
         {t.relevanz != null && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
             Prio {t.relevanz}
           </span>
         )}
         {isDue && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
             fällig
           </span>
         )}
