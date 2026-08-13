@@ -36,6 +36,8 @@ export async function POST(req: Request) {
     ansprechpartner?: string;
     notiz?: string;
     ergebnis?: string;
+    telefon?: string;
+    quelle?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -111,6 +113,76 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    await markFirstTouch(id).catch(() => {});
+    return NextResponse.json({ ok: true });
+  }
+
+  // Inbound-Anruf direkt aus der Leads-Ansicht loggen → erscheint sofort als
+  // offener Lead mit denselben Optionen wie alle anderen.
+  if (action === "log-inbound") {
+    const name = (body.ansprechpartner ?? "").trim().slice(0, 200);
+    const telefon = (body.telefon ?? "").trim().slice(0, 60);
+    const quelle = (body.quelle ?? "").trim() || "telefon0800";
+    const notiz = (body.notiz ?? "").trim().slice(0, 1000);
+    if (!name && !telefon) {
+      return NextResponse.json({ error: "Name oder Telefonnummer angeben." }, { status: 400 });
+    }
+    const now = new Date().toISOString();
+    const values = {
+      call_date: now.slice(0, 10),
+      quelle,
+      bereich: "pflege",
+      lead_name: name || "Inbound-Anruf",
+      telefon: telefon || null,
+      notiz: notiz || null,
+      status: "offen",
+      bearbeiter: member.name,
+    };
+    let { data: row, error } = await admin
+      .from("lead_calls")
+      .insert({ ...values, erstbearbeitet_at: now })
+      .select("id, created_at")
+      .single();
+    if (error && (error.code === "PGRST204" || error.code === "42703")) {
+      // Migration 0055 noch nicht eingespielt — ohne Stempel loggen.
+      ({ data: row, error } = await admin
+        .from("lead_calls")
+        .insert(values)
+        .select("id, created_at")
+        .single());
+    }
+    if (error || !row) {
+      return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, id: row.id, created_at: row.created_at ?? now });
+  }
+
+  // Übergabe an die PDL zurücknehmen (solange keine Bestätigung vorliegt).
+  if (action === "unassign-hub") {
+    const id = (body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
+    const { error } = await admin
+      .from(table)
+      .update({
+        zugewiesen_hub_id: null,
+        zugewiesen_at: null,
+        pdl_bestaetigt_at: null,
+        pdl_ergebnis: null,
+      })
+      .eq("id", id);
+    if (error) return NextResponse.json({ error: "Zurücknehmen fehlgeschlagen." }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "lead-note") {
+    const id = (body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
+    const notiz = (body.notiz ?? "").trim().slice(0, 1000);
+    const { error } = await admin
+      .from(table)
+      .update({ notiz: notiz || null })
+      .eq("id", id);
+    if (error) return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
     await markFirstTouch(id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
@@ -216,6 +288,7 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     return NextResponse.json({
       ok: true,
       hub_name: hub.name,
+      pdl_name: hub.pdl_name ?? null,
       zugewiesen_at: now,
       mail_info: mailInfo,
     });

@@ -31,11 +31,13 @@ export async function buildTeamInbound(
             .order("created_time", { ascending: false })
             .limit(200)
         : Promise.resolve({ data: [] as never[] }),
-      admin.from("hubs").select("id, name"),
+      admin.from("hubs").select("id, name, pdl_name"),
     ]);
 
   const hubName = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
+  const hubPdl = (id: string | null) =>
+    (hubRows ?? []).find((h) => h.id === id)?.pdl_name ?? null;
 
   // Standort-Vorschlag: normalisierter Hub-Name im Lead-Text (Kampagne,
   // Klinik, Notiz) — "Kunden-BadOeynhausen-…" trifft "Bad Oeynhausen".
@@ -71,6 +73,7 @@ export async function buildTeamInbound(
       ergebnis: c.ergebnis ?? null,
       hub: hubName(c.hub_id),
       zugewiesen_hub: hubName(c.zugewiesen_hub_id ?? null),
+      zugewiesen_pdl: hubPdl(c.zugewiesen_hub_id ?? null),
       zugewiesen_at: c.zugewiesen_at ?? null,
       pdl_bestaetigt_at: c.pdl_bestaetigt_at ?? null,
       pdl_ergebnis: c.pdl_ergebnis ?? null,
@@ -97,10 +100,11 @@ export async function buildTeamInbound(
         datum: m.created_time ?? m.created_at ?? "",
         status: m.status,
         bearbeiter: m.bearbeiter ?? null,
-        notiz: null,
-        ergebnis: null,
+        notiz: m.notiz ?? null,
+        ergebnis: m.ergebnis ?? null,
         hub: null,
         zugewiesen_hub: hubName(m.zugewiesen_hub_id ?? null),
+        zugewiesen_pdl: hubPdl(m.zugewiesen_hub_id ?? null),
         zugewiesen_at: m.zugewiesen_at ?? null,
         pdl_bestaetigt_at: m.pdl_bestaetigt_at ?? null,
         pdl_ergebnis: m.pdl_ergebnis ?? null,

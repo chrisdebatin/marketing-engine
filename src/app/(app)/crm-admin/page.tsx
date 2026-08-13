@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { CrmAdminSection } from "@/components/crm-admin-section";
+import { ZieleSection } from "@/app/(app)/crm/ziele-section";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,11 @@ export default async function CrmAdminPage() {
         </p>
       </div>
       <CrmAdminSection />
+
+      <div className="mt-2 border-t pt-5">
+        <h2 className="mb-3 text-lg font-semibold">Institutionen-CRM (Verwaltung)</h2>
+        <ZieleSection mode="full" />
+      </div>
     </div>
   );
 }

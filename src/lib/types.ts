@@ -610,6 +610,7 @@ export interface Database {
           pdl_ergebnis: string | null;
           ergebnis: string | null;
           erstbearbeitet_at: string | null;
+          notiz: string | null;
         };
         Insert: {
           id: string;
@@ -635,6 +636,7 @@ export interface Database {
           pdl_ergebnis?: string | null;
           ergebnis?: string | null;
           erstbearbeitet_at?: string | null;
+          notiz?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];

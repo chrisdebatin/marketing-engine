@@ -2,20 +2,26 @@
 
 import { useEffect, useState } from "react";
 import {
+  Building2,
   CalendarClock,
   Check,
+  Globe,
   Hand,
   Inbox,
   Mail,
   MapPin,
+  Megaphone,
   Phone,
   PhoneCall,
+  Search,
+  Undo2,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { leadQuelleLabel } from "@/lib/leads";
+import { LEAD_QUELLEN, leadQuelleLabel } from "@/lib/leads";
 import { placeKindLabel } from "@/lib/places";
 import { formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
 
@@ -34,6 +40,7 @@ export interface InboundLead {
   ergebnis: string | null;
   hub: string | null;
   zugewiesen_hub: string | null;
+  zugewiesen_pdl: string | null;
   zugewiesen_at: string | null;
   pdl_bestaetigt_at: string | null;
   pdl_ergebnis: string | null;
@@ -80,6 +87,125 @@ const QUELLE_TONE: Record<string, string> = {
   website: "border-sky-200 bg-sky-50 text-sky-800",
   telefon0800: "border-sky-200 bg-sky-50 text-sky-800",
 };
+
+const QUELLE_ICON: Record<string, LucideIcon> = {
+  meta: Megaphone,
+  website: Globe,
+  google: Search,
+  telefon0800: Phone,
+  recare: Building2,
+  krankenhaus: Building2,
+  agentur: Mail,
+};
+
+/**
+ * Herkunfts-Kästchen links neben der Karte: Quellen-Icon + geschwungene
+ * Linie in die Karte — "der kommt von Meta" auf einen Blick.
+ */
+function SourceRail({ quelle }: { quelle: string }) {
+  const Icon = QUELLE_ICON[quelle] ?? Inbox;
+  return (
+    <div className="hidden w-11 shrink-0 flex-col items-center pt-2 sm:flex">
+      <div
+        className={cn(
+          "flex size-9 items-center justify-center rounded-xl border shadow-sm",
+          QUELLE_TONE[quelle] ?? "border-border bg-muted text-muted-foreground",
+        )}
+        title={leadQuelleLabel(quelle) || quelle}
+      >
+        <Icon className="size-4" />
+      </div>
+      <svg viewBox="0 0 24 30" className="mt-0.5 h-8 w-6 text-border" fill="none" aria-hidden>
+        <path
+          d="M12 0 v8 q0 14 12 14"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Vertikale Timeline im rechten Kartenbereich: dieselben Schritte wie der
+ * Prozess, mit Zeitstempeln, wo bekannt (Eingang, Übergabe, PDL-Bestätigung).
+ */
+function CardTimeline({ lead }: { lead: InboundLead }) {
+  const { steps, lost } = processInfo(lead);
+  const zeit = (iso: string | null) =>
+    iso
+      ? new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) +
+        " " +
+        new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+      : null;
+  const stampFor = (label: string): string | null => {
+    if (label === "Eingegangen") return zeit(lead.datum);
+    if (label === "Übergeben") return zeit(lead.zugewiesen_at);
+    if (label === "Aufgenommen") return zeit(lead.pdl_bestaetigt_at);
+    return null;
+  };
+  return (
+    <div className="hidden w-44 shrink-0 border-l pl-4 lg:block">
+      <ol className="flex flex-col">
+        {steps.map((s, i) => (
+          <li key={s.label} className="relative flex gap-2.5 pb-3 last:pb-0">
+            {i < steps.length - 1 && (
+              <span
+                className={cn(
+                  "absolute top-4 left-[5px] h-[calc(100%-0.5rem)] w-px",
+                  s.done && !lost ? "bg-emerald-300" : "bg-border",
+                )}
+              />
+            )}
+            <span
+              className={cn(
+                "z-10 mt-1 size-[11px] shrink-0 rounded-full border-2",
+                lost
+                  ? "border-muted-foreground/30 bg-muted"
+                  : s.done
+                    ? "border-emerald-500 bg-emerald-500"
+                    : s.current
+                      ? "animate-pulse border-primary bg-background"
+                      : "border-border bg-background",
+              )}
+            />
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "text-xs leading-4",
+                  lost
+                    ? "text-muted-foreground/60"
+                    : s.done
+                      ? "font-medium text-emerald-800"
+                      : s.current
+                        ? "font-semibold text-primary"
+                        : "text-muted-foreground/70",
+                )}
+              >
+                {s.label}
+              </p>
+              {stampFor(s.label) && (
+                <p className="text-[10px] text-muted-foreground">{stampFor(s.label)}</p>
+              )}
+              {s.label === "Übergeben" && lead.zugewiesen_hub && (
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {lead.zugewiesen_hub}
+                  {lead.zugewiesen_pdl ? ` · ${lead.zugewiesen_pdl}` : ""}
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+      {lost && (
+        <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+          verloren{lead.ergebnis ? ` — ${lead.ergebnis}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /**
  * Prozess-Stepper je Lead: wo steht die Anfrage, was ist der nächste Schritt?
@@ -143,7 +269,8 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
   const { steps, next, lost } = processInfo(lead);
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px]">
+      {/* horizontaler Stepper nur auf kleinen Screens — ab lg übernimmt die Karten-Timeline rechts */}
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px] lg:hidden">
         {steps.map((s, i) => (
           <span key={s.label} className="flex items-center gap-1">
             {i > 0 && <span className="text-muted-foreground/40">›</span>}
@@ -178,6 +305,21 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
       )}
     </div>
   );
+}
+
+/** Prominenter Eingangszeitpunkt: „vor 23 Min eingegangen" / „gestern um 10:47" … */
+function eingegangenLabel(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return "Eingang unbekannt";
+  const min = Math.floor((Date.now() - t) / 60000);
+  if (min < 1) return "gerade eben eingegangen";
+  if (min < 60) return `vor ${min} Min eingegangen`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `vor ${h} Std eingegangen`;
+  const d = new Date(iso);
+  const zeit = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  if (h < 48) return `gestern um ${zeit} eingegangen`;
+  return `am ${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} um ${zeit} eingegangen`;
 }
 
 /** „vor 5 Min" / „vor 3 Std." / leer ab gestern (dann zählt die Tages-Gruppe). */
@@ -392,6 +534,13 @@ export function TeamWorkspace({
 
       {(monitor || tab === "inbound") && (
         <div className="flex flex-col gap-2">
+          {canAct && (
+            <InboundCallLog
+              token={token}
+              memberName={memberName}
+              onCreated={(lead) => setInbound((cur) => [lead, ...cur])}
+            />
+          )}
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
           <div className="flex flex-wrap items-center gap-2">
             {[...sourceCounts.entries()]
@@ -439,22 +588,19 @@ export function TeamWorkspace({
               </p>
               <ul className="flex flex-col gap-2">
                 {g.leads.map((l) => (
-              <li
-                key={`${l.kind}-${l.id}`}
-                className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
-              >
+              <li key={`${l.kind}-${l.id}`} className="flex items-stretch gap-2">
+                <SourceRail quelle={l.quelle} />
+                <div className="flex min-w-0 flex-1 gap-4 rounded-xl border bg-card p-3.5 shadow-sm">
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground tabular-nums">
+                  <span className="flex items-center gap-1.5 text-sm font-bold tabular-nums">
                     {relTime(l.datum) && l.status === "offen" && (
                       <span
-                        className="size-1.5 animate-pulse rounded-full bg-primary"
+                        className="size-2 animate-pulse rounded-full bg-primary"
                         title="neu"
                       />
                     )}
-                    {timeOf(l.datum) || "—"}
-                    {relTime(l.datum) && (
-                      <span className="font-normal">({relTime(l.datum)})</span>
-                    )}
+                    {eingegangenLabel(l.datum)}
                   </span>
                   <span className="font-medium">{l.name}</span>
                   <span
@@ -504,30 +650,74 @@ export function TeamWorkspace({
                     {l.hub ? ` · ${l.hub}` : ""}
                   </span>
                 </p>
-                {l.notiz && (
-                  <p className="text-xs text-muted-foreground">„{l.notiz}“</p>
-                )}
+                <LeadNote
+                  lead={l}
+                  canAct={canAct}
+                  token={token}
+                  onSaved={(notiz) =>
+                    setInbound((cur) =>
+                      cur.map((x) => (x.id === l.id ? { ...x, notiz } : x)),
+                    )
+                  }
+                />
                 {l.ergebnis && (
                   <p className="text-xs font-medium text-emerald-800">
                     Ergebnis: {l.ergebnis}
                   </p>
                 )}
                 {l.zugewiesen_hub && (
-                  <p className="text-xs font-medium">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium">
                     <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
                       → übergeben an {l.zugewiesen_hub}
+                      {l.zugewiesen_pdl ? ` (PDL ${l.zugewiesen_pdl})` : ""}
                       {l.zugewiesen_at
                         ? ` am ${new Date(l.zugewiesen_at).toLocaleDateString("de-DE")}`
                         : ""}
-                    </span>{" "}
+                    </span>
                     {l.pdl_bestaetigt_at ? (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
                         PDL bestätigt: {l.pdl_ergebnis ?? "aufgenommen"} ✓
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">
-                        Rückmeldung der PDL steht aus
-                      </span>
+                      <>
+                        <span className="text-muted-foreground">
+                          Rückmeldung der PDL steht aus
+                        </span>
+                        {canAct && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setError(null);
+                              try {
+                                await teamAction(token, {
+                                  action: "unassign-hub",
+                                  kind: l.kind,
+                                  id: l.id,
+                                });
+                                setInbound((cur) =>
+                                  cur.map((x) =>
+                                    x.id === l.id
+                                      ? {
+                                          ...x,
+                                          zugewiesen_hub: null,
+                                          zugewiesen_pdl: null,
+                                          zugewiesen_at: null,
+                                          pdl_bestaetigt_at: null,
+                                          pdl_ergebnis: null,
+                                        }
+                                      : x,
+                                  ),
+                                );
+                              } catch (e) {
+                                setError(e instanceof Error ? e.message : "Fehler");
+                              }
+                            }}
+                            className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground"
+                          >
+                            <Undo2 className="size-3" /> Übergabe zurücknehmen
+                          </button>
+                        )}
+                      </>
                     )}
                   </p>
                 )}
@@ -611,6 +801,9 @@ export function TeamWorkspace({
                     }
                   />
                 )}
+                </div>
+                <CardTimeline lead={l} />
+                </div>
               </li>
                 ))}
               </ul>
@@ -637,6 +830,208 @@ export function TeamWorkspace({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Inbound-Anruf direkt loggen: kompaktes Fenster über der Liste — der Anruf
+ * erscheint sofort als offener Lead mit denselben Optionen wie alle anderen.
+ */
+function InboundCallLog({
+  token,
+  memberName,
+  onCreated,
+}: {
+  token: string;
+  memberName: string;
+  onCreated: (lead: InboundLead) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [telefon, setTelefon] = useState("");
+  const [quelle, setQuelle] = useState("telefon0800");
+  const [notiz, setNotiz] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await teamAction(token, {
+        action: "log-inbound",
+        ansprechpartner: name,
+        telefon,
+        quelle,
+        notiz,
+      });
+      onCreated({
+        kind: "call",
+        id: String(res.id),
+        name: name || "Inbound-Anruf",
+        telefon: telefon || null,
+        email: null,
+        quelle,
+        quelle_detail: null,
+        datum: String(res.created_at ?? new Date().toISOString()),
+        status: "offen",
+        bearbeiter: memberName,
+        notiz: notiz || null,
+        ergebnis: null,
+        hub: null,
+        zugewiesen_hub: null,
+        zugewiesen_pdl: null,
+        zugewiesen_at: null,
+        pdl_bestaetigt_at: null,
+        pdl_ergebnis: null,
+        vorschlag_hub_id: null,
+        direct_booking: false,
+      });
+      setName("");
+      setTelefon("");
+      setNotiz("");
+      setOpen(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="self-start"
+        onClick={() => setOpen(true)}
+      >
+        <PhoneCall className="size-3.5" /> Inbound-Anruf loggen
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm">
+      <p className="text-sm font-semibold">Inbound-Anruf loggen</p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name des Anrufers"
+          className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+        />
+        <input
+          value={telefon}
+          onChange={(e) => setTelefon(e.target.value)}
+          placeholder="Telefonnummer"
+          className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+        />
+        <select
+          value={quelle}
+          onChange={(e) => setQuelle(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-2 text-sm"
+        >
+          {LEAD_QUELLEN.map((q) => (
+            <option key={q.key} value={q.key}>
+              {q.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <Textarea
+        value={notiz}
+        onChange={(e) => setNotiz(e.target.value)}
+        rows={2}
+        placeholder="Worum ging es? (optional)"
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button type="button" size="sm" disabled={busy || (!name.trim() && !telefon.trim())} onClick={save}>
+          {busy ? "Speichere…" : "Als Lead anlegen"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          Abbrechen
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Notiz am Lead: anzeigen + direkt auf der Karte bearbeiten. */
+function LeadNote({
+  lead,
+  canAct,
+  token,
+  onSaved,
+}: {
+  lead: InboundLead;
+  canAct: boolean;
+  token: string;
+  onSaved: (notiz: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(lead.notiz ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await teamAction(token, {
+        action: "lead-note",
+        kind: lead.kind,
+        id: lead.id,
+        notiz: text.trim(),
+      });
+      onSaved(text.trim() || null);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    if (!lead.notiz && !canAct) return null;
+    return (
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        {lead.notiz ? <span>„{lead.notiz}“</span> : null}
+        {canAct && (
+          <button
+            type="button"
+            onClick={() => {
+              setText(lead.notiz ?? "");
+              setEditing(true);
+            }}
+            className="shrink-0 font-medium text-primary hover:underline"
+          >
+            {lead.notiz ? "Notiz bearbeiten" : "+ Notiz"}
+          </button>
+        )}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={2}
+        placeholder="Notiz zum Lead (z. B. Rückruf gewünscht, Pflegegrad, Besonderheiten …)"
+      />
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      <div className="flex gap-2">
+        <Button type="button" size="sm" disabled={busy} onClick={save}>
+          {busy ? "Speichere…" : "Notiz speichern"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          Abbrechen
+        </Button>
+      </div>
     </div>
   );
 }
@@ -828,6 +1223,7 @@ function AssignHub({
       setMailInfo(String(res.mail_info ?? ""));
       onDone({
         zugewiesen_hub: String(res.hub_name),
+        zugewiesen_pdl: res.pdl_name ? String(res.pdl_name) : null,
         zugewiesen_at: String(res.zugewiesen_at),
       });
     } catch (e) {

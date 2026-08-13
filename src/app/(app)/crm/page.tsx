@@ -113,7 +113,7 @@ export default async function CrmPage() {
           {
             id: "outbound",
             label: "Outbound-Anrufe",
-            content: <ZieleSection />,
+            content: <ZieleSection mode="caller" />,
           },
         ]}
       />

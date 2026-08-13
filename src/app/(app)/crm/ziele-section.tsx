@@ -64,7 +64,13 @@ function Stat({
  * Hub-Zuteilung, Follow-up-Rhythmus und der Call-Center-Anrufliste —
  * eine Seite für alles: Kanban, Verwaltung, Anrufe, Aufgaben.
  */
-export async function ZieleSection() {
+export async function ZieleSection({
+  mode = "full",
+}: {
+  /** "caller" = nur die einfache Anrufliste (heutige Targets, erreicht, Notizen);
+   *  "full" = komplettes Institutionen-CRM (Kanban, Liste, Auswertung). */
+  mode?: "caller" | "full";
+} = {}) {
   const session = await requireSession();
   const admin = createAdminClient();
   const followup = await getFollowupWeeks();
@@ -254,6 +260,10 @@ export async function ZieleSection() {
       />
     </div>
   );
+
+  // Caller-Ansicht (Outbound-Tab auf /crm): nur die Anrufliste —
+  // das volle CRM liegt auf der CRM-Admin-Seite.
+  if (mode === "caller") return callcenterTab;
 
   return (
     <div className="flex flex-col gap-6">

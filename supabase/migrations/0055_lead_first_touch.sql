@@ -7,6 +7,7 @@ alter table public.lead_calls
   add column if not exists erstbearbeitet_at timestamptz;
 alter table public.meta_leads
   add column if not exists erstbearbeitet_at timestamptz,
-  add column if not exists ergebnis text;
+  add column if not exists ergebnis text,
+  add column if not exists notiz text;
 
 notify pgrst, 'reload schema';
