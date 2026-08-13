@@ -47,6 +47,7 @@ export default async function CrmPage() {
       monitor
       editable={editable}
       view={view}
+      inboundLog={team === "kundenservice"}
       token=""
       memberName={editorName}
       inbound={team === "kundenservice" ? ksInbound : ccInbound}

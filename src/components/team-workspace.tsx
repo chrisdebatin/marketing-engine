@@ -271,6 +271,7 @@ export function TeamWorkspace({
   monitor = false,
   editable = false,
   view = "tabs",
+  inboundLog = true,
 }: {
   token: string;
   memberName: string;
@@ -284,6 +285,8 @@ export function TeamWorkspace({
   /** "tabs" = eigener Umschalter (persönliche Seiten); "inbound"/"outbound"
    * = nur eine Ansicht, Umschalter kommt von außen (/crm-Board). */
   view?: "tabs" | "inbound" | "outbound";
+  /** false = keine Inbound-Anruf-Box (Davina bekommt keine Inbound-Anrufe). */
+  inboundLog?: boolean;
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
@@ -436,7 +439,7 @@ export function TeamWorkspace({
 
       {(view === "inbound" || (view === "tabs" && (monitor || tab === "inbound"))) && (
         <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-4">
-          {canAct && (
+          {canAct && inboundLog && (
             <div className="lg:sticky lg:top-4">
               <InboundCallLog
                 token={token}
@@ -448,7 +451,7 @@ export function TeamWorkspace({
           <div
             className={cn(
               "flex min-w-0 flex-col gap-2",
-              !canAct && "lg:col-span-2",
+              !(canAct && inboundLog) && "lg:col-span-2",
             )}
           >
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}

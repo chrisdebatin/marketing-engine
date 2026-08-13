@@ -78,6 +78,7 @@ export default async function TeamMemberPage({
       <TeamWorkspace
         token={token}
         memberName={member.name}
+        inboundLog={!isCallcenter}
         inbound={inbound}
         outbound={outbound}
         hubs={(hubRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
