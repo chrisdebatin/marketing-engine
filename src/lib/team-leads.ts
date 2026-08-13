@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normName } from "@/lib/crm-log";
 import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { leadAddress, leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
@@ -230,6 +231,45 @@ export async function buildTeamOutbound(
       .is("erledigt_at", null)
       .limit(500),
   ]);
+  // PDL-Aktivitäten (CM-Box beliefert / Flyer ausgelegt) den Institutionen
+  // zuordnen — wer anruft, sieht sofort, dass ein Standort schon vor Ort war.
+  const [{ data: actRows }, { data: profileRows }] = await Promise.all([
+    admin
+      .from("activities")
+      .select("standort_name, type, occurred_on, hub_id, user_id")
+      .order("occurred_on", { ascending: false })
+      .limit(1000),
+    admin.from("profiles").select("id, name"),
+  ]);
+  const acts = (actRows ?? [])
+    .map((a) => ({ ...a, norm: normName(a.standort_name) }))
+    .filter((a) => a.norm.length >= 5);
+  const profileName = (id: string | null) =>
+    (profileRows ?? []).find((p) => p.id === id)?.name ?? null;
+  /** Jüngste Box-/Flyer-Aktivität je Institution (Namens-Match wie place-search). */
+  const besucheFor = (targetName: string) => {
+    const tn = normName(targetName);
+    if (tn.length < 5) return [];
+    const matches = acts.filter(
+      (a) =>
+        a.norm === tn ||
+        (tn.length >= 8 && a.norm.includes(tn)) ||
+        (a.norm.length >= 8 && tn.includes(a.norm)),
+    );
+    return (["box", "flyer"] as const).flatMap((art) => {
+      const m = matches.find((a) => a.type === art);
+      return m
+        ? [
+            {
+              art,
+              datum: m.occurred_on,
+              von: profileName(m.user_id),
+              hub: (hubRows ?? []).find((h) => h.id === m.hub_id)?.name ?? null,
+            },
+          ]
+        : [];
+    });
+  };
   const hubOf = (id: string | null) => (hubRows ?? []).find((h) => h.id === id);
   const hubName = (id: string | null) => hubOf(id)?.name ?? null;
   const exclusive = isCallcenter ? "krankenhaus" : "praxis";
@@ -254,5 +294,6 @@ export async function buildTeamOutbound(
       todos: (todoRows ?? [])
         .filter((td) => td.lead_id === t.id)
         .map((td) => ({ id: td.id, text: td.text, faellig_am: td.faellig_am })),
+      besuche: besucheFor(t.name),
     }));
 }

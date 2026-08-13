@@ -73,6 +73,8 @@ export interface OutboundTarget {
   exklusiv: boolean;
   /** Offene To-dos am Kontakt (aus KI-gelesenen Anruf-Notizen). */
   todos: { id: string; text: string; faellig_am: string | null }[];
+  /** PDL-Aktivitäten vor Ort (CM-Box beliefert / Flyer ausgelegt), jüngste je Art. */
+  besuche: { art: "box" | "flyer"; datum: string; von: string | null; hub: string | null }[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -1198,13 +1200,16 @@ function LeadTodos({
             </button>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 self-start px-2.5 text-xs"
             onClick={() => setAdding(true)}
-            className="self-start text-xs text-primary hover:underline"
           >
-            + To-do mit Wiedervorlage
-          </button>
+            <CalendarClock className="size-3" />
+            To-do mit Wiedervorlage
+          </Button>
         ))}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
@@ -1351,6 +1356,7 @@ function KontakteView({
                 >
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="font-medium">{t.name}</span>
+                    <LeadIdChip id={t.id} />
                     <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {placeKindLabel(t.kategorie)}
                     </span>
@@ -1369,6 +1375,21 @@ function KontakteView({
                         : "kein Kontakt"}
                     </span>
                   </span>
+                  {t.besuche.map((b) => (
+                    <span
+                      key={b.art}
+                      className={cn(
+                        "w-fit rounded-lg px-2 py-0.5 text-[11px] font-medium",
+                        b.art === "box"
+                          ? "bg-sky-100 text-sky-900"
+                          : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {b.art === "box" ? "📦 CM-Box beliefert" : "📄 Flyer ausgelegt"} am{" "}
+                      {formatIsoDate(b.datum)}
+                      {b.von ? ` von ${b.von}` : ""}
+                    </span>
+                  ))}
                 </li>
               ))}
             </ul>
@@ -1614,21 +1635,26 @@ function LeadNote({
   if (!editing) {
     if (!lead.notiz && !canAct) return null;
     return (
-      <p className="flex items-start gap-2 text-xs text-muted-foreground">
-        {lead.notiz ? <span>„{lead.notiz}“</span> : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {lead.notiz ? (
+          <p className="text-xs text-muted-foreground">„{lead.notiz}“</p>
+        ) : null}
         {canAct && (
-          <button
+          <Button
             type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 px-2.5 text-xs"
             onClick={() => {
               setText(lead.notiz ?? "");
               setEditing(true);
             }}
-            className="shrink-0 font-medium text-primary hover:underline"
           >
-            {lead.notiz ? "Notiz bearbeiten" : "+ Notiz"}
-          </button>
+            <Pencil className="size-3" />
+            {lead.notiz ? "Notiz bearbeiten" : "Notiz"}
+          </Button>
         )}
-      </p>
+      </div>
     );
   }
   return (
@@ -2107,6 +2133,7 @@ function OutboundRow({
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-semibold leading-snug">{t.name}</span>
+            <LeadIdChip id={t.id} />
             {t.relevanz != null && (
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
                 Prio {t.relevanz}
@@ -2135,6 +2162,23 @@ function OutboundRow({
           {t.kurzinfo && (
             <p className="text-xs text-muted-foreground italic">{t.kurzinfo}</p>
           )}
+          {t.besuche.map((b) => (
+            <p
+              key={b.art}
+              className={cn(
+                "flex flex-wrap items-center gap-x-1.5 rounded-lg px-2 py-1 text-xs font-medium",
+                b.art === "box"
+                  ? "bg-sky-100 text-sky-900"
+                  : "bg-muted text-muted-foreground",
+              )}
+            >
+              <span>{b.art === "box" ? "📦" : "📄"}</span>
+              {b.art === "box" ? "CM-Box beliefert" : "Flyer/Aufsteller ausgelegt"} am{" "}
+              {formatIsoDate(b.datum)}
+              {b.von ? ` von ${b.von}` : ""}
+              {b.hub ? ` (${b.hub})` : ""}
+            </p>
+          ))}
           {t.hub && (
             <p className="flex flex-wrap items-center gap-x-1.5 rounded-lg bg-primary/[0.05] px-2 py-1 text-xs">
               <span className="font-semibold text-primary">Standort {t.hub}:</span>

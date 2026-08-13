@@ -17,20 +17,12 @@ export default async function CrmAdminPage() {
   if (!session.isAdmin) redirect("/crm");
 
   const admin = createAdminClient();
+  // select("*") statt fester Spaltenliste: fehlt eine Spalte aus einer noch
+  // nicht eingespielten Migration, liefert die Abfrage trotzdem Daten (die
+  // betroffene Kennzahl bleibt dann einfach leer).
   const [callsRes, metaRes, hubsRes] = await Promise.all([
-    admin
-      .from("lead_calls")
-      .select(
-        "quelle, bereich, status, bearbeiter, created_at, call_date, erstbearbeitet_at, zugewiesen_hub_id, zugewiesen_at, pdl_bestaetigt_at, pdl_ergebnis",
-      )
-      .limit(4000),
-    admin
-      .from("meta_leads")
-      .select(
-        "campaign_name, status, bearbeiter, created_time, created_at, erstbearbeitet_at, zugewiesen_hub_id, zugewiesen_at, pdl_bestaetigt_at, pdl_ergebnis",
-      )
-      .neq("status", "geloescht")
-      .limit(4000),
+    admin.from("lead_calls").select("*").limit(4000),
+    admin.from("meta_leads").select("*").neq("status", "geloescht").limit(4000),
     admin.from("hubs").select("id, name, pdl_name"),
   ]);
 
@@ -48,11 +40,11 @@ export default async function CrmAdminPage() {
       status: l.status,
       bearbeiter: l.bearbeiter,
       created: l.created_at ?? l.call_date,
-      erst: l.erstbearbeitet_at,
+      erst: l.erstbearbeitet_at ?? null,
       hub: hubName.get(l.zugewiesen_hub_id ?? "") ?? null,
-      zugewiesenAt: l.zugewiesen_at,
-      bestaetigtAt: l.pdl_bestaetigt_at,
-      pdlErgebnis: l.pdl_ergebnis,
+      zugewiesenAt: l.zugewiesen_at ?? null,
+      bestaetigtAt: l.pdl_bestaetigt_at ?? null,
+      pdlErgebnis: l.pdl_ergebnis ?? null,
     })),
     // Meta: nur Kunden-Leads (Recruiting läuft separat übers Recruiting-Postfach).
     ...(metaRes.data ?? [])
@@ -64,11 +56,11 @@ export default async function CrmAdminPage() {
         status: l.status,
         bearbeiter: l.bearbeiter,
         created: l.created_time ?? l.created_at ?? "",
-        erst: l.erstbearbeitet_at,
+        erst: l.erstbearbeitet_at ?? null,
         hub: hubName.get(l.zugewiesen_hub_id ?? "") ?? null,
-        zugewiesenAt: l.zugewiesen_at,
-        bestaetigtAt: l.pdl_bestaetigt_at,
-        pdlErgebnis: l.pdl_ergebnis,
+        zugewiesenAt: l.zugewiesen_at ?? null,
+        bestaetigtAt: l.pdl_bestaetigt_at ?? null,
+        pdlErgebnis: l.pdl_ergebnis ?? null,
       })),
   ].filter((l) => l.created);
 

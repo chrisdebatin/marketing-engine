@@ -49,8 +49,13 @@ export function leadFullName(fd: unknown): string | null {
 /** Adresse/Ort aus dem Formular (city/ort/plz/street …), zu einer Zeile verbunden. */
 export function leadAddress(fd: unknown): string | null {
   const keys = ["street", "strasse", "straße", "address", "adresse", "plz", "zip", "postal", "city", "stadt", "ort", "wohnort"];
+  // "e-mail-adresse"/"phone" enthalten "adresse"/"ort"-Fragmente — vorher raus.
+  const blocked = ["mail", "phone", "telefon", "name"];
   const parts = fields(fd)
-    .filter((f) => keys.some((k) => f.name?.toLowerCase().includes(k)))
+    .filter((f) => {
+      const n = f.name?.toLowerCase() ?? "";
+      return !blocked.some((b) => n.includes(b)) && keys.some((k) => n.includes(k));
+    })
     .map((f) => f.values?.[0]?.trim())
     .filter((v): v is string => !!v);
   return parts.length ? parts.join(", ") : null;
