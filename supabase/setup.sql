@@ -1133,6 +1133,14 @@ alter table public.lead_calls add column if not exists adresse text;
 alter table public.meta_leads add column if not exists adresse text;
 
 notify pgrst, 'reload schema';
+-- To-dos auch an Outbound-Kontakten (crm_targets): die KI liest die
+-- Anruf-Notiz und legt daraus Aufgaben an ("Flyer schicken").
+alter table public.lead_todos drop constraint if exists lead_todos_lead_kind_check;
+alter table public.lead_todos
+  add constraint lead_todos_lead_kind_check
+  check (lead_kind in ('call', 'meta', 'target'));
+
+notify pgrst, 'reload schema';
 -- Marketing-Engine – seed data
 -- Run after the migrations (Supabase SQL editor or `supabase db reset` picks it up).
 

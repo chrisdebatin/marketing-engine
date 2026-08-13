@@ -216,12 +216,19 @@ export async function buildTeamOutbound(
 ): Promise<OutboundTarget[]> {
   const admin = createAdminClient();
   const isCallcenter = team === "callcenter";
-  const [{ data: targetRows }, { data: hubRows }] = await Promise.all([
+  const [{ data: targetRows }, { data: hubRows }, { data: todoRows }] = await Promise.all([
     admin
       .from("crm_targets")
       .select("*")
       .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
     admin.from("hubs").select("id, name, pdl_name, pdl_phone"),
+    // Offene KI-/manuelle To-dos an Kontakten — tolerant, falls 0059 fehlt.
+    admin
+      .from("lead_todos")
+      .select("id, lead_id, text, faellig_am")
+      .eq("lead_kind", "target")
+      .is("erledigt_at", null)
+      .limit(500),
   ]);
   const hubOf = (id: string | null) => (hubRows ?? []).find((h) => h.id === id);
   const hubName = (id: string | null) => hubOf(id)?.name ?? null;
@@ -244,5 +251,8 @@ export async function buildTeamOutbound(
       naechster_besuch: t.naechster_besuch ?? null,
       besuchs_notiz: t.besuchs_notiz ?? null,
       exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
+      todos: (todoRows ?? [])
+        .filter((td) => td.lead_id === t.id)
+        .map((td) => ({ id: td.id, text: td.text, faellig_am: td.faellig_am })),
     }));
 }

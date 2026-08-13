@@ -374,3 +374,11 @@ alter table public.lead_calls add column if not exists adresse text;
 alter table public.meta_leads add column if not exists adresse text;
 
 notify pgrst, 'reload schema';
+
+-- ── 0059: To-dos auch an Outbound-Kontakten (KI-Aufgaben aus Anruf-Notizen) ─
+alter table public.lead_todos drop constraint if exists lead_todos_lead_kind_check;
+alter table public.lead_todos
+  add constraint lead_todos_lead_kind_check
+  check (lead_kind in ('call', 'meta', 'target'));
+
+notify pgrst, 'reload schema';

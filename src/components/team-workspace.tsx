@@ -71,6 +71,8 @@ export interface OutboundTarget {
   naechster_besuch: string | null;
   besuchs_notiz: string | null;
   exklusiv: boolean;
+  /** Offene To-dos am Kontakt (aus KI-gelesenen Anruf-Notizen). */
+  todos: { id: string; text: string; faellig_am: string | null }[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -264,6 +266,21 @@ function dayKey(iso: string): string {
   return (iso || "").slice(0, 10);
 }
 
+/** Tages-Überschrift der Outbound-Liste: Heute / Morgen / "Freitag, 15.08." */
+function outboundDayLabel(key: string, today: string): string {
+  if (key === today) return "Heute";
+  const morgen = new Date(`${today}T00:00:00`);
+  morgen.setDate(morgen.getDate() + 1);
+  if (key === morgen.toISOString().slice(0, 10)) return "Morgen";
+  const d = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return key;
+  return d.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
 function dayLabel(key: string): string {
   const today = new Date();
   const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -394,6 +411,42 @@ export function TeamWorkspace({
     return (a.naechster_besuch ?? "9999").localeCompare(b.naechster_besuch ?? "9999");
   });
   const dueCount = outbound.filter(due).length;
+
+  // ── Outbound als Tages-Kalender: Heute (inkl. Überfällig & noch nie
+  // kontaktiert), dann jeder Tag mit Einträgen der nächsten 2 Wochen,
+  // Rest unter "Später". Innerhalb eines Tages klare Reihenfolge:
+  // überfällig zuerst, dann Priorität, dann Name.
+  const horizonDate = new Date(`${today}T00:00:00`);
+  horizonDate.setDate(horizonDate.getDate() + 13);
+  const horizon = horizonDate.toISOString().slice(0, 10);
+  const outboundDayMap = new Map<string, OutboundTarget[]>();
+  for (const t of outbound) {
+    const key = due(t)
+      ? today
+      : !t.naechster_besuch || t.naechster_besuch > horizon
+        ? "__spaeter__"
+        : t.naechster_besuch;
+    const arr = outboundDayMap.get(key);
+    if (arr) arr.push(t);
+    else outboundDayMap.set(key, [t]);
+  }
+  const sortTargets = (arr: OutboundTarget[]) =>
+    [...arr].sort((a, b) => {
+      const overdue = (t: OutboundTarget) =>
+        t.letzter_besuch && t.naechster_besuch && t.naechster_besuch < today ? 1 : 0;
+      const o = overdue(b) - overdue(a);
+      if (o !== 0) return o;
+      const r = (a.relevanz ?? 9) - (b.relevanz ?? 9);
+      if (r !== 0) return r;
+      return a.name.localeCompare(b.name);
+    });
+  const outboundDays = [...outboundDayMap.entries()]
+    .filter(([k]) => k !== "__spaeter__")
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([key, targets]) => ({ key, targets: sortTargets(targets) }));
+  const outboundLater = sortTargets(outboundDayMap.get("__spaeter__") ?? []).sort(
+    (a, b) => (a.naechster_besuch ?? "9999").localeCompare(b.naechster_besuch ?? "9999"),
+  );
 
   async function claim(l: InboundLead) {
     setError(null);
@@ -835,22 +888,69 @@ export function TeamWorkspace({
               letzter_besuch: t.letzter_besuch,
             }))}
           />
-          <ul className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-            {sortedOutbound.map((t) => (
-              <OutboundRow
-                key={t.id}
-                target={t}
-                token={token}
-                memberName={memberName}
-                isDue={due(t)}
-                onLogged={(patch) =>
-                  setOutbound((cur) =>
-                    cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
-                  )
-                }
-              />
-            ))}
-          </ul>
+          {outboundDays.map((g) => (
+            <div key={g.key} className="flex flex-col gap-2">
+              <p
+                className={cn(
+                  "mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide uppercase first:mt-0",
+                  g.key === today ? "text-amber-700" : "text-muted-foreground",
+                )}
+              >
+                <CalendarClock className="size-3.5" />
+                {outboundDayLabel(g.key, today)}
+                <span className="h-px flex-1 bg-border" />
+                <span className="font-normal normal-case">
+                  {g.targets.length} Anruf{g.targets.length === 1 ? "" : "e"}
+                </span>
+              </p>
+              <ol className="flex flex-col gap-2">
+                {g.targets.map((t, i) => (
+                  <OutboundRow
+                    key={t.id}
+                    target={t}
+                    index={i + 1}
+                    today={today}
+                    token={token}
+                    memberName={memberName}
+                    isDue={due(t)}
+                    onLogged={(patch) =>
+                      setOutbound((cur) =>
+                        cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                      )
+                    }
+                  />
+                ))}
+              </ol>
+            </div>
+          ))}
+          {outboundLater.length > 0 && (
+            <details className="group mt-2 rounded-xl border bg-card shadow-sm">
+              <summary className="cursor-pointer list-none p-3.5 text-sm font-semibold select-none">
+                Später ({outboundLater.length} Kontakte ab {formatIsoDate(outboundLater[0]?.naechster_besuch)})
+                <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                  aufklappen
+                </span>
+              </summary>
+              <ol className="flex flex-col gap-2 border-t p-3.5">
+                {outboundLater.map((t, i) => (
+                  <OutboundRow
+                    key={t.id}
+                    target={t}
+                    index={i + 1}
+                    today={today}
+                    token={token}
+                    memberName={memberName}
+                    isDue={false}
+                    onLogged={(patch) =>
+                      setOutbound((cur) =>
+                        cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                      )
+                    }
+                  />
+                ))}
+              </ol>
+            </details>
+          )}
         </div>
       )}
     </div>
@@ -1891,41 +1991,85 @@ function RecareOutcome({
   );
 }
 
+/**
+ * Ein Eintrag der Outbound-Tagesliste: Nummer in der Reihenfolge, Institution
+ * mit Kontext, offene To-dos und das Anruf-Formular mit klaren Abfragen —
+ * Erreicht?/Nicht erreicht (nicht erreicht → automatisch morgen wieder),
+ * Ansprechpartner, Notiz (liest die KI: "in 1 Woche zurückrufen" → Wieder-
+ * vorlage-Tag, konkrete Aufgabe → To-do) und optional festes Datum.
+ */
 function OutboundRow({
   target: t,
+  index,
+  today,
   token,
   memberName,
   isDue,
   onLogged,
 }: {
   target: OutboundTarget;
+  index: number;
+  today: string;
   token: string;
   memberName: string;
   isDue: boolean;
   onLogged: (patch: Partial<OutboundTarget>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [erreicht, setErreicht] = useState<boolean | null>(null);
+  const [ansprechpartner, setAnsprechpartner] = useState("");
   const [notiz, setNotiz] = useState("");
+  const [wiedervorlage, setWiedervorlage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hinweis, setHinweis] = useState<string | null>(null);
+
+  const ueberfaelligTage =
+    t.letzter_besuch && t.naechster_besuch && t.naechster_besuch < today
+      ? Math.round(
+          (new Date(`${today}T00:00:00`).getTime() -
+            new Date(`${t.naechster_besuch}T00:00:00`).getTime()) /
+            86_400_000,
+        )
+      : 0;
 
   async function log() {
+    if (erreicht === null) return;
     setBusy(true);
     setError(null);
     try {
       const res = await teamAction(token, {
         action: "outbound-log",
         target_id: t.id,
+        erreicht,
+        ansprechpartner,
         notiz,
+        wiedervorlage,
       });
+      const neuesTodo = res.todo as
+        | { id: string; text: string; faellig_am: string | null }
+        | null;
       onLogged({
         letzter_besuch: String(res.letzter_besuch),
         letzte_kontakt_art: "anruf",
         naechster_besuch: String(res.naechster_besuch),
-        besuchs_notiz: notiz || null,
+        besuchs_notiz:
+          [!erreicht ? "Nicht erreicht" : "", notiz].filter(Boolean).join(" — ") || null,
+        ...(neuesTodo ? { todos: [...t.todos, neuesTodo] } : {}),
       });
+      setHinweis(
+        [
+          typeof res.hinweis === "string" ? res.hinweis : null,
+          neuesTodo ? `To-do angelegt: „${neuesTodo.text}“` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
+      );
       setOpen(false);
+      setErreicht(null);
+      setAnsprechpartner("");
       setNotiz("");
+      setWiedervorlage("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler");
     } finally {
@@ -1933,76 +2077,229 @@ function OutboundRow({
     }
   }
 
+  async function todoDone(todoId: string) {
+    setError(null);
+    try {
+      await teamAction(token, { action: "todo-done", id: todoId });
+      onLogged({ todos: t.todos.filter((td) => td.id !== todoId) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    }
+  }
+
   return (
     <li
       className={cn(
-        "flex h-full flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm",
-        isDue && "border-amber-500/50 bg-amber-500/[0.05]",
+        "flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm",
+        isDue && "border-amber-500/50 bg-amber-500/[0.04]",
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 font-semibold leading-snug">{t.name}</span>
-        <span className="flex shrink-0 flex-wrap justify-end gap-1">
-          {t.relevanz != null && (
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-              Prio {t.relevanz}
-            </span>
+      <div className="flex items-start gap-3">
+        {/* Reihenfolge im Tag */}
+        <span
+          className={cn(
+            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+            isDue ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground",
           )}
-          {isDue && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-              fällig
-            </span>
-          )}
+        >
+          {index}
         </span>
-      </div>
-      {t.kurzinfo && (
-        <p className="-mt-1 text-xs text-muted-foreground italic">{t.kurzinfo}</p>
-      )}
-      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-        <MapPin className="size-3 shrink-0" />
-        {[
-          t.ort,
-          placeKindLabel(t.kategorie) + (t.exklusiv ? "" : " · gemeinsamer Pool"),
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
-      {t.hub && (
-        <p className="flex flex-wrap items-center gap-x-1.5 rounded-lg bg-primary/[0.05] px-2 py-1 text-xs">
-          <span className="font-semibold text-primary">Standort {t.hub}:</span>
-          <span className="font-medium">
-            {t.hub_pdl ? `PDL ${t.hub_pdl}` : "keine PDL hinterlegt"}
-          </span>
-          {t.hub_pdl_phone && (
-            <a
-              href={`tel:${t.hub_pdl_phone}`}
-              className="flex items-center gap-1 font-medium text-primary hover:underline"
-            >
-              <Phone className="size-3" />
-              {t.hub_pdl_phone}
-            </a>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-semibold leading-snug">{t.name}</span>
+            {t.relevanz != null && (
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                Prio {t.relevanz}
+              </span>
+            )}
+            {ueberfaelligTage > 0 && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
+                überfällig seit {ueberfaelligTage} Tag{ueberfaelligTage === 1 ? "" : "en"}
+              </span>
+            )}
+            {!t.letzter_besuch && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                noch nie kontaktiert
+              </span>
+            )}
+          </div>
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <MapPin className="size-3 shrink-0" />
+            {[
+              t.ort,
+              placeKindLabel(t.kategorie) + (t.exklusiv ? "" : " · gemeinsamer Pool"),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {t.kurzinfo && (
+            <p className="text-xs text-muted-foreground italic">{t.kurzinfo}</p>
           )}
-        </p>
-      )}
-      <p className="flex items-center gap-1 text-xs text-muted-foreground">
-        <CalendarClock className="size-3 shrink-0" />
-        {t.letzter_besuch
-          ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder fällig ab ${formatIsoDate(t.naechster_besuch)}`
-          : "Noch kein Kontakt"}
-      </p>
-      <span className="flex-1" />
-      {open ? (
-        <div className="flex flex-col gap-2">
-          <Textarea
-            value={notiz}
-            onChange={(e) => setNotiz(e.target.value)}
-            rows={2}
-            placeholder="Was wurde besprochen? (optional)"
-          />
+          {t.hub && (
+            <p className="flex flex-wrap items-center gap-x-1.5 rounded-lg bg-primary/[0.05] px-2 py-1 text-xs">
+              <span className="font-semibold text-primary">Standort {t.hub}:</span>
+              <span className="font-medium">
+                {t.hub_pdl ? `PDL ${t.hub_pdl}` : "keine PDL hinterlegt"}
+              </span>
+              {t.hub_pdl_phone && (
+                <a
+                  href={`tel:${t.hub_pdl_phone}`}
+                  className="flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <Phone className="size-3" />
+                  {t.hub_pdl_phone}
+                </a>
+              )}
+            </p>
+          )}
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <CalendarClock className="size-3 shrink-0" />
+            {t.letzter_besuch
+              ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder dran ab ${formatIsoDate(t.naechster_besuch)}`
+              : "Noch kein Kontakt"}
+          </p>
+          {t.todos.length > 0 && (
+            <ul className="flex flex-col gap-1">
+              {t.todos.map((td) => (
+                <li key={td.id} className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    title="To-do erledigt"
+                    onClick={() => todoDone(td.id)}
+                    className="flex size-4 shrink-0 items-center justify-center rounded border text-transparent hover:border-emerald-600 hover:text-emerald-600"
+                  >
+                    <Check className="size-3" />
+                  </button>
+                  <span className="font-medium">{td.text}</span>
+                  {td.faellig_am && (
+                    <span className="text-muted-foreground">
+                      bis {formatIsoDate(td.faellig_am)}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {hinweis && (
+            <p className="rounded-lg bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">
+              ✓ {hinweis}
+            </p>
+          )}
+        </div>
+        {!open && (
+          <Button
+            type="button"
+            size="sm"
+            variant={isDue ? "default" : "outline"}
+            className="shrink-0"
+            onClick={() => {
+              setHinweis(null);
+              setOpen(true);
+            }}
+          >
+            <PhoneCall className="size-3.5" /> Anruf loggen
+          </Button>
+        )}
+      </div>
+
+      {open && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3">
+          {/* 1. Erreicht? */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold">Erreicht?</span>
+            <button
+              type="button"
+              onClick={() => setErreicht(true)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium",
+                erreicht === true
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "bg-background text-muted-foreground hover:text-foreground",
+              )}
+            >
+              ✓ Ja, gesprochen
+            </button>
+            <button
+              type="button"
+              onClick={() => setErreicht(false)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium",
+                erreicht === false
+                  ? "border-red-600 bg-red-600 text-white"
+                  : "bg-background text-muted-foreground hover:text-foreground",
+              )}
+            >
+              ✗ Nicht erreicht
+            </button>
+          </div>
+          {erreicht === false && (
+            <p className="text-xs text-muted-foreground">
+              Wird automatisch <span className="font-semibold">morgen</span> wieder
+              auf die Liste gesetzt.
+            </p>
+          )}
+          {erreicht === true && (
+            <>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Ansprechpartner
+                </span>
+                <input
+                  type="text"
+                  value={ansprechpartner}
+                  onChange={(e) => setAnsprechpartner(e.target.value)}
+                  placeholder="Mit wem gesprochen? (z. B. Frau Meier, Sozialdienst)"
+                  className="rounded-md border bg-background px-2 py-1 text-sm"
+                />
+              </label>
+            </>
+          )}
+          {erreicht !== null && (
+            <>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  Notiz
+                </span>
+                <Textarea
+                  value={notiz}
+                  onChange={(e) => setNotiz(e.target.value)}
+                  rows={2}
+                  placeholder={
+                    erreicht
+                      ? "Was wurde besprochen? Die KI liest mit: „ruf in 1 Woche zurück“ wird zum Termin, „Flyer schicken“ zum To-do."
+                      : "Optional: Mailbox, besetzt, …"
+                  }
+                />
+              </label>
+              {erreicht && (
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                    Wiedervorlage am (optional — sonst entscheidet die Notiz/der Rhythmus)
+                  </span>
+                  <input
+                    type="date"
+                    min={today}
+                    value={wiedervorlage}
+                    onChange={(e) => setWiedervorlage(e.target.value)}
+                    className="w-fit rounded-md border bg-background px-2 py-1 text-sm"
+                  />
+                </label>
+              )}
+            </>
+          )}
           {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex gap-2">
-            <Button type="button" size="sm" disabled={busy} onClick={log}>
-              {busy ? "Speichere…" : `Anruf loggen (als ${memberName})`}
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || erreicht === null}
+              onClick={log}
+            >
+              {busy
+                ? "Speichere…"
+                : erreicht === null
+                  ? "Erst „Erreicht?“ beantworten"
+                  : `Speichern (als ${memberName})`}
             </Button>
             <Button
               type="button"
@@ -2014,16 +2311,6 @@ function OutboundRow({
             </Button>
           </div>
         </div>
-      ) : (
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="self-start"
-          onClick={() => setOpen(true)}
-        >
-          <PhoneCall className="size-3.5" /> Anruf loggen
-        </Button>
       )}
     </li>
   );

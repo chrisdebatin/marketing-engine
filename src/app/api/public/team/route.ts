@@ -10,6 +10,8 @@ import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 export const runtime = "nodejs";
+// outbound-log ruft Claude auf (Notiz lesen) — mehr Zeit als die 10s-Vorgabe.
+export const maxDuration = 60;
 
 /**
  * Aktionen der persönlichen Team-Seiten (/t/<token>, token-gated):
@@ -41,6 +43,8 @@ export async function POST(req: Request) {
     quelle?: string;
     email?: string;
     adresse?: string;
+    erreicht?: boolean;
+    wiedervorlage?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -413,20 +417,56 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     if (!target) return NextResponse.json({ error: "Ziel nicht gefunden." }, { status: 404 });
 
     const today = todayIso();
-    const followup = await getFollowupWeeks();
-    const weeks = followup.anruf ?? target.intervall_wochen ?? 6;
-    const next = new Date();
-    next.setDate(next.getDate() + weeks * 7);
-    const naechster = next.toISOString().slice(0, 10);
+    const erreicht = body.erreicht !== false; // Alt-Clients ohne Flag = erreicht
     const note = (body.notiz ?? "").trim().slice(0, 1000);
     const ansprechpartner = (body.ansprechpartner ?? "").trim().slice(0, 200);
 
+    // Nächster Kontakt: nicht erreicht → automatisch morgen. Erreicht →
+    // manuell gewähltes Datum > KI liest die Notiz ("in 1 Woche zurückrufen")
+    // > Standard-Rhythmus.
+    let naechster: string;
+    let hinweis: string;
+    let todoText: string | null = null;
+    if (!erreicht) {
+      const morgen = new Date();
+      morgen.setDate(morgen.getDate() + 1);
+      naechster = morgen.toISOString().slice(0, 10);
+      hinweis = "Nicht erreicht — steht morgen automatisch wieder auf der Liste.";
+    } else {
+      const manuell = (body.wiedervorlage ?? "").trim();
+      const manuellOk = /^\d{4}-\d{2}-\d{2}$/.test(manuell) && manuell > today;
+      const ki = manuellOk
+        ? null
+        : await import("@/lib/outbound-ai")
+            .then((m) => m.readOutboundNote(note, today))
+            .catch(() => null);
+      todoText = ki?.todo ?? null;
+      if (manuellOk) {
+        naechster = manuell;
+        hinweis = `Wiedervorlage am ${manuell} eingetragen.`;
+      } else if (ki?.wiedervorlage) {
+        naechster = ki.wiedervorlage;
+        hinweis = `KI hat die Notiz gelesen — Wiedervorlage am ${ki.wiedervorlage}.`;
+      } else {
+        const followup = await getFollowupWeeks();
+        const weeks = followup.anruf ?? target.intervall_wochen ?? 6;
+        const next = new Date();
+        next.setDate(next.getDate() + weeks * 7);
+        naechster = next.toISOString().slice(0, 10);
+        hinweis = `Wieder fällig in ${weeks} Wochen (Standard-Rhythmus).`;
+      }
+    }
+
+    const logNote = [!erreicht ? "Nicht erreicht" : "", note]
+      .filter(Boolean)
+      .join(" — ")
+      .slice(0, 1000);
     const { error: cErr } = await admin.from("crm_contacts").insert({
       target_id: target.id,
       hub_id: target.hub_id,
       kontakt_art: "anruf",
       ansprechpartner: ansprechpartner || null,
-      note: note || null,
+      note: logNote || null,
       contact_date: today,
       bearbeiter: member.name,
     });
@@ -438,15 +478,35 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
         letzter_besuch: today,
         letzte_kontakt_art: "anruf",
         naechster_besuch: naechster,
-        besuchs_notiz: note || null,
+        besuchs_notiz: logNote || null,
       })
       .eq("id", target.id);
+
+    // KI-To-do aus der Notiz ("Flyer vorbeibringen") am Kontakt anlegen —
+    // tolerant, falls Migration 0059 noch fehlt.
+    let todo: { id: string; text: string; faellig_am: string | null } | null = null;
+    if (todoText) {
+      const { data: t } = await admin
+        .from("lead_todos")
+        .insert({
+          lead_kind: "target",
+          lead_id: target.id,
+          text: todoText,
+          faellig_am: naechster,
+          erstellt_von: member.name,
+        })
+        .select("id, text, faellig_am")
+        .single();
+      if (t) todo = t;
+    }
 
     return NextResponse.json({
       ok: true,
       letzter_besuch: today,
       naechster_besuch: naechster,
       bearbeiter: member.name,
+      hinweis,
+      todo,
     });
   }
 
