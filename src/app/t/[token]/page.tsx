@@ -1,12 +1,9 @@
 import { notFound } from "next/navigation";
 import { Headset, PhoneCall } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildTeamInbound } from "@/lib/team-leads";
+import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { syncRecareMails } from "@/lib/recare-import";
-import {
-  TeamWorkspace,
-  type OutboundTarget,
-} from "@/components/team-workspace";
+import { TeamWorkspace } from "@/components/team-workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -45,39 +42,12 @@ export default async function TeamMemberPage({
     }
   }
 
-  const [inbound, { data: targetRows }, { data: hubRows }] = await Promise.all([
-    buildTeamInbound(isCallcenter ? "callcenter" : "kundenservice"),
-    admin
-      .from("crm_targets")
-      .select(
-        "id, name, kategorie, ort, adresse, hub_id, relevanz, letzter_besuch, letzte_kontakt_art, naechster_besuch, besuchs_notiz, intervall_wochen",
-      )
-      .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
+  const team = isCallcenter ? ("callcenter" as const) : ("kundenservice" as const);
+  const [inbound, outbound, { data: hubRows }] = await Promise.all([
+    buildTeamInbound(team),
+    buildTeamOutbound(team),
     admin.from("hubs").select("id, name"),
   ]);
-
-  const hubName = (id: string | null) =>
-    (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
-
-  // Outbound-Split: praxis exklusiv Kundenservice, krankenhaus exklusiv
-  // Call-Center, alle übrigen Kategorien als gemeinsamer Pool.
-  const exclusive = isCallcenter ? "krankenhaus" : "praxis";
-  const excluded = isCallcenter ? "praxis" : "krankenhaus";
-  const outbound: OutboundTarget[] = (targetRows ?? [])
-    .filter((t) => (t.kategorie ?? "sonstiges") !== excluded)
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      kategorie: t.kategorie ?? "sonstiges",
-      ort: t.ort ?? null,
-      relevanz: t.relevanz ?? null,
-      hub: hubName(t.hub_id),
-      letzter_besuch: t.letzter_besuch ?? null,
-      letzte_kontakt_art: t.letzte_kontakt_art ?? null,
-      naechster_besuch: t.naechster_besuch ?? null,
-      besuchs_notiz: t.besuchs_notiz ?? null,
-      exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
-    }));
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">

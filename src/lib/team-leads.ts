@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
-import type { InboundLead } from "@/components/team-workspace";
+import type { InboundLead, OutboundTarget } from "@/components/team-workspace";
 
 /**
  * Inbound-Leads eines Teams zusammensetzen (SERVER ONLY) — gemeinsam
@@ -118,4 +118,44 @@ export async function buildTeamInbound(
   }
   inbound.sort((a, b) => (b.datum ?? "").localeCompare(a.datum ?? ""));
   return inbound;
+}
+
+/**
+ * Outbound-Anrufliste eines Teams (SERVER ONLY) — Kategorie-Split wie auf
+ * den persönlichen Seiten: praxis exklusiv Kundenservice, krankenhaus
+ * exklusiv Call-Center, alle übrigen Kategorien als gemeinsamer Pool.
+ */
+export async function buildTeamOutbound(
+  team: "kundenservice" | "callcenter",
+): Promise<OutboundTarget[]> {
+  const admin = createAdminClient();
+  const isCallcenter = team === "callcenter";
+  const [{ data: targetRows }, { data: hubRows }] = await Promise.all([
+    admin
+      .from("crm_targets")
+      .select(
+        "id, name, kategorie, ort, adresse, hub_id, relevanz, letzter_besuch, letzte_kontakt_art, naechster_besuch, besuchs_notiz, intervall_wochen",
+      )
+      .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
+    admin.from("hubs").select("id, name"),
+  ]);
+  const hubName = (id: string | null) =>
+    (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
+  const exclusive = isCallcenter ? "krankenhaus" : "praxis";
+  const excluded = isCallcenter ? "praxis" : "krankenhaus";
+  return (targetRows ?? [])
+    .filter((t) => (t.kategorie ?? "sonstiges") !== excluded)
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      kategorie: t.kategorie ?? "sonstiges",
+      ort: t.ort ?? null,
+      relevanz: t.relevanz ?? null,
+      hub: hubName(t.hub_id),
+      letzter_besuch: t.letzter_besuch ?? null,
+      letzte_kontakt_art: t.letzte_kontakt_art ?? null,
+      naechster_besuch: t.naechster_besuch ?? null,
+      besuchs_notiz: t.besuchs_notiz ?? null,
+      exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
+    }));
 }

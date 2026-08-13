@@ -1,27 +1,27 @@
 import { requireSession } from "@/lib/auth";
-import { buildTeamInbound } from "@/lib/team-leads";
-import { PdlTabs } from "@/components/pdl-tabs";
-import { LeadTeamSwitch } from "@/components/lead-team-switch";
+import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
+import { CrmBoard } from "@/components/crm-board";
 import { CrmIntro } from "@/components/crm-intro";
 import { TeamWorkspace } from "@/components/team-workspace";
 import { FrontofficeSection } from "./frontoffice-section";
-import { ZieleSection } from "./ziele-section";
 
 export const dynamic = "force-dynamic";
 // Server-Actions der CRM-Sektionen rufen Claude auf — mehr Zeit als die 10s-Vorgabe.
 export const maxDuration = 60;
 
 /**
- * CRM & Leads — eine Seite für alle: grafisches Intro (wer bearbeitet was),
- * je ein Lead-Monitor pro Team (Belinda & Adelina / Davina, gleiche Ansicht
- * wie ihre persönlichen Seiten, nur ohne Aktionen) und die zentrale
- * Institutionen-/Anrufverwaltung.
+ * CRM & Leads: Team-Switch (Belinda & Adelina / Davina) über dem großen
+ * Toggle "Anstehende Leads" vs. "Outbound-Anrufe" — jedes Team hat seine
+ * eigene Lead-Inbox und seine eigene Anrufliste. Alles direkt bearbeitbar
+ * (Admin-Session). Das volle Institutionen-CRM liegt auf /crm-admin.
  */
 export default async function CrmPage() {
   const session = await requireSession();
-  const [ksInbound, ccInbound] = await Promise.all([
+  const [ksInbound, ccInbound, ksOutbound, ccOutbound] = await Promise.all([
     buildTeamInbound("kundenservice"),
     buildTeamInbound("callcenter"),
+    buildTeamOutbound("kundenservice"),
+    buildTeamOutbound("callcenter"),
   ]);
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { data: hubRows } = await createAdminClient().from("hubs").select("id, name");
@@ -30,90 +30,70 @@ export default async function CrmPage() {
   const editorName = session.profile?.name?.trim() || "Admin";
   const openCount = (l: { status: string }[]) =>
     l.filter((x) => ["offen", "kontaktiert"].includes(x.status)).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const dueCount = (l: { letzter_besuch: string | null; naechster_besuch: string | null }[]) =>
+    l.filter((t) => !t.letzter_besuch || (t.naechster_besuch !== null && t.naechster_besuch <= today)).length;
+
+  const workspace = (
+    team: "kundenservice" | "callcenter",
+    view: "inbound" | "outbound",
+  ) => (
+    <TeamWorkspace
+      monitor
+      editable={editable}
+      view={view}
+      token=""
+      memberName={editorName}
+      inbound={team === "kundenservice" ? ksInbound : ccInbound}
+      outbound={team === "kundenservice" ? ksOutbound : ccOutbound}
+      hubs={hubs}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold">CRM &amp; Leads</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gesamtsicht für alle: die Leads beider Teams (bearbeitet wird auf
-          den persönlichen Links) und die zentrale Anruf- und Besuchsliste
-          der Institutionen.
+          Leads und Anruflisten beider Teams — hier direkt bearbeitbar, jede
+          Aktion wird unter deinem Namen gespeichert.
         </p>
       </div>
 
       <CrmIntro />
 
-      <PdlTabs
-        defaultId="leads"
-        tabs={[
+      <CrmBoard
+        teams={[
           {
-            id: "leads",
-            label: "Anstehende Leads",
-            badge: openCount(ksInbound) + openCount(ccInbound),
-            content: (
-              <LeadTeamSwitch
-                teams={[
-                  {
-                    id: "kundenservice",
-                    label: "Belinda & Adelina",
-                    badge: openCount(ksInbound),
-                    content: (
-                      <div className="flex flex-col gap-6">
-                        <TeamWorkspace
-                          monitor
-                          editable={editable}
-                          token=""
-                          memberName={editorName}
-                          inbound={ksInbound}
-                          outbound={[]}
-                          hubs={hubs}
-                        />
-                        <details className="group rounded-xl border bg-card shadow-sm">
-                          <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
-                            Anruf manuell erfassen &amp; Quellen-Auswertung
-                            <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
-                              aufklappen
-                            </span>
-                          </summary>
-                          <div className="border-t p-4">
-                            <FrontofficeSection />
-                          </div>
-                        </details>
-                      </div>
-                    ),
-                  },
-                  {
-                    id: "callcenter",
-                    label: "Davina",
-                    badge: openCount(ccInbound),
-                    content: (
-                      <div className="flex flex-col gap-3">
-                        <TeamWorkspace
-                          monitor
-                          editable={editable}
-                          token=""
-                          memberName={editorName}
-                          inbound={ccInbound}
-                          outbound={[]}
-                          hubs={hubs}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Davinas Krankenhaus-Anrufliste läuft über ihren
-                          persönlichen Link; die zentrale Liste steht im Tab
-                          „Outbound-Anrufe&ldquo;.
-                        </p>
-                      </div>
-                    ),
-                  },
-                ]}
-              />
+            id: "kundenservice",
+            label: "Belinda & Adelina",
+            leadsBadge: openCount(ksInbound),
+            outboundBadge: dueCount(ksOutbound),
+            leads: (
+              <div className="flex flex-col gap-6">
+                {workspace("kundenservice", "inbound")}
+                <details className="group rounded-xl border bg-card shadow-sm">
+                  <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+                    Anruf manuell erfassen &amp; Quellen-Auswertung
+                    <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                      aufklappen
+                    </span>
+                  </summary>
+                  <div className="border-t p-4">
+                    <FrontofficeSection />
+                  </div>
+                </details>
+              </div>
             ),
+            outbound: workspace("kundenservice", "outbound"),
           },
           {
-            id: "outbound",
-            label: "Outbound-Anrufe",
-            content: <ZieleSection mode="caller" />,
+            id: "callcenter",
+            label: "Davina",
+            leadsBadge: openCount(ccInbound),
+            outboundBadge: dueCount(ccOutbound),
+            leads: workspace("callcenter", "inbound"),
+            outbound: workspace("callcenter", "outbound"),
           },
         ]}
       />

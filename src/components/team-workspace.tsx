@@ -82,10 +82,11 @@ const STATUS_TONE: Record<string, string> = {
 /** Farbige Quellen-Chips: jede Quelle sofort erkennbar. */
 const QUELLE_TONE: Record<string, string> = {
   meta: "border-violet-200 bg-violet-50 text-violet-800",
-  recare: "border-teal-200 bg-teal-50 text-teal-800",
-  agentur: "border-amber-200 bg-amber-50 text-amber-800",
+  google: "border-emerald-200 bg-emerald-50 text-emerald-800",
   website: "border-sky-200 bg-sky-50 text-sky-800",
-  telefon0800: "border-sky-200 bg-sky-50 text-sky-800",
+  agentur: "border-amber-200 bg-amber-50 text-amber-800",
+  recare: "border-teal-200 bg-teal-50 text-teal-800",
+  telefon0800: "border-indigo-200 bg-indigo-50 text-indigo-800",
 };
 
 const QUELLE_ICON: Record<string, LucideIcon> = {
@@ -307,19 +308,29 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
   );
 }
 
-/** Prominenter Eingangszeitpunkt: „vor 23 Min eingegangen" / „gestern um 10:47" … */
-function eingegangenLabel(iso: string): string {
+/** Verstrichene Zeit seit Eingang — groß auf der Karte („vor 23 Min"). */
+function elapsedLabel(iso: string): string {
   const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "Eingang unbekannt";
+  if (Number.isNaN(t)) return "—";
   const min = Math.floor((Date.now() - t) / 60000);
-  if (min < 1) return "gerade eben eingegangen";
-  if (min < 60) return `vor ${min} Min eingegangen`;
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} Min`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `vor ${h} Std eingegangen`;
+  if (h < 24) return `vor ${h} Std`;
+  const days = Math.floor(h / 24);
+  if (days === 1) return "gestern";
+  return `vor ${days} Tagen`;
+}
+
+/** Exakter Eingangszeitpunkt („13.08., 10:47"). */
+function exactStamp(iso: string): string {
   const d = new Date(iso);
-  const zeit = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-  if (h < 48) return `gestern um ${zeit} eingegangen`;
-  return `am ${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} um ${zeit} eingegangen`;
+  if (Number.isNaN(d.getTime())) return "";
+  const datum = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+  const zeit = iso.includes("T")
+    ? d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  return zeit ? `${datum}, ${zeit}` : datum;
 }
 
 /** „vor 5 Min" / „vor 3 Std." / leer ab gestern (dann zählt die Tages-Gruppe). */
@@ -378,6 +389,7 @@ export function TeamWorkspace({
   hubs,
   monitor = false,
   editable = false,
+  view = "tabs",
 }: {
   token: string;
   memberName: string;
@@ -388,6 +400,9 @@ export function TeamWorkspace({
    * editable=true bleiben die Lead-Aktionen trotzdem nutzbar (Admin-Session). */
   monitor?: boolean;
   editable?: boolean;
+  /** "tabs" = eigener Umschalter (persönliche Seiten); "inbound"/"outbound"
+   * = nur eine Ansicht, Umschalter kommt von außen (/crm-Board). */
+  view?: "tabs" | "inbound" | "outbound";
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
@@ -479,7 +494,7 @@ export function TeamWorkspace({
 
   return (
     <div className="flex flex-col gap-4">
-      {!monitor && (
+      {view === "tabs" && !monitor && (
       <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
         <button
           type="button"
@@ -532,7 +547,7 @@ export function TeamWorkspace({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {(monitor || tab === "inbound") && (
+      {(view === "inbound" || (view === "tabs" && (monitor || tab === "inbound"))) && (
         <div className="flex flex-col gap-2">
           {canAct && (
             <InboundCallLog
@@ -592,17 +607,20 @@ export function TeamWorkspace({
                 <SourceRail quelle={l.quelle} />
                 <div className="flex min-w-0 flex-1 gap-4 rounded-xl border bg-card p-3.5 shadow-sm">
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1.5 text-sm font-bold tabular-nums">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="flex items-center gap-2 text-xl leading-6 font-bold tabular-nums">
                     {relTime(l.datum) && l.status === "offen" && (
                       <span
                         className="size-2 animate-pulse rounded-full bg-primary"
                         title="neu"
                       />
                     )}
-                    {eingegangenLabel(l.datum)}
+                    {elapsedLabel(l.datum)}
                   </span>
-                  <span className="font-medium">{l.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    eingegangen {exactStamp(l.datum)}
+                  </span>
+                  <span className="text-base font-semibold">{l.name}</span>
                   <span
                     className={cn(
                       "rounded-full border px-2 py-0.5 text-[11px] font-medium",
@@ -645,10 +663,9 @@ export function TeamWorkspace({
                       {l.email}
                     </a>
                   )}
-                  <span className="text-xs text-muted-foreground">
-                    {l.datum ? formatIsoDate(l.datum.slice(0, 10)) : ""}
-                    {l.hub ? ` · ${l.hub}` : ""}
-                  </span>
+                  {l.hub && (
+                    <span className="text-xs text-muted-foreground">{l.hub}</span>
+                  )}
                 </p>
                 <LeadNote
                   lead={l}
@@ -812,7 +829,7 @@ export function TeamWorkspace({
         </div>
       )}
 
-      {!monitor && tab === "outbound" && (
+      {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
         <ul className="flex flex-col gap-2">
           {sortedOutbound.map((t) => (
             <OutboundRow
