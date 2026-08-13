@@ -139,8 +139,9 @@ export function TeamWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
 
-  // Auto-Aktualisierung: alle 5 Minuten neu laden (holt auch neue Recare-
-  // Mails ab) — außer, gerade wird etwas eingetippt.
+  // Auto-Aktualisierung: alle 20 Sekunden neu laden — neue Anfragen ploppen
+  // oben auf. Pausiert beim Tippen und in Hintergrund-Tabs; der Mail-Abruf
+  // selbst ist serverseitig auf 1×/Minute gedrosselt.
   useEffect(() => {
     const id = setInterval(() => {
       const el = document.activeElement;
@@ -149,7 +150,7 @@ export function TeamWorkspace({
       if (!typing && document.visibilityState === "visible") {
         window.location.reload();
       }
-    }, 5 * 60 * 1000);
+    }, 20 * 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -281,7 +282,7 @@ export function TeamWorkspace({
                 </span>
               ))}
             <span className="ml-auto text-[11px] text-muted-foreground">
-              neueste zuerst · aktualisiert sich alle 5 Min
+              neueste zuerst · aktualisiert sich automatisch
             </span>
             {doneInbound > 0 && (
               <button

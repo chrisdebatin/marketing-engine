@@ -105,8 +105,28 @@ async function extract(text: string): Promise<Extracted | null> {
   }
 }
 
+const LAST_SYNC_KEY = "recare_last_sync_at";
+const SYNC_MIN_INTERVAL_MS = 60_000;
+
 export async function syncRecareMails(): Promise<RecareSyncResult> {
   const admin = createAdminClient();
+
+  // Drossel: Die Team-Seite lädt alle 20 s neu — das Postfach wird trotzdem
+  // höchstens einmal pro Minute abgefragt.
+  const { data: lastSync } = await admin
+    .from("app_settings")
+    .select("value")
+    .eq("key", LAST_SYNC_KEY)
+    .maybeSingle();
+  const last = typeof lastSync?.value === "string" ? Date.parse(lastSync.value) : 0;
+  if (Number.isFinite(last) && Date.now() - last < SYNC_MIN_INTERVAL_MS) {
+    return { imported: 0, skipped: 0, error: null };
+  }
+  await admin.from("app_settings").upsert({
+    key: LAST_SYNC_KEY,
+    value: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  });
 
   // Eingangskanal: bevorzugt das IMAP-Lead-Postfach (Gmail, kein Admin
   // nötig), sonst das angebundene Outlook-Konto.
