@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CalendarClock,
   Check,
@@ -65,6 +65,52 @@ const STATUS_TONE: Record<string, string> = {
   verloren: "bg-muted text-muted-foreground",
 };
 
+/** Farbige Quellen-Chips: jede Quelle sofort erkennbar. */
+const QUELLE_TONE: Record<string, string> = {
+  meta: "border-violet-200 bg-violet-50 text-violet-800",
+  recare: "border-teal-200 bg-teal-50 text-teal-800",
+  agentur: "border-amber-200 bg-amber-50 text-amber-800",
+  website: "border-sky-200 bg-sky-50 text-sky-800",
+  telefon0800: "border-sky-200 bg-sky-50 text-sky-800",
+};
+
+/** „vor 5 Min" / „vor 3 Std." / leer ab gestern (dann zählt die Tages-Gruppe). */
+function relTime(iso: string): string | null {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const min = Math.floor((Date.now() - t) / 60000);
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} Min`;
+  const h = Math.floor(min / 60);
+  if (h < 12) return `vor ${h} Std`;
+  return null;
+}
+
+function dayKey(iso: string): string {
+  return (iso || "").slice(0, 10);
+}
+
+function dayLabel(key: string): string {
+  const today = new Date();
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  if (key === iso(today)) return "Heute";
+  const yesterday = new Date(today.getTime() - 86400_000);
+  if (key === iso(yesterday)) return "Gestern";
+  const d = new Date(`${key}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "Ohne Datum";
+  return d.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function timeOf(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime()) || !iso.includes("T")) return "";
+  return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+}
+
 async function teamAction(token: string, payload: Record<string, unknown>) {
   const res = await fetch("/api/public/team", {
     method: "POST",
@@ -93,10 +139,38 @@ export function TeamWorkspace({
   const [error, setError] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
 
+  // Auto-Aktualisierung: alle 5 Minuten neu laden (holt auch neue Recare-
+  // Mails ab) — außer, gerade wird etwas eingetippt.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const el = document.activeElement;
+      const typing =
+        el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement;
+      if (!typing && document.visibilityState === "visible") {
+        window.location.reload();
+      }
+    }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const openInbound = inbound.filter((l) =>
     ["offen", "kontaktiert"].includes(l.status),
   );
   const doneInbound = inbound.length - openInbound.length;
+
+  // Zähler je Quelle (nur offene) + Tages-Gruppen, neueste zuerst.
+  const sourceCounts = new Map<string, number>();
+  for (const l of openInbound) {
+    sourceCounts.set(l.quelle, (sourceCounts.get(l.quelle) ?? 0) + 1);
+  }
+  const shownInbound = showDone ? inbound : openInbound;
+  const dayGroups: { key: string; leads: InboundLead[] }[] = [];
+  for (const l of shownInbound) {
+    const key = dayKey(l.datum);
+    const last = dayGroups[dayGroups.length - 1];
+    if (last && last.key === key) last.leads.push(l);
+    else dayGroups.push({ key, leads: [l] });
+  }
 
   const today = todayIso();
   const due = (t: OutboundTarget) =>
@@ -191,31 +265,77 @@ export function TeamWorkspace({
 
       {tab === "inbound" && (
         <div className="flex flex-col gap-2">
-          {doneInbound > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowDone((s) => !s)}
-              className="self-start text-xs text-muted-foreground hover:text-foreground"
-            >
-              {showDone
-                ? "Abgeschlossene ausblenden"
-                : `${doneInbound} abgeschlossene anzeigen`}
-            </button>
-          )}
-          {(showDone ? inbound : openInbound).length === 0 && (
+          {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            {[...sourceCounts.entries()]
+              .sort((a, b) => b[1] - a[1])
+              .map(([q, n]) => (
+                <span
+                  key={q}
+                  className={cn(
+                    "rounded-full border px-2.5 py-1 text-xs font-semibold",
+                    QUELLE_TONE[q] ?? "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {n} × {leadQuelleLabel(q) || q}
+                </span>
+              ))}
+            <span className="ml-auto text-[11px] text-muted-foreground">
+              neueste zuerst · aktualisiert sich alle 5 Min
+            </span>
+            {doneInbound > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDone((s) => !s)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                {showDone
+                  ? "Abgeschlossene ausblenden"
+                  : `${doneInbound} abgeschlossene anzeigen`}
+              </button>
+            )}
+          </div>
+          {shownInbound.length === 0 && (
             <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-              Keine offenen Anfragen. 🎉
+              Keine offenen Anfragen. 🎉 Neue Recare-/Meta-Anfragen erscheinen
+              hier automatisch oben.
             </p>
           )}
-          <ul className="flex flex-col gap-2">
-            {(showDone ? inbound : openInbound).map((l) => (
+          {dayGroups.map((g) => (
+            <div key={g.key} className="flex flex-col gap-2">
+              <p className="mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:mt-0">
+                {dayLabel(g.key)}
+                <span className="h-px flex-1 bg-border" />
+                <span className="font-normal normal-case">
+                  {g.leads.length} Anfrage{g.leads.length === 1 ? "" : "n"}
+                </span>
+              </p>
+              <ul className="flex flex-col gap-2">
+                {g.leads.map((l) => (
               <li
                 key={`${l.kind}-${l.id}`}
                 className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
               >
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground tabular-nums">
+                    {relTime(l.datum) && l.status === "offen" && (
+                      <span
+                        className="size-1.5 animate-pulse rounded-full bg-primary"
+                        title="neu"
+                      />
+                    )}
+                    {timeOf(l.datum) || "—"}
+                    {relTime(l.datum) && (
+                      <span className="font-normal">({relTime(l.datum)})</span>
+                    )}
+                  </span>
                   <span className="font-medium">{l.name}</span>
-                  <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                      QUELLE_TONE[l.quelle] ?? "text-muted-foreground",
+                    )}
+                  >
                     {leadQuelleLabel(l.quelle) || l.quelle}
                     {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
                   </span>
@@ -327,8 +447,10 @@ export function TeamWorkspace({
                   )}
                 </div>
               </li>
-            ))}
-          </ul>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
       )}
 
