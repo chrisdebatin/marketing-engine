@@ -22,14 +22,14 @@ export function AppSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r bg-card/60 backdrop-blur-xl lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r bg-sidebar lg:flex">
       {/* Logo */}
       <Link
         href="/"
         className="flex h-16 shrink-0 items-center gap-2.5 border-b px-5 font-semibold"
       >
-        <span className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-chart-5 text-primary-foreground shadow-sm">
-          <Megaphone className="size-4.5" />
+        <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Megaphone className="size-4" />
         </span>
         <span className="leading-tight">
           Marketing-Engine
@@ -42,25 +42,31 @@ export function AppSidebar({
       {/* Gruppierte Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {navGroups(isAdmin).map((group) => (
-          <div key={group.title} className="mb-5">
-            <p className="mb-1.5 px-2 text-[0.65rem] font-semibold tracking-wider text-muted-foreground uppercase">
+          <div key={group.title} className="mb-6">
+            <p className="mb-1.5 px-2.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/80">
               {group.title}
             </p>
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col gap-px">
               {group.items.map(({ href, label, Icon }) => {
                 const active = isNavActive(href, pathname);
                 return (
                   <li key={href}>
                     <Link
                       href={href}
+                      aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-all",
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
                         active
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                          ? "bg-accent font-medium text-foreground"
+                          : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
-                      <Icon className="size-4 shrink-0" />
+                      <Icon
+                        className={cn(
+                          "size-4 shrink-0",
+                          active ? "text-primary" : "text-muted-foreground/70",
+                        )}
+                      />
                       {label}
                     </Link>
                   </li>

@@ -16,7 +16,7 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold">
-          <span className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-chart-5 text-primary-foreground shadow-sm">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Megaphone className="size-4" />
           </span>
           <span className="hidden sm:inline">Marketing-Engine</span>
@@ -28,11 +28,12 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
               <Link
                 key={l.href}
                 href={l.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-all",
+                  "rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
                   active
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-accent font-medium text-foreground"
+                    : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
                 {l.label}

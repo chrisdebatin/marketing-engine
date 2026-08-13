@@ -123,20 +123,16 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(
-        60rem 60rem at 100% -10%,
-        color-mix(in oklch, var(--primary) 10%, transparent),
-        transparent 60%
-      ),
-      radial-gradient(
-        50rem 50rem at -10% 0%,
-        color-mix(in oklch, var(--primary) 7%, transparent),
-        transparent 55%
-      );
-    background-attachment: fixed;
   }
   html {
     @apply font-sans antialiased;
+  }
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 18%, transparent);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
   }
 }

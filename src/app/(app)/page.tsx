@@ -7,9 +7,6 @@ import {
   Map as MapIcon,
   Settings,
   Building2,
-  ArrowRight,
-  Package,
-  User,
   type LucideIcon,
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
@@ -101,7 +98,10 @@ function BoxProgress({ delivered, distributed }: BoxStat) {
         </span>
       </div>
       <div
-        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        className={cn(
+          "h-1.5 w-full overflow-hidden rounded-full",
+          done ? "bg-chart-4/20" : "bg-primary/15",
+        )}
         role="progressbar"
         aria-valuenow={pct}
         aria-valuemin={0}
@@ -129,27 +129,24 @@ function BoxProgress({ delivered, distributed }: BoxStat) {
 
 /** Große Kennzahl-Kachel für das Dashboard oben auf der Startseite. */
 function StatCard({
-  Icon,
   value,
   label,
   sub,
 }: {
-  Icon: LucideIcon;
   value: number;
   label: string;
   sub?: string;
 }) {
   return (
     <Card>
-      <CardContent className="flex flex-col gap-1.5 p-5">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Icon className="size-4.5" />
-        </span>
-        <span className="text-3xl font-semibold tracking-tight tabular-nums">
+      <CardContent className="flex h-full flex-col gap-0.5 p-5">
+        <span className="text-sm text-muted-foreground">{label}</span>
+        <span className="text-3xl font-semibold tracking-tight">
           {value.toLocaleString("de-DE")}
         </span>
-        <span className="text-sm font-medium">{label}</span>
-        {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+        {sub && (
+          <span className="mt-1 text-xs text-muted-foreground">{sub}</span>
+        )}
       </CardContent>
     </Card>
   );
@@ -263,25 +260,21 @@ export default async function HomePage() {
       {/* Kennzahlen-Dashboard */}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
-          Icon={Package}
           value={totals.boxesDelivered}
           label="Boxen geliefert"
           sub={`${totals.boxSpots} Box-Lieferorte eingetragen`}
         />
         <StatCard
-          Icon={ListChecks}
           value={totals.flyerSpots}
           label="Flyer-Auslagen (Orte)"
           sub="von den PDLs eingetragen"
         />
         <StatCard
-          Icon={Truck}
           value={totals.flyersDelivered}
           label="Flyer geliefert"
           sub={`+ ${totals.aufstellerDelivered.toLocaleString("de-DE")} Aufsteller`}
         />
         <StatCard
-          Icon={MapIcon}
           value={totals.boxSpots + totals.flyerSpots}
           label="Orte gesamt"
           sub="alle Auslagen & Box-Lieferorte"
@@ -296,27 +289,19 @@ export default async function HomePage() {
       />
 
       <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <ArrowRight className="size-4" />
+        <h2 className="text-sm font-medium text-muted-foreground">
           Schnellzugriff
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tiles.map(({ href, title, description, Icon }) => (
             <Link key={href} href={href} className="group">
-              <Card className="relative h-full overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
-                <CardContent className="flex h-full flex-col gap-3 p-5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-                      <Icon className="size-5" />
-                    </span>
-                    <ArrowRight className="size-4 -translate-x-1 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+              <Card className="h-full transition-colors hover:ring-primary/30 group-focus-visible:ring-2 group-focus-visible:ring-ring">
+                <CardContent className="flex h-full flex-col gap-1 p-5">
+                  <div className="flex items-center gap-2">
+                    <Icon className="size-4 text-primary" />
+                    <h3 className="font-medium">{title}</h3>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <h3 className="font-semibold">{title}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {description}
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">{description}</p>
                 </CardContent>
               </Card>
             </Link>
@@ -326,8 +311,7 @@ export default async function HomePage() {
 
       {session.hubs.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Package className="size-4" />
+          <h2 className="text-sm font-medium text-muted-foreground">
             Hub-Übersicht nach MD
           </h2>
           {mdGroups.map((g) => (
@@ -349,24 +333,18 @@ export default async function HomePage() {
                   };
                   return (
                     <Link key={h.id} href={`/hubs/${h.id}`} className="group">
-                      <Card className="h-full transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+                      <Card className="h-full transition-colors hover:ring-primary/30 group-focus-visible:ring-2 group-focus-visible:ring-ring">
                         <CardContent className="flex h-full flex-col gap-4 p-5">
-                          <div className="flex items-start gap-3">
-                            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                              <Building2 className="size-5" />
-                            </span>
-                            <div className="min-w-0">
-                              <h4 className="flex flex-wrap items-center gap-2 leading-tight font-semibold">
-                                <span className="truncate">{h.name}</span>
-                                <HubTags md={null} pdl={h.pdl_name} />
-                              </h4>
-                              {h.region && (
-                                <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
-                                  <User className="size-3.5 shrink-0" />
-                                  <span className="truncate">{h.region}</span>
-                                </p>
-                              )}
-                            </div>
+                          <div className="min-w-0">
+                            <h4 className="flex flex-wrap items-center gap-2 leading-tight font-medium">
+                              <span className="truncate">{h.name}</span>
+                              <HubTags md={null} pdl={h.pdl_name} />
+                            </h4>
+                            {h.region && (
+                              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                                {h.region}
+                              </p>
+                            )}
                           </div>
                           <div className="mt-auto">
                             <BoxProgress

@@ -15,16 +15,11 @@ export default async function AppLayout({
       <AppSidebar isAdmin={session.isAdmin} email={session.email} />
 
       <div className="relative flex min-h-full flex-1 flex-col lg:pl-64">
-        {/* Dezenter Farbverlauf hinter dem Inhalt */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-primary/[0.07] via-primary/[0.03] to-transparent"
-        />
         {/* Mobil: Top-Bar */}
         <div className="lg:hidden">
           <AppHeader isAdmin={session.isAdmin} email={session.email} />
         </div>
-        <main className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>

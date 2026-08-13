@@ -7,13 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 export function LoginForm({ initialError }: { initialError: string | null }) {
   const [email, setEmail] = useState("");
@@ -49,27 +42,22 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <div className="mb-1 flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <Megaphone className="size-4" />
-          </span>
-          <span className="font-semibold">Marketing-Engine</span>
-        </div>
-        <CardTitle>Anmelden</CardTitle>
-        <CardDescription>
-          Gib deine E-Mail-Adresse ein — wir senden dir einen Login-Link. Ein
-          Passwort ist nicht nötig.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <div className="w-full max-w-sm">
+      <span className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+        <Megaphone className="size-5" />
+      </span>
+      <h1 className="mt-6 text-2xl font-semibold tracking-tight">Anmelden</h1>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        Gib deine E-Mail-Adresse ein — wir senden dir einen Login-Link. Ein
+        Passwort ist nicht nötig.
+      </p>
+      <div className="mt-8">
         {sent ? (
           <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
             Link wurde gesendet — bitte E-Mail öffnen.
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="login-email">E-Mail-Adresse</Label>
               <Input
@@ -80,6 +68,7 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="h-10"
               />
             </div>
             {error && (
@@ -87,19 +76,22 @@ export function LoginForm({ initialError }: { initialError: string | null }) {
                 {error}
               </p>
             )}
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending} className="h-10 w-full">
               {pending ? "Wird gesendet …" : "Login-Link senden"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Ohne Login kannst du die App weiterhin{" "}
-              <Link href="/" className="underline">
+              <Link
+                href="/"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
                 direkt nutzen
               </Link>
               .
             </p>
           </form>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
