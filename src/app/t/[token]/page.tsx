@@ -47,7 +47,10 @@ export default async function TeamMemberPage({
     const sync = await syncRecareMails().catch(() => null);
     if (sync?.error === "outlook_not_connected") {
       recareHint =
-        "Recare-Import: kein Outlook-Postfach angebunden (Admin → E-Mail-Anbindung).";
+        "Recare-Import: kein Lead-Postfach eingerichtet — LEADS_IMAP_USER/PASS setzen (Gmail-App-Passwort) oder Outlook anbinden.";
+    } else if (sync?.error === "imap_error") {
+      recareHint =
+        "Recare-Import: Lead-Postfach (IMAP) nicht erreichbar — Zugangsdaten prüfen.";
     }
   }
 

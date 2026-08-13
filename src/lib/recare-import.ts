@@ -108,9 +108,36 @@ async function extract(text: string): Promise<Extracted | null> {
 export async function syncRecareMails(): Promise<RecareSyncResult> {
   const admin = createAdminClient();
 
-  const mails = await inboxMails(50);
-  if (mails === null) {
-    return { imported: 0, skipped: 0, error: "outlook_not_connected" };
+  // Eingangskanal: bevorzugt das IMAP-Lead-Postfach (Gmail, kein Admin
+  // nötig), sonst das angebundene Outlook-Konto.
+  let mails: { id: string; subject: string; fromAddress: string; receivedAt: string; body: string | null; preview: string }[];
+  const { imapConfigured, fetchUnseenMails } = await import("@/lib/imap-inbox");
+  if (imapConfigured()) {
+    const inbound = await fetchUnseenMails(20).catch(() => null);
+    if (inbound === null) {
+      return { imported: 0, skipped: 0, error: "imap_error" };
+    }
+    mails = inbound.map((m) => ({
+      id: m.id,
+      subject: m.subject,
+      fromAddress: m.fromAddress,
+      receivedAt: m.receivedAt,
+      body: m.text,
+      preview: m.text.slice(0, 300),
+    }));
+  } else {
+    const outlook = await inboxMails(50);
+    if (outlook === null) {
+      return { imported: 0, skipped: 0, error: "outlook_not_connected" };
+    }
+    mails = outlook.map((m) => ({
+      id: m.id,
+      subject: m.subject,
+      fromAddress: m.fromAddress,
+      receivedAt: m.receivedAt,
+      body: null,
+      preview: m.preview,
+    }));
   }
 
   const { data: setting } = await admin
@@ -128,7 +155,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
 
   for (const m of candidates) {
     processed.add(m.id);
-    const body = (await fetchBody(m.id)) ?? m.preview;
+    const body = m.body ?? (await fetchBody(m.id)) ?? m.preview;
     const data = await extract(`Betreff: ${m.subject}\n\n${body}`);
     if (!data) {
       skipped++;
