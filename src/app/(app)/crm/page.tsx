@@ -1,7 +1,9 @@
 import { requireSession } from "@/lib/auth";
+import { buildTeamInbound } from "@/lib/team-leads";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { CrmIntro } from "@/components/crm-intro";
 import { CrmHandoverStats } from "@/components/crm-handover-stats";
+import { TeamWorkspace } from "@/components/team-workspace";
 import { FrontofficeSection } from "./frontoffice-section";
 import { ZieleSection } from "./ziele-section";
 
@@ -10,20 +12,28 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * CRM & Leads — konsolidiert die früheren Tabs "Frontoffice" und
- * "CRM & Call-Center" in einer Seite: grafisches Intro (wer bearbeitet
- * was), Inbound-Leads und die Institutionen-/Anrufverwaltung.
+ * CRM & Leads — eine Seite für alle: grafisches Intro (wer bearbeitet was),
+ * je ein Lead-Monitor pro Team (Belinda & Adelina / Davina, gleiche Ansicht
+ * wie ihre persönlichen Seiten, nur ohne Aktionen) und die zentrale
+ * Institutionen-/Anrufverwaltung.
  */
 export default async function CrmPage() {
   const session = await requireSession();
+  const [ksInbound, ccInbound] = await Promise.all([
+    buildTeamInbound("kundenservice"),
+    buildTeamInbound("callcenter"),
+  ]);
+  const openCount = (l: { status: string }[]) =>
+    l.filter((x) => ["offen", "kontaktiert"].includes(x.status)).length;
+
   return (
     <div className="flex flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold">CRM &amp; Leads</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Eine Seite für beide Teams: eingehende Anfragen (Kundenservice +
-          Call-Center) und die zentrale Anruf- und Besuchsliste der
-          Institutionen.
+          Gesamtsicht für alle: die Leads beider Teams (bearbeitet wird auf
+          den persönlichen Links) und die zentrale Anruf- und Besuchsliste
+          der Institutionen.
         </p>
       </div>
 
@@ -34,9 +44,54 @@ export default async function CrmPage() {
       <PdlTabs
         tabs={[
           {
-            id: "leads",
-            label: "Anfragen (Inbound)",
-            content: <FrontofficeSection />,
+            id: "kundenservice",
+            label: "Belinda & Adelina",
+            badge: openCount(ksInbound),
+            content: (
+              <div className="flex flex-col gap-6">
+                <TeamWorkspace
+                  monitor
+                  token=""
+                  memberName=""
+                  inbound={ksInbound}
+                  outbound={[]}
+                  hubs={[]}
+                />
+                <details className="group rounded-xl border bg-card shadow-sm">
+                  <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+                    Anruf manuell erfassen &amp; Quellen-Auswertung
+                    <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                      aufklappen
+                    </span>
+                  </summary>
+                  <div className="border-t p-4">
+                    <FrontofficeSection />
+                  </div>
+                </details>
+              </div>
+            ),
+          },
+          {
+            id: "callcenter",
+            label: "Davina",
+            badge: openCount(ccInbound),
+            content: (
+              <div className="flex flex-col gap-3">
+                <TeamWorkspace
+                  monitor
+                  token=""
+                  memberName=""
+                  inbound={ccInbound}
+                  outbound={[]}
+                  hubs={[]}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Davinas Krankenhaus-Anrufliste läuft über ihren persönlichen
+                  Link; die zentrale Liste steht im Tab „Institutionen &amp;
+                  Anrufe&ldquo;.
+                </p>
+              </div>
+            ),
           },
           {
             id: "institutionen",

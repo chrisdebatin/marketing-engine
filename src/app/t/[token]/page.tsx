@@ -1,17 +1,10 @@
 import { notFound } from "next/navigation";
 import { Headset, PhoneCall } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
-import { isRecruitingLead } from "@/lib/lead-forward";
-import {
-  leadEmail,
-  leadFullName,
-  leadPhone,
-} from "@/lib/meta-lead-fields";
+import { buildTeamInbound } from "@/lib/team-leads";
 import { syncRecareMails } from "@/lib/recare-import";
 import {
   TeamWorkspace,
-  type InboundLead,
   type OutboundTarget,
 } from "@/components/team-workspace";
 
@@ -19,10 +12,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Persönliche Team-Seite (Davina / Belinda / Adelina) — kein Login, ein
- * Link pro Person. Inbound-Leads gefiltert nach Team-Quellen (Kundenservice:
- * Website/0800/…, Call-Center: Meta/Recare/Agentur) + Outbound-Anrufliste
- * mit Kategorie-Split (Praxen → Kundenservice, Krankenhäuser → Call-Center,
- * Rest gemeinsam).
+ * Link pro Person. Inbound-Leads nach Team-Routing (lib/team-leads) +
+ * Outbound-Anrufliste mit Kategorie-Split (Praxen → Kundenservice,
+ * Krankenhäuser → Call-Center, Rest gemeinsam).
  */
 export default async function TeamMemberPage({
   params,
@@ -40,9 +32,8 @@ export default async function TeamMemberPage({
   if (!member || !member.active) notFound();
   const isCallcenter = member.team === "callcenter";
 
-  // Lead-Mails (Recare & Co.) aus dem Postfach einsammeln (idempotent,
-  // serverseitig gedrosselt) — läuft bei jedem Team, damit neue Anfragen
-  // unabhängig davon aufploppen, wessen Seite gerade offen ist.
+  // Lead-Mails (Recare, verpasste Anrufe) einsammeln — idempotent und
+  // serverseitig gedrosselt; Fehler blockieren die Seite nicht.
   let recareHint: string | null = null;
   {
     const sync = await syncRecareMails().catch(() => null);
@@ -54,113 +45,19 @@ export default async function TeamMemberPage({
     }
   }
 
-  const [{ data: callRows }, { data: metaRows }, { data: targetRows }, { data: hubRows }] =
-    await Promise.all([
-      admin
-        .from("lead_calls")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200),
-      // Meta-Kunden-Leads bearbeitet das deutsche Team (Kundenservice).
-      !isCallcenter
-        ? admin
-            .from("meta_leads")
-            .select("*")
-            .neq("status", "geloescht")
-            .order("created_time", { ascending: false })
-            .limit(200)
-        : Promise.resolve({ data: [] as never[] }),
-      admin
-        .from("crm_targets")
-        .select(
-          "id, name, kategorie, ort, adresse, hub_id, relevanz, letzter_besuch, letzte_kontakt_art, naechster_besuch, besuchs_notiz, intervall_wochen",
-        )
-        .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
-      admin.from("hubs").select("id, name"),
-    ]);
+  const [inbound, { data: targetRows }, { data: hubRows }] = await Promise.all([
+    buildTeamInbound(isCallcenter ? "callcenter" : "kundenservice"),
+    admin
+      .from("crm_targets")
+      .select(
+        "id, name, kategorie, ort, adresse, hub_id, relevanz, letzter_besuch, letzte_kontakt_art, naechster_besuch, besuchs_notiz, intervall_wochen",
+      )
+      .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
+    admin.from("hubs").select("id, name"),
+  ]);
 
   const hubName = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
-
-  // Standort-Vorschlag: normalisierter Hub-Name im Lead-Text (Kampagne,
-  // Klinik, Notiz) — "Kunden-BadOeynhausen-…" trifft "Bad Oeynhausen".
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-zä-ü0-9]/g, "");
-  const suggestHub = (text: string): string | null => {
-    const t = norm(text);
-    if (t.length < 4) return null;
-    for (const h of hubRows ?? []) {
-      const hn = norm(h.name.replace(/^alltagshilfe\s+/i, ""));
-      if (hn.length >= 4 && t.includes(hn)) return h.id;
-    }
-    return null;
-  };
-
-  // Inbound: Quelle bestimmt das Team.
-  const inbound: InboundLead[] = [];
-  for (const c of callRows ?? []) {
-    const mine = isCallcenter
-      ? CALLCENTER_QUELLEN.has(c.quelle)
-      : !CALLCENTER_QUELLEN.has(c.quelle);
-    if (!mine) continue;
-    inbound.push({
-      kind: "call",
-      id: c.id,
-      name: c.lead_name || "(ohne Name)",
-      telefon: c.telefon ?? null,
-      email: c.email ?? null,
-      quelle: c.quelle,
-      quelle_detail: c.quelle_detail ?? null,
-      datum: c.created_at ?? c.call_date,
-      status: c.status ?? "offen",
-      bearbeiter: c.bearbeiter ?? null,
-      notiz: c.notiz ?? null,
-      ergebnis: c.ergebnis ?? null,
-      hub: hubName(c.hub_id),
-      zugewiesen_hub: hubName(c.zugewiesen_hub_id ?? null),
-      zugewiesen_at: c.zugewiesen_at ?? null,
-      pdl_bestaetigt_at: c.pdl_bestaetigt_at ?? null,
-      pdl_ergebnis: c.pdl_ergebnis ?? null,
-      vorschlag_hub_id: suggestHub(
-        `${c.quelle_detail ?? ""} ${c.notiz ?? ""} ${c.lead_name ?? ""}`,
-      ),
-      direct_booking: isDirectBookingHub(
-        hubName(c.zugewiesen_hub_id ?? null) ??
-          hubName(
-            suggestHub(`${c.quelle_detail ?? ""} ${c.notiz ?? ""}`) ?? null,
-          ),
-      ),
-    });
-  }
-  if (!isCallcenter) {
-    for (const m of metaRows ?? []) {
-      if (isRecruitingLead(m.campaign_name)) continue;
-      inbound.push({
-        kind: "meta",
-        id: m.id,
-        name: leadFullName(m.field_data) ?? "(ohne Name)",
-        telefon: leadPhone(m.field_data),
-        email: leadEmail(m.field_data),
-        quelle: "meta",
-        quelle_detail: m.campaign_name,
-        datum: m.created_time ?? m.created_at ?? "",
-        status: m.status,
-        bearbeiter: m.bearbeiter ?? null,
-        notiz: null,
-        ergebnis: null,
-        hub: null,
-        zugewiesen_hub: hubName(m.zugewiesen_hub_id ?? null),
-        zugewiesen_at: m.zugewiesen_at ?? null,
-        pdl_bestaetigt_at: m.pdl_bestaetigt_at ?? null,
-        pdl_ergebnis: m.pdl_ergebnis ?? null,
-        vorschlag_hub_id: suggestHub(m.campaign_name ?? ""),
-        direct_booking: isDirectBookingHub(
-          hubName(m.zugewiesen_hub_id ?? null) ??
-            hubName(suggestHub(m.campaign_name ?? "") ?? null),
-        ),
-      });
-    }
-  }
-  inbound.sort((a, b) => (b.datum ?? "").localeCompare(a.datum ?? ""));
 
   // Outbound-Split: praxis exklusiv Kundenservice, krankenhaus exklusiv
   // Call-Center, alle übrigen Kategorien als gemeinsamer Pool.

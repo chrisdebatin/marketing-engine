@@ -135,12 +135,15 @@ export function TeamWorkspace({
   inbound: initialInbound,
   outbound: initialOutbound,
   hubs,
+  monitor = false,
 }: {
   token: string;
   memberName: string;
   inbound: InboundLead[];
   outbound: OutboundTarget[];
   hubs: { id: string; name: string }[];
+  /** true = reine Übersicht (z. B. auf /crm): keine Aktionen, kein Auto-Reload. */
+  monitor?: boolean;
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
@@ -152,6 +155,7 @@ export function TeamWorkspace({
   // oben auf. Pausiert beim Tippen und in Hintergrund-Tabs; der Mail-Abruf
   // selbst ist serverseitig auf 1×/Minute gedrosselt.
   useEffect(() => {
+    if (monitor) return;
     const id = setInterval(() => {
       const el = document.activeElement;
       const typing =
@@ -161,7 +165,7 @@ export function TeamWorkspace({
       }
     }, 20 * 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [monitor]);
 
   const openInbound = inbound.filter((l) =>
     ["offen", "kontaktiert"].includes(l.status),
@@ -222,6 +226,7 @@ export function TeamWorkspace({
 
   return (
     <div className="flex flex-col gap-4">
+      {!monitor && (
       <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
         <button
           type="button"
@@ -270,10 +275,11 @@ export function TeamWorkspace({
           )}
         </button>
       </div>
+      )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {tab === "inbound" && (
+      {(monitor || tab === "inbound") && (
         <div className="flex flex-col gap-2">
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
           <div className="flex flex-wrap items-center gap-2">
@@ -415,13 +421,13 @@ export function TeamWorkspace({
                   </p>
                 )}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {!l.bearbeiter && (
+                  {!monitor && !l.bearbeiter && (
                     <Button type="button" size="sm" onClick={() => claim(l)}>
                       <Hand className="size-3.5" />
                       Übernehmen
                     </Button>
                   )}
-                  {l.quelle === "recare" ? (
+                  {!monitor && (l.quelle === "recare" ? (
                     ["offen", "kontaktiert"].includes(l.status) && (
                       <RecareOutcome
                         lead={l}
@@ -479,9 +485,9 @@ export function TeamWorkspace({
                         </>
                       )}
                     </>
-                  )}
+                  ))}
                 </div>
-                {!l.zugewiesen_hub && l.status !== "verloren" && (
+                {!monitor && !l.zugewiesen_hub && l.status !== "verloren" && (
                   <AssignHub
                     lead={l}
                     hubs={hubs}
@@ -505,7 +511,7 @@ export function TeamWorkspace({
         </div>
       )}
 
-      {tab === "outbound" && (
+      {!monitor && tab === "outbound" && (
         <ul className="flex flex-col gap-2">
           {sortedOutbound.map((t) => (
             <OutboundRow
