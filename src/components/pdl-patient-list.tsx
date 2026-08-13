@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Mail, Phone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { leadShortId } from "@/lib/leads";
 
 export interface PdlPatientRow {
   kind: "meta" | "call";
@@ -118,6 +119,15 @@ export function PdlPatientList({
             {r.kontext && (
               <p className="text-xs text-muted-foreground">{r.kontext}</p>
             )}
+            <p className="text-xs">
+              <span className="rounded border bg-muted/60 px-1.5 py-0.5 font-mono">
+                {leadShortId(r.id)}
+              </span>{" "}
+              <span className="text-muted-foreground">
+                — diese Lead-ID bitte beim Anlegen in MediFox als Referenz
+                hinterlegen.
+              </span>
+            </p>
             <div className="flex flex-wrap items-center gap-1.5">
               <Button
                 type="button"

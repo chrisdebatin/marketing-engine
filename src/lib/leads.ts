@@ -27,6 +27,15 @@ export const CALLCENTER_QUELLEN = new Set(["recare"]);
  * MediFox anlegt (beide unter dem DUS-Mandanten — eine Company).
  * Überall sonst: Lead an die PDL übergeben.
  */
+/**
+ * Kurze, stabile Lead-ID (z. B. "PU-4F7K2A") — abgeleitet aus der Datensatz-ID,
+ * keine eigene Spalte nötig. Wird beim Anlegen des Neukunden in MediFox als
+ * Referenz hinterlegt, damit Lead und MediFox-Kunde zuordenbar bleiben.
+ */
+export function leadShortId(id: string): string {
+  return "PU-" + id.replace(/[^a-z0-9]/gi, "").slice(-6).toUpperCase();
+}
+
 export function isDirectBookingHub(name: string | null | undefined): boolean {
   if (!name) return false;
   const n = name.toLowerCase();

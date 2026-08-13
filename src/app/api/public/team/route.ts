@@ -4,6 +4,7 @@ import { getFollowupWeeks } from "@/lib/settings";
 import { todayIso } from "@/lib/crm";
 import { deliverMail } from "@/lib/mailer";
 import { splitPdlEmails, splitPdlNames } from "@/lib/pdl";
+import { leadShortId } from "@/lib/leads";
 import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
@@ -273,6 +274,7 @@ Versorgungsstart koordinieren:</p>
 <tr><td style="color:#666;padding-right:12px">E-Mail</td><td>${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : "–"}</td></tr>
 <tr><td style="color:#666;padding-right:12px">Kontext</td><td>${esc(kontext ?? "–")}</td></tr>
 <tr><td style="color:#666;padding-right:12px">Übergeben von</td><td>${esc(member.name)}</td></tr>
+<tr><td style="color:#666;padding-right:12px">Lead-ID</td><td><strong style="font-family:monospace">${esc(leadShortId(id))}</strong> — bitte beim Anlegen in MediFox als Referenz hinterlegen</td></tr>
 </table>
 <p>Sobald die Versorgung startet, bitte kurz auf Ihrer Standort-Seite
 bestätigen (Reiter „Patienten&rdquo;):</p>

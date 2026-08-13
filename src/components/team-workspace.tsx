@@ -17,7 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { LEAD_QUELLEN, leadQuelleLabel } from "@/lib/leads";
+import { LEAD_QUELLEN, leadQuelleLabel, leadShortId } from "@/lib/leads";
 import { placeKindLabel } from "@/lib/places";
 import { formatIsoDate, kontaktArtLabel, todayIso } from "@/lib/crm";
 
@@ -195,6 +195,30 @@ function stampFor(lead: InboundLead, label: string): string | null {
   if (label === "Übergeben") return zeit(lead.zugewiesen_at);
   if (label === "Aufgenommen") return zeit(lead.pdl_bestaetigt_at);
   return null;
+}
+
+/**
+ * Kurze Lead-ID als Chip — Klick kopiert sie. Diese ID gehört beim Anlegen
+ * des Neukunden in MediFox als Referenz ins Kundenprofil (Disclaimer im
+ * Tooltip), damit Lead ↔ MediFox zuordenbar bleibt.
+ */
+function LeadIdChip({ id }: { id: string }) {
+  const [copied, setCopied] = useState(false);
+  const short = leadShortId(id);
+  return (
+    <button
+      type="button"
+      title="Lead-ID — bitte beim Anlegen in MediFox als Referenz hinterlegen. Klick kopiert."
+      onClick={() => {
+        void navigator.clipboard?.writeText(short).catch(() => {});
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="rounded border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
+    >
+      {copied ? "kopiert ✓" : short}
+    </button>
+  );
 }
 
 /** Frisch = jünger als 1 Std und noch offen — nur dann darf etwas pulsieren. */
@@ -522,6 +546,7 @@ export function TeamWorkspace({
                     )}
                   </span>
                   <span className="font-medium">{l.name}</span>
+                  <LeadIdChip id={l.id} />
                   <span
                     className={cn(
                       "rounded-full border px-2 py-0.5 text-[11px] font-medium",
@@ -703,6 +728,7 @@ export function TeamWorkspace({
                         <>
                           {l.direct_booking ? (
                             <ErstgespraechChecklist
+                              leadId={l.id}
                               onConfirm={() => setStatus(l, "erstgespraech")}
                             />
                           ) : (
@@ -859,17 +885,20 @@ function InboundCallLog({
         placeholder="Telefonnummer"
         className="h-9 rounded-lg border bg-background px-2.5 text-sm"
       />
-      <select
-        value={quelle}
-        onChange={(e) => setQuelle(e.target.value)}
-        className="h-9 rounded-lg border bg-background px-2 text-sm"
-      >
-        {LEAD_QUELLEN.map((q) => (
-          <option key={q.key} value={q.key}>
-            {q.label}
-          </option>
-        ))}
-      </select>
+      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+        Wie sind sie auf uns aufmerksam geworden?
+        <select
+          value={quelle}
+          onChange={(e) => setQuelle(e.target.value)}
+          className="h-9 rounded-lg border bg-background px-2 text-sm font-normal text-foreground"
+        >
+          {LEAD_QUELLEN.map((q) => (
+            <option key={q.key} value={q.key}>
+              {q.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <Textarea
         value={notiz}
         onChange={(e) => setNotiz(e.target.value)}
@@ -1059,7 +1088,13 @@ function LostReason({ onSave }: { onSave: (grund: string) => void }) {
  * Mandant) angelegt. Verhindert, dass Leads zwischen Tool und MediFox
  * verloren gehen.
  */
-function ErstgespraechChecklist({ onConfirm }: { onConfirm: () => void }) {
+function ErstgespraechChecklist({
+  leadId,
+  onConfirm,
+}: {
+  leadId: string;
+  onConfirm: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [kalender, setKalender] = useState(false);
   const [medifox, setMedifox] = useState(false);
@@ -1095,7 +1130,13 @@ function ErstgespraechChecklist({ onConfirm }: { onConfirm: () => void }) {
           onChange={(e) => setMedifox(e.target.checked)}
           className="size-4"
         />
-        Neukunde in MediFox (DUS-Mandant) angelegt
+        <span>
+          Neukunde in MediFox (DUS-Mandant) angelegt —{" "}
+          <strong>
+            Lead-ID <span className="font-mono">{leadShortId(leadId)}</span>
+          </strong>{" "}
+          dort als Referenz hinterlegt
+        </span>
       </label>
       <div className="flex gap-2">
         <Button
