@@ -46,6 +46,16 @@ export function leadFullName(fd: unknown): string | null {
   return any ? capitalize(any) : null;
 }
 
+/** Adresse/Ort aus dem Formular (city/ort/plz/street …), zu einer Zeile verbunden. */
+export function leadAddress(fd: unknown): string | null {
+  const keys = ["street", "strasse", "straße", "address", "adresse", "plz", "zip", "postal", "city", "stadt", "ort", "wohnort"];
+  const parts = fields(fd)
+    .filter((f) => keys.some((k) => f.name?.toLowerCase().includes(k)))
+    .map((f) => f.values?.[0]?.trim())
+    .filter((v): v is string => !!v);
+  return parts.length ? parts.join(", ") : null;
+}
+
 /** Zusatzfelder (z. B. Qualifikation) als "Label: Wert"-Liste — alles außer Name/Telefon/E-Mail. */
 export function leadExtraFields(fd: unknown): string[] {
   const known = ["name", "phone", "telefon", "mail"];

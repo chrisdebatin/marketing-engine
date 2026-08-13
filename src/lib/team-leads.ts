@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
 import { isRecruitingLead } from "@/lib/lead-forward";
-import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
+import { leadAddress, leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 import { hubCoords } from "@/lib/hub-coords";
 import type { InboundLead, OutboundTarget } from "@/components/team-workspace";
 
@@ -137,6 +137,11 @@ export async function buildTeamInbound(
       name: c.lead_name || "(ohne Name)",
       telefon: c.telefon ?? null,
       email: c.email ?? null,
+      // Adresse: eigenes Feld; Altbestand hat den Ort noch im Notiz-Freitext.
+      adresse:
+        (("adresse" in c ? (c as { adresse?: string | null }).adresse : null) ??
+          /(?:^|· )Ort: ([^·]+)/.exec(c.notiz ?? "")?.[1]?.trim()) ||
+        null,
       quelle: c.quelle,
       quelle_detail: c.quelle_detail ?? null,
       datum: c.created_at ?? c.call_date,
@@ -169,6 +174,9 @@ export async function buildTeamInbound(
         name: leadFullName(m.field_data) ?? "(ohne Name)",
         telefon: leadPhone(m.field_data),
         email: leadEmail(m.field_data),
+        adresse:
+          ("adresse" in m ? (m as { adresse?: string | null }).adresse : null) ??
+          leadAddress(m.field_data),
         quelle: "meta",
         quelle_detail: m.campaign_name,
         datum: m.created_time ?? m.created_at ?? "",

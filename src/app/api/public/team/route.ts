@@ -39,6 +39,8 @@ export async function POST(req: Request) {
     ergebnis?: string;
     telefon?: string;
     quelle?: string;
+    email?: string;
+    adresse?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -184,6 +186,40 @@ export async function POST(req: Request) {
       .update({ notiz: notiz || null })
       .eq("id", id);
     if (error) return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    await markFirstTouch(id).catch(() => {});
+    return NextResponse.json({ ok: true });
+  }
+
+  // Standardisierte Stammdaten am Lead pflegen (Name/Telefon/E-Mail/Adresse).
+  // Bei Meta-Leads kommen Name/Telefon/E-Mail aus dem Formular — dort ist
+  // nur die Adresse editierbar.
+  if (action === "lead-daten") {
+    const id = (body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
+    const adresse = (body.adresse ?? "").trim().slice(0, 200) || null;
+    const { error } =
+      kind === "call"
+        ? await admin
+            .from("lead_calls")
+            .update({
+              adresse,
+              lead_name: (body.ansprechpartner ?? "").trim().slice(0, 200) || null,
+              telefon: (body.telefon ?? "").trim().slice(0, 60) || null,
+              email: (body.email ?? "").trim().slice(0, 200) || null,
+            })
+            .eq("id", id)
+        : await admin.from("meta_leads").update({ adresse }).eq("id", id);
+    if (error) {
+      const missing = error.code === "PGRST204" || error.code === "42703";
+      return NextResponse.json(
+        {
+          error: missing
+            ? "Adress-Feld fehlt noch — bitte supabase/apply_all_pending.sql (0058) ausführen."
+            : "Speichern fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
     await markFirstTouch(id).catch(() => {});
     return NextResponse.json({ ok: true });
   }

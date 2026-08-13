@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -9,6 +9,7 @@ import {
   Inbox,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   PhoneCall,
   Undo2,
@@ -29,6 +30,7 @@ export interface InboundLead {
   name: string;
   telefon: string | null;
   email: string | null;
+  adresse: string | null;
   quelle: string;
   quelle_detail: string | null;
   datum: string;
@@ -613,29 +615,16 @@ export function TeamWorkspace({
                     </span>
                   )}
                 </div>
-                <p className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm">
-                  {l.telefon && (
-                    <a
-                      href={`tel:${l.telefon}`}
-                      className="flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <Phone className="size-3" />
-                      {l.telefon}
-                    </a>
-                  )}
-                  {l.email && (
-                    <a
-                      href={`mailto:${l.email}`}
-                      className="flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <Mail className="size-3" />
-                      {l.email}
-                    </a>
-                  )}
-                  {l.hub && (
-                    <span className="text-xs text-muted-foreground">{l.hub}</span>
-                  )}
-                </p>
+                <LeadStammdaten
+                  lead={l}
+                  canAct={canAct}
+                  token={token}
+                  onSaved={(patch) =>
+                    setInbound((cur) =>
+                      cur.map((x) => (x.id === l.id ? { ...x, ...patch } : x)),
+                    )
+                  }
+                />
                 {!l.zugewiesen_hub && l.vorschlag_hub && l.vorschlag_pdl && (
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-primary/[0.05] px-2.5 py-1.5 text-xs">
                     <span className="font-semibold text-primary">
@@ -905,6 +894,7 @@ function InboundCallLog({
         name: name || "Inbound-Anruf",
         telefon: telefon || null,
         email: null,
+        adresse: null,
         quelle,
         quelle_detail: null,
         datum: String(res.created_at ?? new Date().toISOString()),
@@ -1332,6 +1322,160 @@ function KontakteView({
 }
 
 /** Notiz am Lead: anzeigen + direkt auf der Karte bearbeiten. */
+/**
+ * Standardisierter Stammdaten-Block auf jeder Lead-Karte: Telefon, E-Mail und
+ * Adresse/Ort immer an derselben Stelle (fehlende Angaben als "—"), mit
+ * Stift zum Nachpflegen. Bei Meta-Leads kommen Name/Telefon/E-Mail aus dem
+ * Meta-Formular und sind nicht editierbar — nur die Adresse.
+ */
+function LeadStammdaten({
+  lead,
+  canAct,
+  token,
+  onSaved,
+}: {
+  lead: InboundLead;
+  canAct: boolean;
+  token: string;
+  onSaved: (patch: Partial<InboundLead>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(lead.name === "(ohne Name)" ? "" : lead.name);
+  const [telefon, setTelefon] = useState(lead.telefon ?? "");
+  const [email, setEmail] = useState(lead.email ?? "");
+  const [adresse, setAdresse] = useState(lead.adresse ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isMeta = lead.kind === "meta";
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await teamAction(token, {
+        action: "lead-daten",
+        kind: lead.kind,
+        id: lead.id,
+        ansprechpartner: name,
+        telefon,
+        email,
+        adresse,
+      });
+      onSaved(
+        isMeta
+          ? { adresse: adresse.trim() || null }
+          : {
+              name: name.trim() || "(ohne Name)",
+              telefon: telefon.trim() || null,
+              email: email.trim() || null,
+              adresse: adresse.trim() || null,
+            },
+      );
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler beim Speichern.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const feld = (label: string, value: ReactNode) => (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      <p className="truncate text-sm" title={typeof value === "string" ? value : undefined}>
+        {value ?? <span className="text-muted-foreground">—</span>}
+      </p>
+    </div>
+  );
+
+  if (editing) {
+    const input = (
+      label: string,
+      value: string,
+      set: (v: string) => void,
+      opts?: { locked?: boolean; type?: string },
+    ) => (
+      <label className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {label}
+          {opts?.locked ? " (aus Meta-Formular)" : ""}
+        </span>
+        <input
+          type={opts?.type ?? "text"}
+          value={value}
+          onChange={(e) => set(e.target.value)}
+          disabled={opts?.locked || busy}
+          className="rounded-md border bg-background px-2 py-1 text-sm disabled:opacity-60"
+        />
+      </label>
+    );
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {input("Name", name, setName, { locked: isMeta })}
+          {input("Telefon", telefon, setTelefon, { locked: isMeta, type: "tel" })}
+          {input("E-Mail", email, setEmail, { locked: isMeta, type: "email" })}
+          {input("Adresse / Ort", adresse, setAdresse)}
+        </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        <div className="flex gap-2">
+          <Button size="sm" onClick={save} disabled={busy}>
+            {busy ? "Speichert…" : "Speichern"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={busy}>
+            Abbrechen
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border bg-muted/40 px-3 py-2 pr-9 sm:grid-cols-4">
+      {feld(
+        "Telefon",
+        lead.telefon ? (
+          <a href={`tel:${lead.telefon}`} className="flex items-center gap-1 text-primary hover:underline">
+            <Phone className="size-3 shrink-0" />
+            {lead.telefon}
+          </a>
+        ) : null,
+      )}
+      {feld(
+        "E-Mail",
+        lead.email ? (
+          <a href={`mailto:${lead.email}`} className="flex items-center gap-1 text-primary hover:underline">
+            <Mail className="size-3 shrink-0" />
+            {lead.email}
+          </a>
+        ) : null,
+      )}
+      {feld(
+        "Adresse / Ort",
+        lead.adresse ? (
+          <span className="flex items-center gap-1">
+            <MapPin className="size-3 shrink-0 text-muted-foreground" />
+            {lead.adresse}
+          </span>
+        ) : null,
+      )}
+      {feld("Eingang", exactStamp(lead.datum) || null)}
+      {canAct && (
+        <button
+          type="button"
+          title="Stammdaten bearbeiten"
+          onClick={() => setEditing(true)}
+          className="absolute top-1.5 right-1.5 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function LeadNote({
   lead,
   canAct,

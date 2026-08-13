@@ -424,6 +424,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
         lead_name: w.name.slice(0, 200) || "(ohne Name)",
         telefon: w.telefon.slice(0, 60) || null,
         email: w.email.slice(0, 200) || null,
+        adresse: w.ort.slice(0, 200) || null,
         notiz: [w.anliegen, w.ort ? `Ort: ${w.ort}` : ""].filter(Boolean).join(" · ").slice(0, 1000) || null,
         status: "offen",
       });
@@ -450,6 +451,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       quelle_detail: data.klinik.slice(0, 200) || null,
       lead_name: data.patient.slice(0, 200) || "(ohne Name)",
       telefon: data.telefon.slice(0, 60) || null,
+      adresse: data.ort.slice(0, 200) || null,
       notiz: notizTeile.join(" · ").slice(0, 1000) || null,
       status: "offen",
     });

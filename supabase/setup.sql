@@ -1,10 +1,3 @@
--- Marketing-Engine: komplettes Setup (Schema + RLS + Seed)
--- Einmal im Supabase SQL-Editor einfuegen und ausfuehren.
--- AUTO-GENERIERT aus supabase/migrations/*.sql + seed.sql. Nicht von Hand editieren.
-
--- ============================================================
--- 0001_init.sql
--- ============================================================
 -- Marketing-Engine – initial schema
 -- Run in the Supabase SQL editor or via `supabase db push`.
 
@@ -120,10 +113,6 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
-
--- ============================================================
--- 0002_rls.sql
--- ============================================================
 -- Marketing-Engine – Row Level Security
 
 -- ============================================================
@@ -250,17 +239,9 @@ create policy activities_update on public.activities
 drop policy if exists activities_delete on public.activities;
 create policy activities_delete on public.activities
   for delete using (user_id = auth.uid() or public.is_admin());
-
--- ============================================================
--- 0003_hubs_md.sql
--- ============================================================
 -- Add the responsible MD (person accountable for the hub) to hubs.
 alter table public.hubs
   add column if not exists responsible_md text;
-
--- ============================================================
--- 0004_deliveries.sql
--- ============================================================
 -- Marketing-Engine – deliveries (MD liefert an Hub) + placements (wo die Flyer
 -- ausgelegt wurden; eingetragen per Share-Link ohne Login).
 
@@ -319,10 +300,6 @@ create policy deliveries_delete on public.deliveries
 drop policy if exists delivery_placements_select on public.delivery_placements;
 create policy delivery_placements_select on public.delivery_placements
   for select using (public.has_hub(hub_id));
-
--- ============================================================
--- 0005_hub_pdl.sql
--- ============================================================
 -- Local PDL (Pflege-Dienstleitung) contact per hub + a stable share token for
 -- the per-hub PDL link.
 
@@ -342,17 +319,9 @@ alter table public.hubs
 
 create unique index if not exists hubs_share_token_uidx
   on public.hubs (share_token);
-
--- ============================================================
--- 0006_hub_pdl_phone.sql
--- ============================================================
 -- Phone number for the local PDL (Pflege-Dienstleitung) contact per hub.
 
 alter table public.hubs add column if not exists pdl_phone text;
-
--- ============================================================
--- 0007_placement_kind.sql
--- ============================================================
 -- Distinguish what a PDL logged on the share link: placed flyers vs. delivered
 -- case-management boxes. Existing rows are flyer placements.
 
@@ -362,10 +331,6 @@ alter table public.delivery_placements
 alter table public.delivery_placements
   add constraint delivery_placements_kind_chk
   check (kind in ('flyer', 'box'));
-
--- ============================================================
--- 0008_open_access.sql
--- ============================================================
 -- Open-access mode: the app no longer requires login. Every visitor acts as
 -- the admin. Disable RLS so the public anon key can read/write, and attribute
 -- new activities to the admin user (client inserts omit user_id).
@@ -382,18 +347,10 @@ alter table public.delivery_placements disable row level security;
 -- auth.uid() is null without a session; default new activities to the admin.
 alter table public.activities
   alter column user_id set default '25fe44d1-42e8-4525-9509-88860e1594fe';
-
--- ============================================================
--- 0009_delivery_aufsteller.sql
--- ============================================================
 -- Third delivery-material category: Flyeraufsteller (flyer display stands).
 
 alter table public.deliveries
   add column if not exists aufsteller_count integer not null default 0;
-
--- ============================================================
--- 0010_email_orders.sql
--- ============================================================
 -- Material orders recognised from linked e-mail accounts (Gmail via OAuth),
 -- plus the stored OAuth token per connected mailbox.
 
@@ -428,10 +385,6 @@ create table if not exists public.email_accounts (
 create unique index if not exists email_accounts_provider_uidx
   on public.email_accounts (provider);
 alter table public.email_accounts disable row level security;
-
--- ============================================================
--- 0011_pdl_orders.sql
--- ============================================================
 -- PDL self-service + admin material orders on top of the existing `orders`
 -- table (0010, originally email-only). New sources: 'pdl' (via the hub share
 -- link) and 'admin' (created in-app). Adds a third workflow status and a note.
@@ -456,16 +409,8 @@ create trigger orders_set_updated_at
 
 create index if not exists orders_source_idx on public.orders (source);
 create index if not exists orders_created_idx on public.orders (created_at desc);
-
--- ============================================================
--- 0012_hub_address.sql
--- ============================================================
 -- Optionale Postanschrift je Hub (für Versand von Materialbestellungen).
 alter table public.hubs add column if not exists address text;
-
--- ============================================================
--- 0013_shop_patients.sql
--- ============================================================
 -- PDL-Online-Shop (Material-Katalog + Warenkorb-Positionen) und
 -- monatliche Patienten-Verifizierung (Batches + Records).
 -- Alle Tabellen: RLS DISABLED — Zugriff ausschliesslich ueber den
@@ -557,10 +502,6 @@ drop trigger if exists patient_records_set_updated_at on public.patient_records;
 create trigger patient_records_set_updated_at
   before update on public.patient_records
   for each row execute function public.set_updated_at();
-
--- ============================================================
--- 0014_md_role.sql
--- ============================================================
 -- MD-Rolle: profiles.role darf jetzt auch 'md' sein (Marketing/Vertrieb im
 -- Feld, sieht nur die eigenen Hubs aus user_hubs).
 --
@@ -576,10 +517,6 @@ alter table public.profiles
 alter table public.profiles
   add constraint profiles_role_check
   check (role in ('admin', 'md', 'employee'));
-
--- ============================================================
--- 0015_hub_tasks.sql
--- ============================================================
 -- Hub-Aufgaben: frei definierbare Aufgaben/Tags, die pro Hub abgehakt werden
 -- (z. B. "E-Mail mit PDL-Link verschickt"). Eine Aufgabe gilt fuer alle Hubs;
 -- ein Check-Eintrag (task_id, hub_id) bedeutet "fuer diesen Hub erledigt".
@@ -611,20 +548,12 @@ select 'E-Mail mit PDL-Link verschickt',
 where not exists (
   select 1 from public.hub_tasks where title = 'E-Mail mit PDL-Link verschickt'
 );
-
--- ============================================================
--- 0016_patient_source.sql
--- ============================================================
 -- Patienten-Verifizierung: Herkunft eines Eintrags.
 -- 'zentral' = aus der zentralen Liste importiert (Marketing-Team),
 -- 'pdl'     = von der PDL ueber den Hub-Link ergaenzt (fehlte zentral).
 alter table public.patient_records
   add column if not exists source text not null default 'zentral'
   check (source in ('zentral', 'pdl'));
-
--- ============================================================
--- 0017_patient_flows.sql
--- ============================================================
 -- Patienten-Bewegungen: PDLs erfassen monatlich Neuaufnahmen (Zugang) und
 -- abgegangene Patienten (Abgang) je SGB-Leistungsart über ihren Hub-Link.
 -- DSGVO — Datenminimierung: nur Anzeigename + optionale Referenz-ID.
@@ -649,19 +578,11 @@ create table if not exists public.patient_flows (
 create index if not exists patient_flows_hub_period_idx
   on public.patient_flows (hub_id, period);
 alter table public.patient_flows disable row level security;
-
--- ============================================================
--- 0018_place_kind.sql
--- ============================================================
 -- Orts-Kategorie für Auslage-/Liefer-Orte: Die PDL gibt beim Eintragen an,
 -- WAS der Ort ist (Krankenhaus, Arztpraxis, Apotheke, Pflegeeinrichtung,
 -- Sanitätshaus, Sonstiges). Altbestand bleibt null (= Sonstiges).
 alter table public.delivery_placements
   add column if not exists place_kind text;
-
--- ============================================================
--- 0019_flyer_actions.sql
--- ============================================================
 -- Flyeraktionen: Log der durchgeführten Verteil-/Postwurf-Aktionen
 -- (Datum, Anzahl, Ziel-PLZ (mehrere, Komma-getrennt), Inhalt/Motiv, Notiz).
 -- RLS DISABLED — Zugriff ausschliesslich über den Service-Role-Client,
@@ -680,18 +601,10 @@ create table if not exists public.flyer_actions (
 create index if not exists flyer_actions_date_idx
   on public.flyer_actions (action_date desc);
 alter table public.flyer_actions disable row level security;
-
--- ============================================================
--- 0020_placement_ort.sql
--- ============================================================
 -- Ortschaft (Stadt) für Auslage-/Liefer-Orte: Die PDL gibt zusätzlich zum
 -- Einrichtungs-Namen an, in welchem Ort verteilt wurde. Altbestand: null.
 alter table public.delivery_placements
   add column if not exists ort text;
-
--- ============================================================
--- 0021_hub_notes.sql
--- ============================================================
 -- Notizen je Hub/Standort; optional als offenes To-do markierbar und
 -- abhakbar. RLS DISABLED — Zugriff ausschliesslich über den
 -- Service-Role-Client, wie bei hub_tasks/orders.
@@ -706,18 +619,10 @@ create table if not exists public.hub_notes (
 );
 create index if not exists hub_notes_hub_idx on public.hub_notes (hub_id);
 alter table public.hub_notes disable row level security;
-
--- ============================================================
--- 0022_placement_adresse.sql
--- ============================================================
 -- Adresse (Straße + Hausnr.) für Auslage-/Liefer-Orte: "Empfang" allein
 -- reicht nicht — die PDL gibt zusätzlich eine Adresse an. Altbestand: null.
 alter table public.delivery_placements
   add column if not exists adresse text;
-
--- ============================================================
--- 0023_ms_tokens.sql
--- ============================================================
 -- Outlook-/Microsoft-Graph-Anbindung: gespeicherter OAuth-Refresh-Token des
 -- verbundenen Kontos (eine Zeile). RLS DISABLED — Zugriff ausschliesslich
 -- über den Service-Role-Client; der Token verlässt den Server nie.
@@ -729,10 +634,6 @@ create table if not exists public.ms_oauth_tokens (
   updated_at    timestamptz not null default now()
 );
 alter table public.ms_oauth_tokens disable row level security;
-
--- ============================================================
--- 0024_note_topics.sql
--- ============================================================
 -- Themen für Standort-Notizen (z. B. "Recare"): Ein Thema betrifft alle
 -- Standorte, jeder Standort hat seinen eigenen Stand (Notizen je Hub+Thema).
 -- RLS DISABLED — Zugriff ausschliesslich über den Service-Role-Client.
@@ -748,18 +649,10 @@ alter table public.note_topics disable row level security;
 alter table public.hub_notes
   add column if not exists topic_id uuid references public.note_topics (id) on delete cascade;
 create index if not exists hub_notes_topic_idx on public.hub_notes (topic_id);
-
--- ============================================================
--- 0025_hub_ik.sql
--- ============================================================
 -- IK-Nummer (Institutionskennzeichen) je Hub/Standort — u. a. Grundlage
 -- für das geplante Recare-Feature. Altbestand: null.
 alter table public.hubs
   add column if not exists ik_nummer text;
-
--- ============================================================
--- 0026_crm_targets.sql
--- ============================================================
 -- CRM: zentrale Liste der Ziel-Orte (Krankenhäuser, Praxen, …), die erreicht
 -- werden sollen. Jeder Ziel-Ort ist einem Hub zugeteilt; die PDL sieht ihre
 -- Besuchs-Liste auf dem Dashboard und hakt Besuche ab. Nach einem Besuch
@@ -782,10 +675,6 @@ create table if not exists public.crm_targets (
 );
 create index if not exists crm_targets_hub_idx on public.crm_targets (hub_id);
 alter table public.crm_targets disable row level security;
-
--- ============================================================
--- 0027_crm_contacts.sql
--- ============================================================
 -- CRM-Ausbau: PDLs loggen jeden Kontakt (Box vorbeigebracht / Besuch /
 -- Anruf) mit Ansprechpartner und Gesprächsnotiz; Follow-up standardmäßig
 -- in 4 Wochen. Kontakt-Historie in eigener Log-Tabelle (Wochenziel-Zählung).
@@ -818,20 +707,12 @@ alter table public.crm_targets
 -- Backfill: die importierten Recare-Partnerkliniken sind markiert.
 update public.crm_targets set recare_partner = true
   where note like '%Recare-Partner%' and recare_partner is null;
-
--- ============================================================
--- 0028_md_email.sql
--- ============================================================
 -- 0028: E-Mail-Adresse des zuständigen MD je Hub — für die wöchentlichen
 -- Marketing-Updates per Outlook. Gleiche MD-Person darf auf mehreren Hubs
 -- dieselbe Adresse haben.
 alter table public.hubs add column if not exists md_email text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0029_crm_plan_flyer.sql
--- ============================================================
 -- 0029: CRM wie ein richtiges CRM —
 -- a) crm_targets.plan: was an diesem Ort geliefert/gemacht werden soll
 --    (To-do-Anzeige für die PDL; zentral vorgebbar).
@@ -845,10 +726,6 @@ alter table public.crm_contacts add constraint crm_contacts_kontakt_art_check
   check (kontakt_art in ('box', 'flyer', 'besuch', 'anruf'));
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0030_crm_relevanz.sql
--- ============================================================
 -- 0030: Relevanz-Kategorie (1 = höchste, 3 = niedrigste) für CRM-Ziel-Orte.
 -- Importierte Orte tragen die Relevanz zusätzlich in der note ("Relevanz X"),
 -- solange die Spalte fehlt — der Backfill übernimmt sie in die Spalte.
@@ -860,10 +737,6 @@ update public.crm_targets
   where relevanz is null and note ~ 'Relevanz [1-3]';
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0031_app_settings.sql
--- ============================================================
 -- 0031: App-Einstellungen (Key-Value) — z. B. Follow-up-Rhythmus je
 -- Kontakt-Art (Box/Flyer: 8 Wochen, Besuch/Anruf: 4; im CRM einstellbar).
 create table if not exists public.app_settings (
@@ -874,10 +747,6 @@ create table if not exists public.app_settings (
 alter table public.app_settings disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0032_phone_calls.sql
--- ============================================================
 -- 0032: Anruf-Daten aus der Telefonanlage (CSV-Upload auf /statistik).
 -- Ein Datensatz je Anruf (Call ID) — Mehrfach-Uploads derselben Datei
 -- werden per unique call_id ignoriert.
@@ -895,10 +764,6 @@ create index if not exists phone_calls_time_idx on public.phone_calls (call_time
 alter table public.phone_calls disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0033_capacity_reports.sql
--- ============================================================
 -- 0033: Wöchentliche Kapazitäts-Meldung je Hub (durch die PDL).
 -- Datenbasis für Kapazitäts-Report und perspektivisch die automatische
 -- Annahme von Recare-Anfragen. Ein Datensatz je Hub und Kalenderwoche.
@@ -919,10 +784,6 @@ create table if not exists public.capacity_reports (
 alter table public.capacity_reports disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0034_lead_calls.sql
--- ============================================================
 -- 0034: Frontoffice/Callcenter — jeder Interessenten-Anruf wird als Lead
 -- geloggt: Quelle (woher aufmerksam geworden) + an welchen Standort/PDL
 -- weitergeleitet wurde.
@@ -941,10 +802,6 @@ create index if not exists lead_calls_date_idx on public.lead_calls (call_date d
 alter table public.lead_calls disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0035_lead_bereich.sql
--- ============================================================
 -- 0035: Bereich (alltagshilfe/ambulant/intensiv), Quelle-Detail (welches
 -- Krankenhaus/Case Management) und Name des Interessenten am Lead.
 alter table public.lead_calls add column if not exists bereich text;
@@ -952,10 +809,6 @@ alter table public.lead_calls add column if not exists quelle_detail text;
 alter table public.lead_calls add column if not exists lead_name text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0036_meta_ads.sql
--- ============================================================
 -- 0036: Meta-Ads-Kampagnen (manuell gepflegt): allgemeine (gruppenweit)
 -- und lokale (je Hub). "Läuft gerade" = start_date <= heute <= end_date
 -- (end_date null = läuft bis auf Weiteres).
@@ -975,10 +828,6 @@ create table if not exists public.meta_ads (
 alter table public.meta_ads disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0037_personal_ads.sql
--- ============================================================
 -- 0037: Personal-Anzeigen (Recruiting) je Hub — auf welchen Plattformen
 -- (Meta, Join, Indeed, …) läuft gerade eine Stellenanzeige.
 -- hub_id null = Anzeige für alle Standorte.
@@ -996,34 +845,18 @@ create table if not exists public.personal_ads (
 alter table public.personal_ads disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0038_note_status.sql
--- ============================================================
 -- 0038: Status für To-dos (Kanban): offen (null) / in_arbeit.
 alter table public.hub_notes add column if not exists status text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0039_note_tag.sql
--- ============================================================
 -- 0039: Kategorie-Tag für Anfragen-To-dos (Meta-Anzeige, Zeitungsanzeige, …).
 alter table public.hub_notes add column if not exists tag text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0040_note_images.sql
--- ============================================================
 -- Screenshots/Bilder an Anfragen-To-dos (Kanban): Array öffentlicher
 -- Storage-URLs. Der Bucket "note-images" wird zur Laufzeit automatisch
 -- angelegt (public), daher hier nur die Spalte.
 alter table public.hub_notes add column if not exists images jsonb;
-
--- ============================================================
--- 0041_crm_callcenter.sql
--- ============================================================
 -- 0041: CRM-Ausbau für das Call-Center —
 -- a) crm_persons: mehrere Ansprechpartner je Ziel-Ort (Name, Funktion,
 --    Telefon, E-Mail) statt des einen Freitextfelds.
@@ -1057,10 +890,6 @@ alter table public.crm_contacts add constraint crm_contacts_kontakt_art_check
   check (kontakt_art in ('box', 'flyer', 'besuch', 'anruf', 'lead'));
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0042_crm_todos.sql
--- ============================================================
 -- 0042: KI-To-dos aus Call-Center-Notizen —
 -- Claude liest jede Gesprächsnotiz aus und legt daraus Aufgaben für den
 -- zuständigen Standort an (z. B. "PDL vorbeischicken"). Die PDL sieht sie
@@ -1085,10 +914,6 @@ create index if not exists crm_todos_contact_idx on public.crm_todos (contact_id
 alter table public.crm_todos disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0043_capacity_scores.sql
--- ============================================================
 -- 0043: Kapazitäts-Skala je Leistungsbereich —
 -- Pflege, Alltagshilfe und Wundversorgung werden je Standort auf einer
 -- Skala 1–5 gemeldet (5 = volle Kapazität/grün, 1 = keine Kapazität/rot).
@@ -1102,20 +927,12 @@ alter table public.capacity_reports add column if not exists wundversorgung_scor
   check (wundversorgung_score between 1 and 5);
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0044_hub_note_notiz.sql
--- ============================================================
 -- 0044: Freitext-Notiz an Kampagnen-Anfragen (Kanban-Karten) —
 -- z. B. Zwischenstände ("Warten auf Freigabe", "Budget geklärt").
 
 alter table public.hub_notes add column if not exists notiz text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0045_meta_creatives.sql
--- ============================================================
 -- 0045: Hochgeladene Werbemittel (Bilder) für den Meta-Ads-KI-Agenten.
 -- Dateien liegen im öffentlichen Storage-Bucket "meta-creatives"; diese
 -- Tabelle ist der Katalog, aus dem der Agent beim Anzeigen-Erstellen wählt.
@@ -1132,20 +949,12 @@ create table if not exists public.meta_creatives (
 alter table public.meta_creatives disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0046_meta_creatives_video.sql
--- ============================================================
 -- 0046: Video-Creatives für den Meta-Ads-Agenten. meta_video_id speichert
 -- die ID des zu Meta hochgeladenen Videos, damit ein Retry (Meta verarbeitet
 -- Videos asynchron) nicht erneut hochladen muss.
 alter table public.meta_creatives add column if not exists meta_video_id text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0047_meta_leads.sql
--- ============================================================
 -- 0047: Meta-Leads (Instant-Formular-Kontakte) — werden beim Aufruf von
 -- /meta-ads automatisch von Meta synchronisiert. id = Metas Lead-ID, damit
 -- der Sync idempotent ist. Status bleibt beim Re-Sync erhalten; Leads
@@ -1164,10 +973,6 @@ create index if not exists meta_leads_status_idx on public.meta_leads (status, c
 alter table public.meta_leads disable row level security;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0048_flyer_actions_ort.sql
--- ============================================================
 -- 0048: Verteilgebiet (Ort) als eigenes Feld an Flyeraktionen — wird von
 -- der KI-Freitext-Erfassung befüllt und im Titel angezeigt. Backfill für
 -- die bestehenden Einträge (Gebiet stand bisher nur im Notiz-Text).
@@ -1185,10 +990,6 @@ update public.flyer_actions set ort = 'Düsseldorf'
   where ort is null and id = 'd5190b1f-c44e-4036-a30c-9c0bf5769e8a';
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0048_meta_lead_followup.sql
--- ============================================================
 -- 0048: E-Mail-Follow-up je Meta-Lead. Beim Sync wird für neue Leads mit
 -- E-Mail-Adresse automatisch ein personalisierter Entwurf erzeugt (Status
 -- 'entwurf'); Versand erst nach 1-Klick-Freigabe in der Lead-Liste.
@@ -1201,10 +1002,6 @@ alter table public.meta_leads
   add column if not exists followup_error   text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0049_meta_lead_forward.sql
--- ============================================================
 -- 0049: Automatische Weiterleitung von Mitarbeiter-Leads an das Recruiting-
 -- Postfach (LEAD_FORWARD_TO, Default recruiting@igsg.de). Der Sync
 -- verschickt je Lead genau eine Mail; forwarded_at macht das idempotent.
@@ -1213,10 +1010,6 @@ alter table public.meta_leads
   add column if not exists forward_error text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0050_meta_lead_crm.sql
--- ============================================================
 -- 0050: Meta-Leads erscheinen zusätzlich im CRM (crm_targets) — als eigene
 -- Kategorien meta_mitarbeiter / meta_kunde, getrennt von den Krankenhäusern.
 -- crm_target_id verknüpft Lead ↔ CRM-Eintrag und macht den Sync idempotent.
@@ -1224,10 +1017,6 @@ alter table public.meta_leads
   add column if not exists crm_target_id uuid references public.crm_targets(id) on delete set null;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0051_meta_leads_delete.sql
--- ============================================================
 -- 0051: Leads löschbar machen (Soft-Delete). Harte Löschung geht nicht —
 -- der Meta-Sync würde den Lead beim nächsten Lauf wieder anlegen. Status
 -- 'geloescht' blendet ihn dauerhaft aus; die Sync-Upsert-Logik (ignore
@@ -1237,10 +1026,6 @@ alter table public.meta_leads add constraint meta_leads_status_check
   check (status in ('offen', 'kontaktiert', 'geloescht'));
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0052_team_members.sql
--- ============================================================
 -- 0052: CRM-Ausbau Stufe 1 — persönliche Team-Links + Claim/Status.
 -- team_members: Davina (Call-Center Indien), Belinda + Adelina (Kundenservice
 -- DE). Jede(r) bekommt einen persönlichen Token-Link (/t/<token>); alle
@@ -1282,19 +1067,11 @@ alter table public.meta_leads add constraint meta_leads_status_check
 alter table public.crm_contacts add column if not exists bearbeiter text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0053_lead_ergebnis.sql
--- ============================================================
 -- 0053: Ergebnis-Feld an Leads — v. a. für Recare-Anfragen: "Patient
 -- aufgenommen", "Keine Kapazität", "PDL nicht erreicht" oder Freitext.
 alter table public.lead_calls add column if not exists ergebnis text;
 
 notify pgrst, 'reload schema';
-
--- ============================================================
--- 0054_lead_zuweisung.sql
--- ============================================================
 -- 0054: Patienten-Übergabe an PDLs. Das Team weist einen Lead einem
 -- Standort zu (zugewiesen_*), die PDL bekommt eine Mail und bestätigt auf
 -- ihrer Standort-Seite "in die Versorgung aufgenommen" (pdl_bestaetigt_at).
@@ -1312,10 +1089,50 @@ alter table public.meta_leads
   add column if not exists pdl_ergebnis text;
 
 notify pgrst, 'reload schema';
+-- 0055: Zeitstempel der ersten Bearbeitung (Übernehmen/Status/Ergebnis) —
+-- Grundlage für die Admin-Auswertung "wie lange lag der Lead im System,
+-- bevor ihn jemand angefasst hat". Wird von der Team-API beim ersten
+-- Eingriff gesetzt; Altbestand bleibt null (dort unbekannt).
+-- Außerdem: ergebnis-Feld auch an meta_leads (Verloren-Grund, analog 0053).
+alter table public.lead_calls
+  add column if not exists erstbearbeitet_at timestamptz;
+alter table public.meta_leads
+  add column if not exists erstbearbeitet_at timestamptz,
+  add column if not exists ergebnis text,
+  add column if not exists notiz text;
 
--- ============================================================
--- seed.sql
--- ============================================================
+notify pgrst, 'reload schema';
+-- 0056: KI-generierte Kurz-Info je Institution (z. B. "Maximalversorger,
+-- ca. 1.400 Betten, Uniklinik") — einmalig erzeugt und hier gecacht,
+-- angezeigt auf den Anruflisten-Karten.
+alter table public.crm_targets add column if not exists kurzinfo text;
+
+notify pgrst, 'reload schema';
+-- 0057: To-dos mit Deadline direkt am Lead ("ruf mich in 1 Woche zurück").
+-- Ist ein To-do fällig, poppt der Lead in der Team-Inbox oben in der
+-- Wiedervorlage-Gruppe auf. lead_kind/lead_id statt FK, weil Leads in zwei
+-- Tabellen leben (lead_calls uuid, meta_leads text-ID).
+create table if not exists public.lead_todos (
+  id           uuid primary key default gen_random_uuid(),
+  lead_kind    text not null check (lead_kind in ('call', 'meta')),
+  lead_id      text not null,
+  text         text not null,
+  faellig_am   date,
+  erledigt_at  timestamptz,
+  erstellt_von text,
+  created_at   timestamptz default now()
+);
+create index if not exists lead_todos_lead_idx on public.lead_todos (lead_kind, lead_id);
+create index if not exists lead_todos_open_idx on public.lead_todos (faellig_am) where erledigt_at is null;
+alter table public.lead_todos disable row level security;
+
+notify pgrst, 'reload schema';
+-- Standardisierte Lead-Stammdaten: Adresse/Ort als eigenes Feld an beiden
+-- Lead-Tabellen (bisher steckte der Ort nur im Notiz-Freitext).
+alter table public.lead_calls add column if not exists adresse text;
+alter table public.meta_leads add column if not exists adresse text;
+
+notify pgrst, 'reload schema';
 -- Marketing-Engine – seed data
 -- Run after the migrations (Supabase SQL editor or `supabase db reset` picks it up).
 
@@ -1360,19 +1177,3 @@ on conflict (name) do update set responsible_md = excluded.responsible_md;
 --   update public.profiles set role = 'admin'
 --   where id = (select id from auth.users where email = 'you@example.com');
 -- ------------------------------------------------------------
-
--- ===== 0055_lead_first_touch.sql =====
--- 0055: Zeitstempel der ersten Bearbeitung (Übernehmen/Status/Ergebnis) —
--- Grundlage für die Admin-Auswertung "wie lange lag der Lead im System,
--- bevor ihn jemand angefasst hat". Wird von der Team-API beim ersten
--- Eingriff gesetzt; Altbestand bleibt null (dort unbekannt).
-alter table public.lead_calls
-  add column if not exists erstbearbeitet_at timestamptz;
-alter table public.meta_leads
-  add column if not exists erstbearbeitet_at timestamptz;
-
-notify pgrst, 'reload schema';
-
--- 0055-Addendum: ergebnis auch an meta_leads (Verloren-Grund)
-alter table public.meta_leads add column if not exists ergebnis text;
-alter table public.meta_leads add column if not exists notiz text;

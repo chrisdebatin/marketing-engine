@@ -40,7 +40,7 @@ create table if not exists public.phone_calls (
 );
 create index if not exists phone_calls_time_idx on public.phone_calls (call_time desc);
 alter table public.phone_calls disable row level security;
-
+ß
 notify pgrst, 'reload schema';
 
 -- ── 0033: Wöchentliche Kapazitäts-Meldung je Hub ────────────────────
@@ -366,5 +366,11 @@ create table if not exists public.lead_todos (
 create index if not exists lead_todos_lead_idx on public.lead_todos (lead_kind, lead_id);
 create index if not exists lead_todos_open_idx on public.lead_todos (faellig_am) where erledigt_at is null;
 alter table public.lead_todos disable row level security;
+
+notify pgrst, 'reload schema';
+
+-- ── 0058: Adresse/Ort als eigenes Feld an beiden Lead-Tabellen ─────
+alter table public.lead_calls add column if not exists adresse text;
+alter table public.meta_leads add column if not exists adresse text;
 
 notify pgrst, 'reload schema';
