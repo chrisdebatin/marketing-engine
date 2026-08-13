@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Headset, PhoneCall } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CALLCENTER_QUELLEN } from "@/lib/leads";
+import { CALLCENTER_QUELLEN, isDirectBookingHub } from "@/lib/leads";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import {
   leadEmail,
@@ -123,6 +123,12 @@ export default async function TeamMemberPage({
       vorschlag_hub_id: suggestHub(
         `${c.quelle_detail ?? ""} ${c.notiz ?? ""} ${c.lead_name ?? ""}`,
       ),
+      direct_booking: isDirectBookingHub(
+        hubName(c.zugewiesen_hub_id ?? null) ??
+          hubName(
+            suggestHub(`${c.quelle_detail ?? ""} ${c.notiz ?? ""}`) ?? null,
+          ),
+      ),
     });
   }
   if (!isCallcenter) {
@@ -147,6 +153,10 @@ export default async function TeamMemberPage({
         pdl_bestaetigt_at: m.pdl_bestaetigt_at ?? null,
         pdl_ergebnis: m.pdl_ergebnis ?? null,
         vorschlag_hub_id: suggestHub(m.campaign_name ?? ""),
+        direct_booking: isDirectBookingHub(
+          hubName(m.zugewiesen_hub_id ?? null) ??
+            hubName(suggestHub(m.campaign_name ?? "") ?? null),
+        ),
       });
     }
   }

@@ -38,6 +38,8 @@ export interface InboundLead {
   pdl_bestaetigt_at: string | null;
   pdl_ergebnis: string | null;
   vorschlag_hub_id: string | null;
+  /** Düsseldorf/Gevelsberg: Team bucht Termin selbst + legt in MediFox (DUS) an. */
+  direct_booking: boolean;
 }
 
 export interface OutboundTarget {
@@ -450,15 +452,21 @@ export function TeamWorkspace({
                       )}
                       {["offen", "kontaktiert"].includes(l.status) && (
                         <>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-                            onClick={() => setStatus(l, "erstgespraech")}
-                          >
-                            <Check className="size-3.5" /> Erstgespräch vereinbart
-                          </Button>
+                          {l.direct_booking ? (
+                            <ErstgespraechChecklist
+                              onConfirm={() => setStatus(l, "erstgespraech")}
+                            />
+                          ) : (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                              onClick={() => setStatus(l, "erstgespraech")}
+                            >
+                              <Check className="size-3.5" /> Erstgespräch vereinbart
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             size="sm"
@@ -515,6 +523,72 @@ export function TeamWorkspace({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/**
+ * Düsseldorf/Gevelsberg: Vor "Erstgespräch vereinbart" beide Pflicht-Häkchen
+ * — Termin im Beraterinnen-Kalender gebucht + Neukunde in MediFox (DUS-
+ * Mandant) angelegt. Verhindert, dass Leads zwischen Tool und MediFox
+ * verloren gehen.
+ */
+function ErstgespraechChecklist({ onConfirm }: { onConfirm: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [kalender, setKalender] = useState(false);
+  const [medifox, setMedifox] = useState(false);
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+        onClick={() => setOpen(true)}
+      >
+        <Check className="size-3.5" /> Erstgespräch vereinbart
+      </Button>
+    );
+  }
+  return (
+    <div className="flex w-full flex-col gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={kalender}
+          onChange={(e) => setKalender(e.target.checked)}
+          className="size-4"
+        />
+        Termin im Beraterinnen-Kalender gebucht
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={medifox}
+          onChange={(e) => setMedifox(e.target.checked)}
+          className="size-4"
+        />
+        Neukunde in MediFox (DUS-Mandant) angelegt
+      </label>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!kalender || !medifox}
+          onClick={onConfirm}
+        >
+          <Check className="size-3.5" /> Bestätigen
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setOpen(false)}
+        >
+          Abbrechen
+        </Button>
+      </div>
     </div>
   );
 }

@@ -21,6 +21,18 @@ export const LEAD_QUELLEN = [
  */
 export const CALLCENTER_QUELLEN = new Set(["recare"]);
 
+/**
+ * Standorte, an denen das DE-Team den Beratungstermin selbst bucht
+ * (Zugriff auf den Beraterinnen-Kalender) und den Neukunden direkt in
+ * MediFox anlegt (beide unter dem DUS-Mandanten — eine Company).
+ * Überall sonst: Lead an die PDL übergeben.
+ */
+export function isDirectBookingHub(name: string | null | undefined): boolean {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  return n.includes("düsseldorf") || n.includes("gevelsberg");
+}
+
 export function leadQuelleLabel(key: string | null | undefined): string {
   if (!key) return "";
   return LEAD_QUELLEN.find((q) => q.key === key)?.label ?? key;

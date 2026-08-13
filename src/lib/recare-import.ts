@@ -128,9 +128,14 @@ interface ExtractedCall {
   name: string;
   zeitpunkt: string;
   notiz: string;
+  kategorie: "neuinteressent" | "bestandskunde" | "mitarbeiter_intern" | "sonstiges";
 }
 
-/** Verpasster-Anruf-Mail (Telefonanlage) → Anrufernummer/Name/Zeit. */
+/**
+ * Verpasster-Anruf-Mail (Telefonanlage) → Anruferdaten + Vorsortierung:
+ * Nur Neuinteressenten erscheinen als offene Leads, der Rest wird als
+ * "kein Neuinteressent" abgelegt (auffindbar unter Abgeschlossene).
+ */
 async function extractCall(text: string): Promise<ExtractedCall | null> {
   if (!process.env.ANTHROPIC_API_KEY) return null;
   try {
@@ -139,11 +144,11 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
       model: MODEL,
       max_tokens: 512,
       system:
-        "Du extrahierst aus einer Benachrichtigungs-Mail der Telefonanlage über einen verpassten Anruf die Daten des Anrufers. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. telefon = Rufnummer des Anrufers; name = Name falls genannt; zeitpunkt = Datum/Uhrzeit des Anrufs; notiz = sonstige nützliche Info (z. B. gewählte Nummer, Wartezeit).",
+        "Du extrahierst aus einer Benachrichtigungs-Mail der Telefonanlage über einen verpassten Anruf die Daten des Anrufers und sortierst den Anruf vor. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. telefon = Rufnummer des Anrufers; name = Name falls genannt; zeitpunkt = Datum/Uhrzeit des Anrufs; notiz = Kern der Gesprächszusammenfassung. kategorie: 'neuinteressent' = potenzieller NEUER Pflege-Kunde bzw. Angehörige(r) mit Pflege-Anliegen (im Zweifel neuinteressent wählen!); 'bestandskunde' = bereits versorgte Kundin/Kunde (Termine, aktuelle Einsätze); 'mitarbeiter_intern' = eigene Mitarbeiter (Krankmeldung, Dienstplan) oder interne Anrufe; 'sonstiges' = alles andere (Lieferanten, Schulen, Vertrieb, keine Angaben).",
       tools: [
         {
           name: "verpasster_anruf",
-          description: "Extrahierte Anrufer-Daten.",
+          description: "Extrahierte Anrufer-Daten mit Vorsortierung.",
           input_schema: {
             type: "object",
             properties: {
@@ -151,8 +156,12 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
               name: { type: "string" },
               zeitpunkt: { type: "string" },
               notiz: { type: "string" },
+              kategorie: {
+                type: "string",
+                enum: ["neuinteressent", "bestandskunde", "mitarbeiter_intern", "sonstiges"],
+              },
             },
-            required: ["telefon", "name", "zeitpunkt", "notiz"],
+            required: ["telefon", "name", "zeitpunkt", "notiz", "kategorie"],
             additionalProperties: false,
           },
         },
@@ -168,6 +177,12 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
     return null;
   }
 }
+
+const KATEGORIE_LABEL: Record<string, string> = {
+  bestandskunde: "Bestandskunde",
+  mitarbeiter_intern: "Mitarbeiter/intern",
+  sonstiges: "Sonstiges",
+};
 
 export async function syncRecareMails(): Promise<RecareSyncResult> {
   const admin = createAdminClient();
@@ -243,6 +258,9 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
     // Verpasster 0800-Anruf: Nummer/Name/Zeit rausziehen, Lead fürs DE-Team.
     if (m.kind === "anruf") {
       const call = await extractCall(`Betreff: ${m.subject}\n\n${body}`);
+      // Vorsortierung: nur Neuinteressenten als offener Lead; der Rest wird
+      // direkt abgeschlossen (bleibt unter "Abgeschlossene" auffindbar).
+      const interessent = !call || call.kategorie === "neuinteressent";
       const { error: insErr } = await admin.from("lead_calls").insert({
         call_date: m.receivedAt.slice(0, 10),
         quelle: "telefon0800",
@@ -257,7 +275,10 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
             .filter(Boolean)
             .join(" · ")
             .slice(0, 1000) || null,
-        status: "offen",
+        status: interessent ? "offen" : "verloren",
+        ergebnis: interessent
+          ? null
+          : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
       });
       if (insErr) skipped++;
       else imported++;
