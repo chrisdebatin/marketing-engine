@@ -82,6 +82,19 @@ export default async function TeamMemberPage({
   const hubName = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.name ?? null;
 
+  // Standort-Vorschlag: normalisierter Hub-Name im Lead-Text (Kampagne,
+  // Klinik, Notiz) — "Kunden-BadOeynhausen-…" trifft "Bad Oeynhausen".
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-zä-ü0-9]/g, "");
+  const suggestHub = (text: string): string | null => {
+    const t = norm(text);
+    if (t.length < 4) return null;
+    for (const h of hubRows ?? []) {
+      const hn = norm(h.name.replace(/^alltagshilfe\s+/i, ""));
+      if (hn.length >= 4 && t.includes(hn)) return h.id;
+    }
+    return null;
+  };
+
   // Inbound: Quelle bestimmt das Team.
   const inbound: InboundLead[] = [];
   for (const c of callRows ?? []) {
@@ -103,6 +116,13 @@ export default async function TeamMemberPage({
       notiz: c.notiz ?? null,
       ergebnis: c.ergebnis ?? null,
       hub: hubName(c.hub_id),
+      zugewiesen_hub: hubName(c.zugewiesen_hub_id ?? null),
+      zugewiesen_at: c.zugewiesen_at ?? null,
+      pdl_bestaetigt_at: c.pdl_bestaetigt_at ?? null,
+      pdl_ergebnis: c.pdl_ergebnis ?? null,
+      vorschlag_hub_id: suggestHub(
+        `${c.quelle_detail ?? ""} ${c.notiz ?? ""} ${c.lead_name ?? ""}`,
+      ),
     });
   }
   if (!isCallcenter) {
@@ -122,6 +142,11 @@ export default async function TeamMemberPage({
         notiz: null,
         ergebnis: null,
         hub: null,
+        zugewiesen_hub: hubName(m.zugewiesen_hub_id ?? null),
+        zugewiesen_at: m.zugewiesen_at ?? null,
+        pdl_bestaetigt_at: m.pdl_bestaetigt_at ?? null,
+        pdl_ergebnis: m.pdl_ergebnis ?? null,
+        vorschlag_hub_id: suggestHub(m.campaign_name ?? ""),
       });
     }
   }
@@ -178,6 +203,7 @@ export default async function TeamMemberPage({
         memberName={member.name}
         inbound={inbound}
         outbound={outbound}
+        hubs={(hubRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
       />
     </main>
   );

@@ -604,6 +604,10 @@ export interface Database {
           forward_error: string | null;
           crm_target_id: string | null;
           bearbeiter: string | null;
+          zugewiesen_hub_id: string | null;
+          zugewiesen_at: string | null;
+          pdl_bestaetigt_at: string | null;
+          pdl_ergebnis: string | null;
         };
         Insert: {
           id: string;
@@ -623,6 +627,10 @@ export interface Database {
           forward_error?: string | null;
           crm_target_id?: string | null;
           bearbeiter?: string | null;
+          zugewiesen_hub_id?: string | null;
+          zugewiesen_at?: string | null;
+          pdl_bestaetigt_at?: string | null;
+          pdl_ergebnis?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["meta_leads"]["Insert"]>;
         Relationships: [];
@@ -643,6 +651,10 @@ export interface Database {
           telefon: string | null;
           email: string | null;
           ergebnis: string | null;
+          zugewiesen_hub_id: string | null;
+          zugewiesen_at: string | null;
+          pdl_bestaetigt_at: string | null;
+          pdl_ergebnis: string | null;
           created_at: string | null;
         };
         Insert: {
@@ -660,6 +672,10 @@ export interface Database {
           telefon?: string | null;
           email?: string | null;
           ergebnis?: string | null;
+          zugewiesen_hub_id?: string | null;
+          zugewiesen_at?: string | null;
+          pdl_bestaetigt_at?: string | null;
+          pdl_ergebnis?: string | null;
           created_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["lead_calls"]["Insert"]>;

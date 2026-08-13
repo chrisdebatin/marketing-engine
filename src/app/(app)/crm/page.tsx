@@ -1,5 +1,7 @@
+import { requireSession } from "@/lib/auth";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { CrmIntro } from "@/components/crm-intro";
+import { CrmHandoverStats } from "@/components/crm-handover-stats";
 import { FrontofficeSection } from "./frontoffice-section";
 import { ZieleSection } from "./ziele-section";
 
@@ -13,6 +15,7 @@ export const maxDuration = 60;
  * was), Inbound-Leads und die Institutionen-/Anrufverwaltung.
  */
 export default async function CrmPage() {
+  const session = await requireSession();
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -25,6 +28,8 @@ export default async function CrmPage() {
       </div>
 
       <CrmIntro />
+
+      {session.isAdmin && <CrmHandoverStats />}
 
       <PdlTabs
         tabs={[

@@ -12,6 +12,11 @@ import {
 import { PdlTabs } from "@/components/pdl-tabs";
 import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
 import {
+  PdlPatientList,
+  type PdlPatientRow,
+} from "@/components/pdl-patient-list";
+import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
+import {
   OrderShop,
   type OrderWithItems,
   type ShopOrderItemLine,
@@ -186,6 +191,43 @@ export default async function HubShareLinkPage({
     });
     sharedByKey.set(key, arr);
   }
+
+  // Zugewiesene Patienten (offen = noch nicht bestätigt). Fallback ?? [] —
+  // fehlt Migration 0054, bleibt der Tab einfach leer.
+  const [{ data: patCalls }, { data: patMeta }] = await Promise.all([
+    admin
+      .from("lead_calls")
+      .select("id, lead_name, telefon, email, quelle, quelle_detail, notiz, zugewiesen_at")
+      .eq("zugewiesen_hub_id", hub.id)
+      .is("pdl_bestaetigt_at", null),
+    admin
+      .from("meta_leads")
+      .select("id, field_data, campaign_name, zugewiesen_at")
+      .eq("zugewiesen_hub_id", hub.id)
+      .is("pdl_bestaetigt_at", null),
+  ]);
+  const patients: PdlPatientRow[] = [
+    ...(patCalls ?? []).map((c) => ({
+      kind: "call" as const,
+      id: c.id,
+      name: c.lead_name ?? "(ohne Name)",
+      telefon: c.telefon,
+      email: c.email,
+      kontext: [c.quelle === "recare" ? "Recare" : c.quelle, c.quelle_detail, c.notiz]
+        .filter(Boolean)
+        .join(" · "),
+      zugewiesen_at: c.zugewiesen_at,
+    })),
+    ...(patMeta ?? []).map((m) => ({
+      kind: "meta" as const,
+      id: m.id,
+      name: leadFullName(m.field_data) ?? "(ohne Name)",
+      telefon: leadPhone(m.field_data),
+      email: leadEmail(m.field_data),
+      kontext: m.campaign_name,
+      zugewiesen_at: m.zugewiesen_at,
+    })),
+  ].sort((a, b) => (a.zugewiesen_at ?? "").localeCompare(b.zugewiesen_at ?? ""));
 
   const ownTargets = ((crmTargets ?? []) as VisitTarget[]).map((t) => {
     const others = (sharedByKey.get(dupKey(t)) ?? []).filter(
@@ -457,6 +499,12 @@ export default async function HubShareLinkPage({
                 )}
               </div>
             ),
+          },
+          {
+            id: "patienten",
+            label: "Patienten",
+            badge: patients.length > 0 ? patients.length : undefined,
+            content: <PdlPatientList token={token} initial={patients} />,
           },
           {
             id: "auftraege",

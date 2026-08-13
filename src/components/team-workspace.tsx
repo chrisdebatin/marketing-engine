@@ -33,6 +33,11 @@ export interface InboundLead {
   notiz: string | null;
   ergebnis: string | null;
   hub: string | null;
+  zugewiesen_hub: string | null;
+  zugewiesen_at: string | null;
+  pdl_bestaetigt_at: string | null;
+  pdl_ergebnis: string | null;
+  vorschlag_hub_id: string | null;
 }
 
 export interface OutboundTarget {
@@ -127,11 +132,13 @@ export function TeamWorkspace({
   memberName,
   inbound: initialInbound,
   outbound: initialOutbound,
+  hubs,
 }: {
   token: string;
   memberName: string;
   inbound: InboundLead[];
   outbound: OutboundTarget[];
+  hubs: { id: string; name: string }[];
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
@@ -386,6 +393,25 @@ export function TeamWorkspace({
                     Ergebnis: {l.ergebnis}
                   </p>
                 )}
+                {l.zugewiesen_hub && (
+                  <p className="text-xs font-medium">
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
+                      → übergeben an {l.zugewiesen_hub}
+                      {l.zugewiesen_at
+                        ? ` am ${new Date(l.zugewiesen_at).toLocaleDateString("de-DE")}`
+                        : ""}
+                    </span>{" "}
+                    {l.pdl_bestaetigt_at ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">
+                        PDL bestätigt: {l.pdl_ergebnis ?? "aufgenommen"} ✓
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        Rückmeldung der PDL steht aus
+                      </span>
+                    )}
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-1.5">
                   {!l.bearbeiter && (
                     <Button type="button" size="sm" onClick={() => claim(l)}>
@@ -447,6 +473,22 @@ export function TeamWorkspace({
                     </>
                   )}
                 </div>
+                {!l.zugewiesen_hub && l.status !== "verloren" && (
+                  <AssignHub
+                    lead={l}
+                    hubs={hubs}
+                    token={token}
+                    onDone={(patch) =>
+                      setInbound((cur) =>
+                        cur.map((x) =>
+                          x.id === l.id
+                            ? { ...x, ...patch, bearbeiter: memberName }
+                            : x,
+                        ),
+                      )
+                    }
+                  />
+                )}
               </li>
                 ))}
               </ul>
@@ -478,8 +520,79 @@ export function TeamWorkspace({
 }
 
 /**
- * Recare-Ausgang: vier Optionen — aufgenommen / keine Kapazität /
- * PDL nicht erreicht / Freitext. Setzt Ergebnis + passenden Status.
+ * Standort-Übergabe: Vorschlag vorausgewählt, PDL bekommt automatisch die
+ * Kontaktdaten per Mail und bestätigt später "in Versorgung aufgenommen".
+ */
+function AssignHub({
+  lead,
+  hubs,
+  token,
+  onDone,
+}: {
+  lead: InboundLead;
+  hubs: { id: string; name: string }[];
+  token: string;
+  onDone: (patch: Partial<InboundLead>) => void;
+}) {
+  const [hubId, setHubId] = useState(lead.vorschlag_hub_id ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mailInfo, setMailInfo] = useState<string | null>(null);
+
+  async function assign() {
+    if (!hubId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await teamAction(token, {
+        action: "assign-hub",
+        kind: lead.kind,
+        id: lead.id,
+        target_id: hubId,
+      });
+      setMailInfo(String(res.mail_info ?? ""));
+      onDone({
+        zugewiesen_hub: String(res.hub_name),
+        zugewiesen_at: String(res.zugewiesen_at),
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1 border-t pt-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">An Standort übergeben:</span>
+        <select
+          value={hubId}
+          onChange={(e) => setHubId(e.target.value)}
+          disabled={busy}
+          className="h-8 rounded-lg border bg-background px-2 text-sm"
+        >
+          <option value="">Standort wählen…</option>
+          {hubs.map((h) => (
+            <option key={h.id} value={h.id}>
+              {h.name}
+              {h.id === lead.vorschlag_hub_id ? " (Vorschlag)" : ""}
+            </option>
+          ))}
+        </select>
+        <Button type="button" size="sm" disabled={busy || !hubId} onClick={assign}>
+          {busy ? "Übergebe…" : "Übergeben + PDL informieren"}
+        </Button>
+      </div>
+      {mailInfo && <p className="text-xs text-muted-foreground">{mailInfo}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/**
+ * Recare-Ausgang: keine Kapazität / PDL nicht erreicht / Freitext.
+ * ("Patient aufgenommen" bestätigt die PDL nach der Übergabe selbst.)
  */
 function RecareOutcome({
   lead,
@@ -520,16 +633,6 @@ function RecareOutcome({
   return (
     <div className="flex w-full flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
-          onClick={() => set("Patient aufgenommen", "aufgenommen")}
-        >
-          <Check className="size-3.5" /> Patient aufgenommen
-        </Button>
         <Button
           type="button"
           size="sm"

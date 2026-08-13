@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFollowupWeeks } from "@/lib/settings";
 import { todayIso } from "@/lib/crm";
+import { deliverMail } from "@/lib/mailer";
+import { splitPdlEmails, splitPdlNames } from "@/lib/pdl";
+import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
+
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 
 export const runtime = "nodejs";
 
@@ -83,6 +88,112 @@ export async function POST(req: Request) {
       );
     }
     return NextResponse.json({ ok: true });
+  }
+
+  if (action === "assign-hub") {
+    const id = (body.id ?? "").trim();
+    const hubId = (body.target_id ?? "").trim(); // target_id = Hub bei dieser Aktion
+    if (!id || !hubId) {
+      return NextResponse.json({ error: "Lead/Standort fehlt." }, { status: 400 });
+    }
+    const { data: hub } = await admin
+      .from("hubs")
+      .select("id, name, pdl_name, pdl_email, share_token")
+      .eq("id", hubId)
+      .maybeSingle();
+    if (!hub) return NextResponse.json({ error: "Standort nicht gefunden." }, { status: 404 });
+
+    // Lead laden (Kontaktdaten für die PDL-Mail).
+    let name = "(ohne Name)";
+    let telefon: string | null = null;
+    let email: string | null = null;
+    let kontext: string | null = null;
+    if (kind === "meta") {
+      const { data: l } = await admin
+        .from("meta_leads")
+        .select("field_data, campaign_name")
+        .eq("id", id)
+        .maybeSingle();
+      if (!l) return NextResponse.json({ error: "Lead nicht gefunden." }, { status: 404 });
+      name = leadFullName(l.field_data) ?? name;
+      telefon = leadPhone(l.field_data);
+      email = leadEmail(l.field_data);
+      kontext = l.campaign_name;
+    } else {
+      const { data: l } = await admin
+        .from("lead_calls")
+        .select("lead_name, telefon, email, quelle, quelle_detail, notiz")
+        .eq("id", id)
+        .maybeSingle();
+      if (!l) return NextResponse.json({ error: "Lead nicht gefunden." }, { status: 404 });
+      name = l.lead_name ?? name;
+      telefon = l.telefon;
+      email = l.email;
+      kontext = [l.quelle === "recare" ? "Recare" : l.quelle, l.quelle_detail, l.notiz]
+        .filter(Boolean)
+        .join(" · ");
+    }
+
+    const now = new Date().toISOString();
+    const { error: updErr } = await admin
+      .from(table)
+      .update({
+        zugewiesen_hub_id: hub.id,
+        zugewiesen_at: now,
+        bearbeiter: member.name,
+      })
+      .eq("id", id);
+    if (updErr) {
+      const colMissing = updErr.code === "PGRST204" || updErr.code === "42703";
+      return NextResponse.json(
+        {
+          error: colMissing
+            ? "Zuweisungs-Felder fehlen noch — bitte supabase/apply_all_pending.sql ausführen."
+            : "Speichern fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
+
+    // PDL-Mail mit Kontaktdaten + Link zur Standort-Seite (dort bestätigen).
+    const emails = splitPdlEmails(hub.pdl_email);
+    let mailInfo = "keine PDL-E-Mail hinterlegt — bitte telefonisch informieren";
+    if (emails.length > 0) {
+      const anrede = splitPdlNames(hub.pdl_name)[0] ?? "";
+      const esc = (s: string) =>
+        s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const link = `${APP_URL}/h/${hub.share_token}`;
+      const res = await deliverMail({
+        to: emails,
+        subject: `Neuer Patient für ${hub.name}: ${name}`,
+        html: `<div style="font-family:sans-serif;line-height:1.5">
+<p>Guten Tag${anrede ? ` ${esc(anrede)}` : ""},</p>
+<p>Ihnen wurde ein neuer Patient zugewiesen — bitte Kontakt aufnehmen und den
+Versorgungsstart koordinieren:</p>
+<table cellpadding="4" style="border-collapse:collapse">
+<tr><td style="color:#666;padding-right:12px">Name</td><td><strong>${esc(name)}</strong></td></tr>
+<tr><td style="color:#666;padding-right:12px">Telefon</td><td><strong>${telefon ? `<a href="tel:${esc(telefon)}">${esc(telefon)}</a>` : "–"}</strong></td></tr>
+<tr><td style="color:#666;padding-right:12px">E-Mail</td><td>${email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : "–"}</td></tr>
+<tr><td style="color:#666;padding-right:12px">Kontext</td><td>${esc(kontext ?? "–")}</td></tr>
+<tr><td style="color:#666;padding-right:12px">Übergeben von</td><td>${esc(member.name)}</td></tr>
+</table>
+<p>Sobald die Versorgung startet, bitte kurz auf Ihrer Standort-Seite
+bestätigen (Reiter „Patienten&rdquo;):</p>
+<p><a href="${link}" style="display:inline-block;background:#5b5bd6;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Zur Standort-Seite</a></p>
+<p>Viele Grüße<br>Ihr Marketing-Team</p>
+</div>`,
+      });
+      mailInfo = res.ok
+        ? `PDL per Mail informiert (${emails.join(", ")})`
+        : `Mail-Versand fehlgeschlagen: ${res.error}`;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      hub_name: hub.name,
+      zugewiesen_at: now,
+      mail_info: mailInfo,
+    });
   }
 
   if (action === "recare-ergebnis") {
