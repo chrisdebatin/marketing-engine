@@ -298,8 +298,8 @@ export function TeamWorkspace({
           </div>
           {shownInbound.length === 0 && (
             <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-              Keine offenen Anfragen. 🎉 Neue Recare-/Meta-Anfragen erscheinen
-              hier automatisch oben.
+              Keine offenen Anfragen. 🎉 Neue Anfragen erscheinen hier
+              automatisch oben.
             </p>
           )}
           {dayGroups.map((g) => (

@@ -99,23 +99,27 @@ export function CrmIntro() {
               <div className="flex flex-wrap gap-1.5">
                 <SourceChip icon={Globe} label="Website" />
                 <SourceChip icon={Phone} label="0800-Nummer" />
+                <SourceChip icon={Megaphone} label="Meta-Anzeigen" />
+                <SourceChip icon={Mail} label="Lead-Agenturen" />
                 <SourceChip icon={Building2} label="Klinik meldet sich" />
               </div>
               <Arrow />
               <TeamCard
                 name="Belinda & Adelina"
-                role="Kundenservice Deutschland"
+                role="Kundenservice Deutschland — B2C bis zum Beratungsgespräch"
                 tone="sky"
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex flex-wrap gap-1.5">
-                <SourceChip icon={Megaphone} label="Meta-Anzeigen" />
                 <SourceChip icon={Building2} label="Recare" />
-                <SourceChip icon={Mail} label="Lead-Agenturen" />
               </div>
               <Arrow />
-              <TeamCard name="Davina" role="Call-Center" tone="violet" />
+              <TeamCard
+                name="Davina"
+                role="Call-Center — Recare + Krankenhaus-Anrufe"
+                tone="violet"
+              />
             </div>
             <div className="flex flex-wrap items-center gap-1.5 border-t pt-3">
               <span className="mr-1 text-xs text-muted-foreground">

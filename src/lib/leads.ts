@@ -15,8 +15,11 @@ export const LEAD_QUELLEN = [
   { key: "sonstiges", label: "Sonstiges" },
 ] as const;
 
-/** Quellen, die das Call-Center (Davina) bearbeitet — Rest: Kundenservice DE. */
-export const CALLCENTER_QUELLEN = new Set(["recare", "agentur"]);
+/**
+ * Quellen, die das Call-Center (Davina) bearbeitet — nur Recare; alles
+ * andere (Website, 0800, Meta, Agentur, B2B) liegt beim Kundenservice DE.
+ */
+export const CALLCENTER_QUELLEN = new Set(["recare"]);
 
 export function leadQuelleLabel(key: string | null | undefined): string {
   if (!key) return "";

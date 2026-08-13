@@ -40,17 +40,17 @@ export default async function TeamMemberPage({
   if (!member || !member.active) notFound();
   const isCallcenter = member.team === "callcenter";
 
-  // Recare-Mails aus dem angebundenen Postfach einsammeln (idempotent) —
-  // neue Anfragen erscheinen direkt in der Liste. Fehler blockieren nichts.
+  // Lead-Mails (Recare & Co.) aus dem Postfach einsammeln (idempotent,
+  // serverseitig gedrosselt) — läuft bei jedem Team, damit neue Anfragen
+  // unabhängig davon aufploppen, wessen Seite gerade offen ist.
   let recareHint: string | null = null;
-  if (isCallcenter) {
+  {
     const sync = await syncRecareMails().catch(() => null);
     if (sync?.error === "outlook_not_connected") {
       recareHint =
-        "Recare-Import: kein Lead-Postfach eingerichtet — LEADS_IMAP_USER/PASS setzen (Gmail-App-Passwort) oder Outlook anbinden.";
+        "Lead-Postfach nicht eingerichtet — LEADS_IMAP_USER/PASS setzen (Gmail-App-Passwort) oder Outlook anbinden.";
     } else if (sync?.error === "imap_error") {
-      recareHint =
-        "Recare-Import: Lead-Postfach (IMAP) nicht erreichbar — Zugangsdaten prüfen.";
+      recareHint = "Lead-Postfach (IMAP) nicht erreichbar — Zugangsdaten prüfen.";
     }
   }
 
@@ -61,7 +61,8 @@ export default async function TeamMemberPage({
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200),
-      isCallcenter
+      // Meta-Kunden-Leads bearbeitet das deutsche Team (Kundenservice).
+      !isCallcenter
         ? admin
             .from("meta_leads")
             .select("*")
@@ -104,7 +105,7 @@ export default async function TeamMemberPage({
       hub: hubName(c.hub_id),
     });
   }
-  if (isCallcenter) {
+  if (!isCallcenter) {
     for (const m of metaRows ?? []) {
       if (isRecruitingLead(m.campaign_name)) continue;
       inbound.push({
