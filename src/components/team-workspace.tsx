@@ -3,21 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Building2,
   CalendarClock,
   Check,
-  Globe,
   Hand,
   Inbox,
   Mail,
   MapPin,
-  Megaphone,
   Phone,
   PhoneCall,
-  Search,
   Undo2,
   X,
-  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -93,32 +88,6 @@ const QUELLE_TONE: Record<string, string> = {
   recare: "border-teal-200 bg-teal-50 text-teal-800",
   telefon0800: "border-indigo-200 bg-indigo-50 text-indigo-800",
 };
-
-const QUELLE_ICON: Record<string, LucideIcon> = {
-  meta: Megaphone,
-  website: Globe,
-  google: Search,
-  telefon0800: Phone,
-  recare: Building2,
-  krankenhaus: Building2,
-  agentur: Mail,
-};
-
-/** Herkunfts-Icon in der Karte: "der kommt von Meta" auf einen Blick. */
-function SourceBadge({ quelle }: { quelle: string }) {
-  const Icon = QUELLE_ICON[quelle] ?? Inbox;
-  return (
-    <div
-      className={cn(
-        "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border",
-        QUELLE_TONE[quelle] ?? "border-border bg-muted text-muted-foreground",
-      )}
-      title={leadQuelleLabel(quelle) || quelle}
-    >
-      <Icon className="size-4" />
-    </div>
-  );
-}
 
 /**
  * Prozess-Stepper je Lead: wo steht die Anfrage, was ist der nächste Schritt?
@@ -232,20 +201,6 @@ function stampFor(lead: InboundLead, label: string): string | null {
 function isFresh(l: InboundLead): boolean {
   const t = new Date(l.datum).getTime();
   return l.status === "offen" && !Number.isNaN(t) && Date.now() - t < 3_600_000;
-}
-
-/** Verstrichene Zeit seit Eingang („vor 23 Min"). */
-function elapsedLabel(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return "—";
-  const min = Math.floor((Date.now() - t) / 60000);
-  if (min < 1) return "gerade eben";
-  if (min < 60) return `vor ${min} Min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `vor ${h} Std`;
-  const days = Math.floor(h / 24);
-  if (days === 1) return "gestern";
-  return `vor ${days} Tagen`;
 }
 
 /** Exakter Eingangszeitpunkt („13.08., 10:47"). */
@@ -537,42 +492,47 @@ export function TeamWorkspace({
                 {g.leads.map((l) => (
               <li
                 key={`${l.kind}-${l.id}`}
-                className="flex min-w-0 gap-3 rounded-xl border bg-card p-4 shadow-sm"
+                className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
               >
-                <SourceBadge quelle={l.quelle} />
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                  <span className="text-base font-semibold text-foreground">{l.name}</span>
-                  <span className="rounded-full border px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    {leadQuelleLabel(l.quelle) || l.quelle}
-                    {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
-                  </span>
-                  <span
-                    className={cn(
-                      "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium",
-                      STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    <span className="size-1.5 rounded-full bg-current opacity-70" />
-                    {STATUS_LABEL[l.status] ?? l.status}
-                  </span>
-                  {l.bearbeiter && (
-                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground/80">
-                      {l.bearbeiter}
-                    </span>
-                  )}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span
                     title={`eingegangen ${exactStamp(l.datum)}`}
                     className={cn(
-                      "ml-auto flex items-center gap-1.5 text-sm font-medium tabular-nums",
+                      "flex items-center gap-1.5 text-xs font-semibold tabular-nums",
                       isFresh(l) ? "text-primary" : "text-muted-foreground",
                     )}
                   >
                     {isFresh(l) && (
                       <span className="size-1.5 animate-pulse rounded-full bg-primary" title="neu" />
                     )}
-                    {elapsedLabel(l.datum)}
+                    {timeOf(l.datum) || exactStamp(l.datum) || "—"}
+                    {relTime(l.datum) && (
+                      <span className="font-normal">({relTime(l.datum)})</span>
+                    )}
                   </span>
+                  <span className="font-medium">{l.name}</span>
+                  <span
+                    className={cn(
+                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                      QUELLE_TONE[l.quelle] ?? "text-muted-foreground",
+                    )}
+                  >
+                    {leadQuelleLabel(l.quelle) || l.quelle}
+                    {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {STATUS_LABEL[l.status] ?? l.status}
+                  </span>
+                  {l.bearbeiter && (
+                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                      {l.bearbeiter}
+                    </span>
+                  )}
                 </div>
                 <p className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-sm">
                   {l.telefon && (
@@ -770,7 +730,6 @@ export function TeamWorkspace({
                     }
                   />
                 )}
-                </div>
               </li>
                 ))}
               </ul>
