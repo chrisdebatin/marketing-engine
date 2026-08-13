@@ -38,16 +38,28 @@ export async function POST(req: Request) {
     ergebnis?: string;
   };
   const token = (body.token ?? "").trim();
-  if (!token) return NextResponse.json({ error: "Token fehlt." }, { status: 400 });
-
   const admin = createAdminClient();
-  const { data: member } = await admin
-    .from("team_members")
-    .select("id, name, team, active")
-    .eq("token", token)
-    .maybeSingle();
-  if (!member || !member.active) {
-    return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+
+  // Zwei Wege: Token der persönlichen Team-Seite ODER eingeloggte
+  // Admin-Session (Bearbeitung direkt auf /crm — bearbeiter = Profilname).
+  let member: { name: string };
+  if (token) {
+    const { data: tokenMember } = await admin
+      .from("team_members")
+      .select("id, name, team, active")
+      .eq("token", token)
+      .maybeSingle();
+    if (!tokenMember || !tokenMember.active) {
+      return NextResponse.json({ error: "Ungültiger Link." }, { status: 404 });
+    }
+    member = tokenMember;
+  } else {
+    const { requireSession } = await import("@/lib/auth");
+    const session = await requireSession().catch(() => null);
+    if (!session?.isAdmin) {
+      return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
+    }
+    member = { name: session.profile?.name?.trim() || "Admin" };
   }
 
   const action = body.action ?? "";

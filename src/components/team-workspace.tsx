@@ -81,6 +81,105 @@ const QUELLE_TONE: Record<string, string> = {
   telefon0800: "border-sky-200 bg-sky-50 text-sky-800",
 };
 
+/**
+ * Prozess-Stepper je Lead: wo steht die Anfrage, was ist der nächste Schritt?
+ * B2C-Funnel: Eingegangen → Kontaktiert → Erstgespräch → Übergeben → Aufgenommen.
+ * Recare verkürzt: Eingegangen → PDL-Klärung → Übergeben → Aufgenommen.
+ */
+function processInfo(l: InboundLead): {
+  steps: { label: string; done: boolean; current: boolean }[];
+  next: string | null;
+  lost: boolean;
+} {
+  const lost = l.status === "verloren" && !l.pdl_bestaetigt_at;
+  const uebergeben = Boolean(l.zugewiesen_hub);
+  const aufgenommen =
+    l.status === "aufgenommen" ||
+    Boolean(l.pdl_bestaetigt_at && !/nicht|kein/i.test(l.pdl_ergebnis ?? ""));
+  const kontaktiert =
+    ["kontaktiert", "erstgespraech", "aufgenommen"].includes(l.status) || uebergeben;
+  const erstgespraech = ["erstgespraech", "aufgenommen"].includes(l.status) || uebergeben;
+
+  const defs =
+    l.quelle === "recare"
+      ? [
+          { label: "Eingegangen", done: true },
+          { label: "PDL-Klärung", done: kontaktiert },
+          { label: "Übergeben", done: uebergeben },
+          { label: "Aufgenommen", done: aufgenommen },
+        ]
+      : [
+          { label: "Eingegangen", done: true },
+          { label: "Kontaktiert", done: kontaktiert },
+          { label: "Erstgespräch", done: erstgespraech },
+          { label: "Übergeben", done: uebergeben },
+          { label: "Aufgenommen", done: aufgenommen },
+        ];
+  const firstOpen = defs.findIndex((s) => !s.done);
+  const steps = defs.map((s, i) => ({ ...s, current: !lost && i === firstOpen }));
+
+  let next: string | null = null;
+  if (lost) next = null;
+  else if (aufgenommen) next = "abgeschlossen ✓";
+  else if (uebergeben) next = "Auf Rückmeldung der PDL warten";
+  else if (l.quelle === "recare")
+    next = "PDL anrufen & Kapazität klären, dann übergeben";
+  else if (l.status === "offen" && !l.bearbeiter) next = "Übernehmen & anrufen";
+  else if (l.status === "offen")
+    next = l.telefon
+      ? "Anrufen"
+      : l.email
+        ? "Keine Telefonnummer — per E-Mail Infos abfragen"
+        : "Kontaktdaten unvollständig — Infos abfragen";
+  else if (l.status === "kontaktiert")
+    next = l.direct_booking
+      ? "Erstgespräch vereinbaren (Kalender + MediFox)"
+      : "Erstgespräch vereinbaren";
+  else if (l.status === "erstgespraech") next = "An Standort/PDL übergeben";
+  return { steps, next, lost };
+}
+
+function ProcessSteps({ lead }: { lead: InboundLead }) {
+  const { steps, next, lost } = processInfo(lead);
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px]">
+        {steps.map((s, i) => (
+          <span key={s.label} className="flex items-center gap-1">
+            {i > 0 && <span className="text-muted-foreground/40">›</span>}
+            <span
+              className={cn(
+                "flex items-center gap-0.5",
+                lost
+                  ? "text-muted-foreground/50"
+                  : s.done
+                    ? "font-medium text-emerald-700"
+                    : s.current
+                      ? "font-semibold text-primary"
+                      : "text-muted-foreground/60",
+              )}
+            >
+              {s.done ? "✓ " : ""}
+              {s.label}
+            </span>
+          </span>
+        ))}
+        {lost && (
+          <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+            verloren
+          </span>
+        )}
+      </div>
+      {next && (
+        <p className="text-xs">
+          <span className="font-semibold text-primary">Nächster Schritt:</span>{" "}
+          <span className={next === "abgeschlossen ✓" ? "text-emerald-700" : ""}>{next}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** „vor 5 Min" / „vor 3 Std." / leer ab gestern (dann zählt die Tages-Gruppe). */
 function relTime(iso: string): string | null {
   const t = new Date(iso).getTime();
@@ -136,20 +235,24 @@ export function TeamWorkspace({
   outbound: initialOutbound,
   hubs,
   monitor = false,
+  editable = false,
 }: {
   token: string;
   memberName: string;
   inbound: InboundLead[];
   outbound: OutboundTarget[];
   hubs: { id: string; name: string }[];
-  /** true = reine Übersicht (z. B. auf /crm): keine Aktionen, kein Auto-Reload. */
+  /** true = Gesamtsicht (z. B. /crm): kein Auto-Reload, keine Anrufliste. Mit
+   * editable=true bleiben die Lead-Aktionen trotzdem nutzbar (Admin-Session). */
   monitor?: boolean;
+  editable?: boolean;
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const canAct = !monitor || editable;
 
   // Auto-Aktualisierung: alle 20 Sekunden neu laden — neue Anfragen ploppen
   // oben auf. Pausiert beim Tippen und in Hintergrund-Tabs; der Mail-Abruf
@@ -420,14 +523,17 @@ export function TeamWorkspace({
                     )}
                   </p>
                 )}
+                <div className="border-t pt-2">
+                  <ProcessSteps lead={l} />
+                </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {!monitor && !l.bearbeiter && (
+                  {canAct && !l.bearbeiter && (
                     <Button type="button" size="sm" onClick={() => claim(l)}>
                       <Hand className="size-3.5" />
                       Übernehmen
                     </Button>
                   )}
-                  {!monitor && (l.quelle === "recare" ? (
+                  {canAct && (l.quelle === "recare" ? (
                     ["offen", "kontaktiert"].includes(l.status) && (
                       <RecareOutcome
                         lead={l}
@@ -487,7 +593,7 @@ export function TeamWorkspace({
                     </>
                   ))}
                 </div>
-                {!monitor && !l.zugewiesen_hub && l.status !== "verloren" && (
+                {canAct && !l.zugewiesen_hub && l.status !== "verloren" && (
                   <AssignHub
                     lead={l}
                     hubs={hubs}

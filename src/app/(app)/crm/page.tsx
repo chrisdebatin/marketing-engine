@@ -23,6 +23,11 @@ export default async function CrmPage() {
     buildTeamInbound("kundenservice"),
     buildTeamInbound("callcenter"),
   ]);
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const { data: hubRows } = await createAdminClient().from("hubs").select("id, name");
+  const hubs = (hubRows ?? []).map((h) => ({ id: h.id, name: h.name }));
+  const editable = session.isAdmin;
+  const editorName = session.profile?.name?.trim() || "Admin";
   const openCount = (l: { status: string }[]) =>
     l.filter((x) => ["offen", "kontaktiert"].includes(x.status)).length;
 
@@ -51,11 +56,12 @@ export default async function CrmPage() {
               <div className="flex flex-col gap-6">
                 <TeamWorkspace
                   monitor
+                  editable={editable}
                   token=""
-                  memberName=""
+                  memberName={editorName}
                   inbound={ksInbound}
                   outbound={[]}
-                  hubs={[]}
+                  hubs={hubs}
                 />
                 <details className="group rounded-xl border bg-card shadow-sm">
                   <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
@@ -79,11 +85,12 @@ export default async function CrmPage() {
               <div className="flex flex-col gap-3">
                 <TeamWorkspace
                   monitor
+                  editable={editable}
                   token=""
-                  memberName=""
+                  memberName={editorName}
                   inbound={ccInbound}
                   outbound={[]}
-                  hubs={[]}
+                  hubs={hubs}
                 />
                 <p className="text-xs text-muted-foreground">
                   Davinas Krankenhaus-Anrufliste läuft über ihren persönlichen
