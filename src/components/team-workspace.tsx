@@ -984,6 +984,35 @@ export function TeamWorkspace({
                       )}
                     </>
                   ))}
+                  {/* Agentur-/Recare-Leads außerhalb unserer Standorte: als
+                      "nicht im Einzugsbereich" zurückweisen — bei Agentur-Leads
+                      Grundlage der Reklamation (wir zahlen dafür nicht; Übersicht
+                      im CRM-Admin). */}
+                  {canAct &&
+                    ["agentur", "recare"].includes(l.quelle) &&
+                    ["offen", "kontaktiert", "erstgespraech"].includes(l.status) &&
+                    !l.zugewiesen_hub && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        title={
+                          l.quelle === "agentur"
+                            ? "Lead liegt außerhalb unserer Standorte — wird der Agentur gemeldet, damit er nicht berechnet wird (Übersicht im CRM-Admin)."
+                            : "Patient liegt außerhalb unserer Standorte."
+                        }
+                        className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                        onClick={() =>
+                          setStatus(
+                            l,
+                            "verloren",
+                            `nicht im Einzugsbereich (gemeldet ${new Date().toLocaleDateString("de-DE")})`,
+                          )
+                        }
+                      >
+                        <MapPin className="size-3.5" /> Nicht im Einzugsbereich
+                      </Button>
+                    )}
                 </div>
                 {canAct && !l.zugewiesen_hub && l.status !== "verloren" &&
                   (l.status === "erstgespraech" || l.quelle === "recare") && (

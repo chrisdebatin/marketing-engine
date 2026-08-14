@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
+import { AgenturRueckweisungen } from "@/components/agentur-rueckweisungen";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { ZieleSection } from "@/app/(app)/crm/ziele-section";
@@ -65,6 +66,26 @@ export default async function CrmAdminPage() {
       })),
   ].filter((l) => l.created);
 
+  // Zurückgewiesene Leads "nicht im Einzugsbereich": Agentur-Leads sind
+  // abrechnungsrelevant (wöchentliche Reklamations-Mail an die Agentur).
+  const ausserhalb = (callsRes.data ?? []).filter(
+    (l) =>
+      l.status === "verloren" &&
+      /einzugsbereich/i.test(l.ergebnis ?? ""),
+  );
+  const rueckweisungen = ausserhalb
+    .filter((l) => l.quelle === "agentur")
+    .map((l) => ({
+      id: l.id,
+      name: l.lead_name ?? "(ohne Name)",
+      eingang: l.created_at ?? l.call_date,
+      ort: ("adresse" in l ? (l as { adresse?: string | null }).adresse : null) ?? null,
+      telefon: l.telefon,
+      ergebnis: l.ergebnis,
+    }))
+    .sort((a, b) => (b.eingang ?? "").localeCompare(a.eingang ?? ""));
+  const recareAusserhalb = ausserhalb.filter((l) => l.quelle === "recare").length;
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -77,6 +98,8 @@ export default async function CrmAdminPage() {
         hubPdl={hubPdl}
         now={new Date().toISOString()}
       />
+
+      <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
 
       {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —
           hier nur noch Stats. Import & Einstellungen bleiben eingeklappt
