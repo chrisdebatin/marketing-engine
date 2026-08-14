@@ -380,6 +380,34 @@ export async function buildTeamOutbound(
     .select("id, target_id, contact_date, bearbeiter, note, ansprechpartner")
     .order("contact_date", { ascending: false })
     .limit(3000);
+  // Ansprechpartner mit Telefon/E-Mail je Institution — beim Anruf sichtbar
+  // und direkt korrigierbar, wenn die Nummer nicht stimmt.
+  const { data: personRows } = await admin
+    .from("crm_persons")
+    .select("id, target_id, name, funktion, telefon, email")
+    .limit(2000);
+  const personenVon = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      funktion: string | null;
+      telefon: string | null;
+      email: string | null;
+    }[]
+  >();
+  for (const p of personRows ?? []) {
+    if (!p.target_id) continue;
+    const arr = personenVon.get(p.target_id) ?? [];
+    arr.push({
+      id: p.id,
+      name: p.name,
+      funktion: p.funktion ?? null,
+      telefon: p.telefon ?? null,
+      email: p.email ?? null,
+    });
+    personenVon.set(p.target_id, arr);
+  }
   const letzterVon = new Map<string, string>();
   // Jüngster Log-Eintrag je Institution — Grundlage fürs Nachbearbeiten.
   const letzterLog = new Map<
@@ -451,6 +479,8 @@ export async function buildTeamOutbound(
       letzter_von: letzterVon.get(t.id) ?? null,
       letzter_log_id: letzterLog.get(t.id)?.id ?? null,
       letzter_ansprechpartner: letzterLog.get(t.id)?.ansprechpartner ?? null,
+      adresse: t.adresse ?? null,
+      personen: personenVon.get(t.id) ?? [],
       exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
       todos: (todoRows ?? [])
         .filter((td) => td.lead_id === t.id)

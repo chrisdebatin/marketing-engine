@@ -102,6 +102,15 @@ export interface OutboundTarget {
   letzter_log_id: string | null;
   /** Ansprechpartner aus dem jüngsten Log-Eintrag. */
   letzter_ansprechpartner: string | null;
+  adresse: string | null;
+  /** Hinterlegte Ansprechpartner mit Telefon/E-Mail (crm_persons). */
+  personen: {
+    id: string;
+    name: string;
+    funktion: string | null;
+    telefon: string | null;
+    email: string | null;
+  }[];
   exklusiv: boolean;
   /** Offene To-dos am Kontakt (aus KI-gelesenen Anruf-Notizen). */
   todos: { id: string; text: string; faellig_am: string | null }[];
@@ -1664,6 +1673,7 @@ export function TeamWorkspace({
                             token={token}
                             memberName={memberName}
                             isDue
+                            canAct={canAct}
                             onLogged={(patch) =>
                               setOutbound((cur) =>
                                 cur.map((x) =>
@@ -1702,6 +1712,7 @@ export function TeamWorkspace({
                             token={token}
                             memberName={memberName}
                             isDue={false}
+                            canAct={canAct}
                             onLogged={(patch) =>
                               setOutbound((cur) =>
                                 cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
@@ -1730,6 +1741,7 @@ export function TeamWorkspace({
                             token={token}
                             memberName={memberName}
                             isDue={false}
+                            canAct={canAct}
                             onLogged={(patch) =>
                               setOutbound((cur) =>
                                 cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
@@ -2519,6 +2531,167 @@ function LeadKebab({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Kontaktdaten einer Institution auf der Anruf-Karte: Telefon zum Wählen,
+ * E-Mail, Ansprechpartner und Adresse — alles direkt korrigierbar, wenn die
+ * hinterlegten Daten nicht stimmen (häufig bei importierten Listen).
+ */
+function KontaktDaten({
+  target: t,
+  token,
+  canAct,
+  onSaved,
+}: {
+  target: OutboundTarget;
+  token: string;
+  canAct: boolean;
+  onSaved: (patch: Partial<OutboundTarget>) => void;
+}) {
+  // Bevorzugt der Eintrag mit Telefonnummer, sonst der erste.
+  const haupt = t.personen.find((p) => p.telefon) ?? t.personen[0] ?? null;
+  const [open, setOpen] = useState(false);
+  const [telefon, setTelefon] = useState(haupt?.telefon ?? "");
+  const [email, setEmail] = useState(haupt?.email ?? "");
+  const [name, setName] = useState(haupt?.name ?? "");
+  const [adresse, setAdresse] = useState(t.adresse ?? "");
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  async function speichern() {
+    setBusy(true);
+    setFehler(null);
+    try {
+      const res = await teamAction(token, {
+        action: "kontakt-daten",
+        target_id: t.id,
+        telefon,
+        email,
+        ansprechpartner: name,
+        adresse,
+      });
+      onSaved({
+        personen: (res.personen as OutboundTarget["personen"]) ?? t.personen,
+        ...(res.adresse ? { adresse: String(res.adresse) } : {}),
+      });
+      setOpen(false);
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (open) {
+    return (
+      <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+        <p className="text-xs font-semibold">Kontaktdaten korrigieren</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">Telefon</span>
+            <Input
+              value={telefon}
+              onChange={(e) => setTelefon(e.target.value)}
+              placeholder="z. B. 02374 2400"
+              className="bg-background"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">E-Mail</span>
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="z. B. info@praxis.de"
+              className="bg-background"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">Ansprechpartner</span>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="z. B. Frau Meier, Sozialdienst"
+              className="bg-background"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">Adresse</span>
+            <Input
+              value={adresse}
+              onChange={(e) => setAdresse(e.target.value)}
+              placeholder="Straße, PLZ Ort"
+              className="bg-background"
+            />
+          </label>
+        </div>
+        {fehler && <p className="text-xs text-destructive">{fehler}</p>}
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" disabled={busy} onClick={speichern}>
+            {busy ? "Speichert…" : "Speichern"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => setOpen(false)}
+          >
+            Abbrechen
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      {haupt?.telefon ? (
+        <a
+          href={`tel:${haupt.telefon.replace(/\s/g, "")}`}
+          className="flex items-center gap-1.5 font-medium text-primary hover:underline"
+          title="Anrufen"
+        >
+          <Phone className="size-3.5" />
+          {haupt.telefon}
+        </a>
+      ) : (
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Phone className="size-3.5" />
+          keine Nummer hinterlegt
+        </span>
+      )}
+      {haupt?.email && (
+        <a
+          href={`mailto:${haupt.email}`}
+          className="flex items-center gap-1.5 font-medium text-primary hover:underline"
+        >
+          <Mail className="size-3.5" />
+          {haupt.email}
+        </a>
+      )}
+      {haupt?.name && haupt.name !== "Ansprechpartner" && (
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <User className="size-3.5" />
+          {haupt.name}
+          {haupt.funktion && haupt.funktion !== haupt.name
+            ? ` (${haupt.funktion})`
+            : ""}
+        </span>
+      )}
+      {canAct && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          title="Stimmen die Daten nicht? Hier korrigieren."
+          className="flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="size-3" />
+          {haupt?.telefon ? "ändern" : "eintragen"}
+        </button>
+      )}
+    </p>
   );
 }
 
@@ -3494,6 +3667,7 @@ function OutboundRow({
   token,
   memberName,
   isDue,
+  canAct = true,
   onLogged,
 }: {
   target: OutboundTarget;
@@ -3502,6 +3676,8 @@ function OutboundRow({
   token: string;
   memberName: string;
   isDue: boolean;
+  /** Nur-Lese-Ansicht (Monitor) blendet Bearbeiten-Aktionen aus. */
+  canAct?: boolean;
   onLogged: (patch: Partial<OutboundTarget>) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -3662,6 +3838,13 @@ function OutboundRow({
           {t.kurzinfo && (
             <p className="text-xs text-muted-foreground italic">{t.kurzinfo}</p>
           )}
+          {/* Kontaktdaten der Institution — direkt wählbar und korrigierbar */}
+          <KontaktDaten
+            target={t}
+            token={token}
+            canAct={canAct}
+            onSaved={onLogged}
+          />
           {t.hub && (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
               <span className="font-semibold text-primary">Standort {t.hub}:</span>

@@ -611,6 +611,78 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     });
   }
 
+  // ── Kontaktdaten einer Institution korrigieren/ergänzen ──
+  // Telefon/E-Mail liegen an crm_persons; ohne Eintrag wird einer angelegt.
+  if (action === "kontakt-daten") {
+    const targetId = (body.target_id ?? "").trim();
+    if (!targetId) {
+      return NextResponse.json({ error: "Kontakt fehlt." }, { status: 400 });
+    }
+    const { data: target } = await admin
+      .from("crm_targets")
+      .select("id")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!target) {
+      return NextResponse.json({ error: "Kontakt nicht gefunden." }, { status: 404 });
+    }
+
+    const telefon = (body.telefon ?? "").trim().slice(0, 60);
+    const email = (body.email ?? "").trim().slice(0, 200);
+    const apName = (body.ansprechpartner ?? "").trim().slice(0, 200);
+    const adresse = (body.adresse ?? "").trim().slice(0, 300);
+
+    // Adresse gehört an die Institution selbst.
+    if (adresse) {
+      await admin.from("crm_targets").update({ adresse }).eq("id", targetId);
+    }
+
+    // Person: vorhandene aktualisieren (die mit Telefon zuerst), sonst neu.
+    const { data: vorhanden } = await admin
+      .from("crm_persons")
+      .select("id, telefon")
+      .eq("target_id", targetId)
+      .order("created_at", { ascending: true })
+      .limit(10);
+    const ziel =
+      (vorhanden ?? []).find((p) => p.telefon) ?? (vorhanden ?? [])[0] ?? null;
+
+    if (ziel) {
+      const { error: pErr } = await admin
+        .from("crm_persons")
+        .update({
+          telefon: telefon || null,
+          email: email || null,
+          ...(apName ? { name: apName } : {}),
+        })
+        .eq("id", ziel.id);
+      if (pErr) {
+        return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+      }
+    } else if (telefon || email || apName) {
+      const { error: iErr } = await admin.from("crm_persons").insert({
+        target_id: targetId,
+        name: apName || "Ansprechpartner",
+        telefon: telefon || null,
+        email: email || null,
+      });
+      if (iErr) {
+        return NextResponse.json({ error: "Anlegen fehlgeschlagen." }, { status: 500 });
+      }
+    }
+
+    // Aktuellen Stand zurückgeben, damit die Karte sofort stimmt.
+    const { data: personen } = await admin
+      .from("crm_persons")
+      .select("id, name, funktion, telefon, email")
+      .eq("target_id", targetId);
+    return NextResponse.json({
+      ok: true,
+      personen: personen ?? [],
+      ...(adresse ? { adresse } : {}),
+    });
+  }
+
   // ── Bestätigter Vor-Ort-Auftrag an die PDL ──
   if (action === "pdl-auftrag") {
     const text = (body.text ?? "").trim();
