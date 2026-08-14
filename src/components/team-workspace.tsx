@@ -464,6 +464,7 @@ export function TeamWorkspace({
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
   const [outTab, setOutTab] = useState<"liste" | "wieder" | "erledigt">("liste");
+  const [inTab, setInTab] = useState<"offen" | "pdl" | "closed">("offen");
   const canAct = !monitor || editable;
 
   const router = useRouter();
@@ -488,13 +489,36 @@ export function TeamWorkspace({
   useEffect(() => setInbound(initialInbound), [initialInbound]);
   useEffect(() => setOutbound(initialOutbound), [initialOutbound]);
 
-  // Aktiv = alles, was noch Arbeit braucht (auch Erstgespräch: Übergabe
-  // steht aus). Aufgenommen/verloren wandern in "Alte & abgelehnte Leads".
-  const openInbound = inbound.filter((l) =>
-    ["offen", "kontaktiert", "erstgespraech"].includes(l.status),
+  // Drei Zustände im Leads-Tab: Offen (unser Zug), "Hängt bei PDL"
+  // (übergeben, pending confirmation) und Geschlossen (PDL hat bestätigt).
+  // Verlorene bleiben unten unter "Alte & abgelehnte Leads".
+  const istPending = (l: InboundLead) =>
+    Boolean(l.zugewiesen_at && !l.pdl_bestaetigt_at && l.status !== "verloren");
+  const istGeschlossen = (l: InboundLead) =>
+    l.status === "aufgenommen" ||
+    Boolean(l.pdl_bestaetigt_at && !/nicht|kein/i.test(l.pdl_ergebnis ?? ""));
+  const pendingLeads = inbound
+    .filter(istPending)
+    .sort((a, b) => (a.zugewiesen_at ?? "").localeCompare(b.zugewiesen_at ?? ""));
+  const closedLeads = inbound
+    .filter(istGeschlossen)
+    .sort((a, b) =>
+      (b.pdl_bestaetigt_at ?? b.datum ?? "").localeCompare(
+        a.pdl_bestaetigt_at ?? a.datum ?? "",
+      ),
+    );
+  const heuteIso = todayIso();
+  const heuteGeschlossen = closedLeads.filter(
+    (l) => (l.pdl_bestaetigt_at ?? "").slice(0, 10) === heuteIso,
+  ).length;
+  const openInbound = inbound.filter(
+    (l) =>
+      ["offen", "kontaktiert", "erstgespraech"].includes(l.status) &&
+      !istPending(l) &&
+      !istGeschlossen(l),
   );
   const doneLeads = inbound.filter(
-    (l) => !["offen", "kontaktiert", "erstgespraech"].includes(l.status),
+    (l) => l.status === "verloren" && !istGeschlossen(l),
   );
 
   // Zähler je Quelle (nur offene) + Tages-Gruppen, neueste zuerst.
@@ -509,7 +533,11 @@ export function TeamWorkspace({
   const hatFaelligesTodo = (l: InboundLead) =>
     l.todos.some((t) => t.faellig_am !== null && t.faellig_am <= heute);
   const wiedervorlage = inbound.filter(
-    (l) => hatFaelligesTodo(l) && l.status !== "verloren",
+    (l) =>
+      hatFaelligesTodo(l) &&
+      l.status !== "verloren" &&
+      !istPending(l) &&
+      !istGeschlossen(l),
   );
   const wvIds = new Set(wiedervorlage.map((l) => l.id));
   const dayGroups: { key: string; leads: InboundLead[] }[] = [];
@@ -742,6 +770,181 @@ export function TeamWorkspace({
               !(canAct && inboundLog) && "lg:col-span-2",
             )}
           >
+          {/* Zustands-Reiter: Offen / Hängt bei PDL / Geschlossen */}
+          <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
+            {(
+              [
+                { key: "offen", label: "Offene Leads", n: openInbound.length },
+                { key: "pdl", label: "Hängt bei PDL", n: pendingLeads.length },
+                { key: "closed", label: "Geschlossen", n: heuteGeschlossen },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setInTab(t.key)}
+                title={
+                  t.key === "pdl"
+                    ? "Übergeben — wartet auf Freigabe (pending confirmation)"
+                    : t.key === "closed"
+                      ? "Von der PDL bestätigt — Badge zählt heute geschlossene"
+                      : undefined
+                }
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium",
+                  inTab === t.key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span className="truncate">{t.label}</span>
+                {t.n > 0 && (
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 text-xs font-semibold tabular-nums",
+                      inTab === t.key ? "bg-white/20" : "bg-primary/10 text-primary",
+                    )}
+                  >
+                    {t.n}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {inTab === "pdl" && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Übergeben und wartet auf Freigabe der PDL (pending
+                confirmation). Nachfassen lohnt sich ab 48 Std — jeder
+                Anruf-Versuch bitte per ✓/✗ vermerken.
+              </p>
+              {pendingLeads.length === 0 ? (
+                <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                  Nichts wartet auf PDL-Freigabe.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {pendingLeads.map((l) => {
+                    const wartetMs = l.zugewiesen_at
+                      ? Date.parse(heuteIso) - Date.parse(l.zugewiesen_at)
+                      : 0;
+                    const spaet = wartetMs > 48 * 3_600_000;
+                    return (
+                      <li
+                        key={`${l.kind}-${l.id}`}
+                        className={cn(
+                          "flex flex-col gap-1.5 rounded-xl border border-l-4 bg-card p-3.5 shadow-sm",
+                          spaet ? "border-l-red-400" : "border-l-sky-400",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="font-semibold">{l.name}</span>
+                          <LeadIdChip id={l.id} />
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                              spaet
+                                ? "bg-red-100 text-red-800"
+                                : "bg-sky-100 text-sky-800",
+                            )}
+                          >
+                            wartet {relTime(l.zugewiesen_at ?? "") || "…"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          → übergeben an{" "}
+                          <span className="font-medium text-foreground">
+                            {l.zugewiesen_hub}
+                          </span>
+                          {l.zugewiesen_pdl ? ` (PDL ${l.zugewiesen_pdl})` : ""}
+                          {l.zugewiesen_at
+                            ? ` am ${formatIsoDate(l.zugewiesen_at.slice(0, 10))}`
+                            : ""}
+                          {l.bearbeiter ? ` · von ${l.bearbeiter}` : ""}
+                        </p>
+                        {l.notiz && (
+                          <p className="line-clamp-2 text-xs text-muted-foreground">
+                            „{l.notiz}“
+                          </p>
+                        )}
+                        {canAct && (
+                          <div className="flex flex-wrap items-center gap-3 border-t pt-2">
+                            <PdlVersuchButtons lead={l} token={token} />
+                            <button
+                              type="button"
+                              onClick={() => unassignHub(l)}
+                              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                            >
+                              <Undo2 className="size-3" /> Übergabe zurücknehmen
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          )}
+
+          {inTab === "closed" && (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Von der PDL bestätigt und damit geschlossen —{" "}
+                <span className="font-semibold text-foreground">
+                  {heuteGeschlossen} heute
+                </span>
+                , {closedLeads.length} gesamt.
+              </p>
+              {closedLeads.length === 0 ? (
+                <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                  Noch keine geschlossenen Leads.
+                </p>
+              ) : (
+                <ul className="divide-y rounded-xl border bg-card shadow-sm">
+                  {closedLeads.slice(0, 50).map((l) => (
+                    <li
+                      key={`${l.kind}-${l.id}`}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <Check className="size-3.5" />
+                      </span>
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {l.pdl_bestaetigt_at
+                          ? formatIsoDate(l.pdl_bestaetigt_at.slice(0, 10))
+                          : "—"}
+                      </span>
+                      <span className="font-medium">{l.name}</span>
+                      <LeadIdChip id={l.id} />
+                      {l.zugewiesen_hub && (
+                        <span className="text-xs text-muted-foreground">
+                          → {l.zugewiesen_hub}
+                        </span>
+                      )}
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                        {l.pdl_ergebnis ?? "aufgenommen"}
+                      </span>
+                      {l.bearbeiter && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {l.bearbeiter}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {closedLeads.length > 50 && (
+                    <li className="px-4 py-2 text-center text-xs text-muted-foreground">
+                      +{closedLeads.length - 50} ältere
+                    </li>
+                  )}
+                </ul>
+              )}
+            </>
+          )}
+
+          {inTab === "offen" && (
+          <>
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
           <div className="flex flex-wrap items-center gap-2">
             {[...sourceCounts.entries()]
@@ -1088,7 +1291,7 @@ export function TeamWorkspace({
               <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
                 Alte &amp; abgelehnte Leads ({doneLeads.length})
                 <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
-                  aufklappen — abgelehnte und aufgenommene Leads
+                  aufklappen — abgelehnte / verlorene Leads
                 </span>
               </summary>
               <ul className="divide-y border-t">
@@ -1136,6 +1339,8 @@ export function TeamWorkspace({
                 ))}
               </ul>
             </details>
+          )}
+          </>
           )}
           </div>
         </div>
