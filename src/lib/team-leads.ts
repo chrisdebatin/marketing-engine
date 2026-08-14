@@ -118,6 +118,89 @@ export async function buildTeamInbound(
       .filter((t) => t.lead_kind === kind && t.lead_id === id)
       .map((t) => ({ id: t.id, text: t.text, faellig_am: t.faellig_am }));
 
+  // ── Klinik-Beziehung für Recare-Leads: waren wir schon da, haben wir
+  // schon angerufen, wie viele Patienten kamen bisher von dort? ──
+  interface KontaktZeile {
+    target_id: string | null;
+    kontakt_art: string;
+    ansprechpartner: string | null;
+    contact_date: string;
+  }
+  const recareCalls = (callRows ?? []).filter(
+    (c) => c.quelle === "recare" && c.quelle_detail,
+  );
+  let klinikKontakte = new Map<string, KontaktZeile[]>();
+  const patStats = new Map<string, { total: number; aufgenommen: number }>();
+  if (recareCalls.length > 0) {
+    const targetIds = [
+      ...new Set(recareCalls.map((c) => c.target_id).filter(Boolean)),
+    ] as string[];
+    const [kontakteRes, alleRecareRes] = await Promise.all([
+      targetIds.length
+        ? admin
+            .from("crm_contacts")
+            .select("target_id, kontakt_art, ansprechpartner, contact_date")
+            .in("target_id", targetIds)
+            .order("contact_date", { ascending: false })
+            .limit(300)
+        : Promise.resolve({ data: [] as KontaktZeile[] }),
+      admin
+        .from("lead_calls")
+        .select("quelle_detail, status, pdl_bestaetigt_at, pdl_ergebnis")
+        .eq("quelle", "recare")
+        .not("quelle_detail", "is", null)
+        .limit(1000),
+    ]);
+    klinikKontakte = new Map();
+    for (const k of (kontakteRes.data ?? []) as KontaktZeile[]) {
+      if (!k.target_id) continue;
+      const arr = klinikKontakte.get(k.target_id) ?? [];
+      arr.push(k);
+      klinikKontakte.set(k.target_id, arr);
+    }
+    for (const r of alleRecareRes.data ?? []) {
+      const key = normName(r.quelle_detail ?? "");
+      if (!key) continue;
+      const e = patStats.get(key) ?? { total: 0, aufgenommen: 0 };
+      e.total++;
+      if (
+        r.status === "aufgenommen" ||
+        (r.pdl_bestaetigt_at && !/nicht|kein/i.test(r.pdl_ergebnis ?? ""))
+      ) {
+        e.aufgenommen++;
+      }
+      patStats.set(key, e);
+    }
+  }
+  const klinikInfoFor = (c: {
+    quelle: string;
+    quelle_detail: string | null;
+    target_id: string | null;
+  }): InboundLead["klinik_info"] => {
+    if (c.quelle !== "recare" || !c.quelle_detail) return null;
+    const stats = patStats.get(normName(c.quelle_detail)) ?? {
+      total: 0,
+      aufgenommen: 0,
+    };
+    const rows = c.target_id ? (klinikKontakte.get(c.target_id) ?? []) : [];
+    const anruf = rows.find((k) => k.kontakt_art === "anruf");
+    const besuch = rows.find((k) =>
+      ["besuch", "box", "flyer"].includes(k.kontakt_art),
+    );
+    return {
+      name: c.quelle_detail,
+      letzter_anruf: anruf
+        ? { datum: anruf.contact_date, ansprechpartner: anruf.ansprechpartner }
+        : null,
+      letzter_besuch: besuch
+        ? { datum: besuch.contact_date, art: besuch.kontakt_art }
+        : null,
+      ansprechpartner: rows.find((k) => k.ansprechpartner)?.ansprechpartner ?? null,
+      patienten: stats.total,
+      aufgenommen: stats.aufgenommen,
+    };
+  };
+
   const inbound: InboundLead[] = [];
   for (const c of callRows ?? []) {
     const mine = isCallcenter
@@ -170,6 +253,7 @@ export async function buildTeamInbound(
         hubName(c.zugewiesen_hub_id ?? null) ?? hubName(vorschlagId),
       ),
       todos: todosFor("call", c.id),
+      klinik_info: klinikInfoFor(c),
     });
   }
   if (!isCallcenter) {
@@ -212,6 +296,7 @@ export async function buildTeamInbound(
             hubName(suggestHub(m.campaign_name ?? "") ?? null),
         ),
         todos: todosFor("meta", m.id),
+        klinik_info: null,
       });
     }
   }

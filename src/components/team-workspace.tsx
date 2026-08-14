@@ -61,6 +61,15 @@ export interface InboundLead {
   vorschlag_hub: string | null;
   vorschlag_pdl: string | null;
   vorschlag_pdl_phone: string | null;
+  /** Klinik-Beziehung bei Recare-Leads: waren wir schon da, wer war Ansprechpartner, wie viele Patienten kamen bisher. */
+  klinik_info: {
+    name: string;
+    letzter_anruf: { datum: string; ansprechpartner: string | null } | null;
+    letzter_besuch: { datum: string; art: string } | null;
+    ansprechpartner: string | null;
+    patienten: number;
+    aufgenommen: number;
+  } | null;
   /** Düsseldorf/Gevelsberg: Team bucht Termin selbst + legt in MediFox (DUS) an. */
   direct_booking: boolean;
   /** Offene To-dos mit Deadline — fällige heben den Lead in die Wiedervorlage. */
@@ -1103,6 +1112,62 @@ export function TeamWorkspace({
                     )}
                   </p>
                 )}
+                {/* Klinik-Beziehung (nur Recare): waren wir schon da, wer war
+                    zuletzt Ansprechpartner, wie viele Patienten kamen bisher. */}
+                {l.klinik_info && (
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs">
+                    <p className="font-semibold text-indigo-950">
+                      🏥 {l.klinik_info.name} — unsere Beziehung
+                    </p>
+                    <ul className="mt-1 flex flex-col gap-0.5 text-indigo-950/80">
+                      <li>
+                        Vor Ort:{" "}
+                        {l.klinik_info.letzter_besuch ? (
+                          <>
+                            {kontaktArtLabel(l.klinik_info.letzter_besuch.art) || "Besuch"}{" "}
+                            am {formatIsoDate(l.klinik_info.letzter_besuch.datum)}
+                          </>
+                        ) : (
+                          "noch nie besucht"
+                        )}
+                      </li>
+                      <li>
+                        Angerufen:{" "}
+                        {l.klinik_info.letzter_anruf ? (
+                          <>
+                            am {formatIsoDate(l.klinik_info.letzter_anruf.datum)}
+                            {l.klinik_info.letzter_anruf.ansprechpartner
+                              ? ` (mit ${l.klinik_info.letzter_anruf.ansprechpartner})`
+                              : ""}
+                          </>
+                        ) : (
+                          "noch nie"
+                        )}
+                      </li>
+                      <li>
+                        Patienten von dort:{" "}
+                        {l.klinik_info.patienten > 1 ? (
+                          <>
+                            {l.klinik_info.patienten} Anfragen ·{" "}
+                            <span className="font-medium">
+                              {l.klinik_info.aufgenommen} aufgenommen
+                            </span>
+                          </>
+                        ) : (
+                          "erste Anfrage dieser Klinik"
+                        )}
+                      </li>
+                      {l.klinik_info.ansprechpartner && (
+                        <li>
+                          Letzter Ansprechpartner:{" "}
+                          <span className="font-medium">
+                            {l.klinik_info.ansprechpartner}
+                          </span>
+                        </li>
+                      )}
+                    </ul>
+                  </div>
+                )}
                 <LeadNote
                   lead={l}
                   canAct={canAct}
@@ -1645,6 +1710,7 @@ function InboundCallLog({
         vorschlag_pdl_phone: null,
         direct_booking: false,
         todos: [],
+        klinik_info: null,
       });
       setName("");
       setTelefon("");
