@@ -159,7 +159,12 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
       model: MODEL,
       max_tokens: 512,
       system:
-        "Du extrahierst aus einer Benachrichtigungs-Mail der Telefonanlage über einen verpassten Anruf die Daten des Anrufers und sortierst den Anruf vor. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. telefon = Rufnummer des Anrufers; name = Name falls genannt; zeitpunkt = Datum/Uhrzeit des Anrufs; notiz = Kern der Gesprächszusammenfassung. kategorie: 'neuinteressent' = potenzieller NEUER Pflege-Kunde bzw. Angehörige(r) mit Pflege-Anliegen (im Zweifel neuinteressent wählen!); 'bestandskunde' = bereits versorgte Kundin/Kunde (Termine, aktuelle Einsätze); 'mitarbeiter_intern' = eigene Mitarbeiter (Krankmeldung, Dienstplan) oder interne Anrufe; 'sonstiges' = alles andere (Lieferanten, Schulen, Vertrieb, keine Angaben).",
+        "Du extrahierst aus einer Benachrichtigungs-Mail der Telefonanlage über einen verpassten Anruf die Daten des Anrufers und sortierst den Anruf vor. Felder, die nicht im Text stehen, als leeren String lassen — nichts erfinden. telefon = Rufnummer des Anrufers; name = Name falls genannt; zeitpunkt = Datum/Uhrzeit des Anrufs; notiz = Kern der Gesprächszusammenfassung (auch Weiterleitungsnotiz und gewünschte Ansprechperson nennen). " +
+        "kategorie — WICHTIG: Im Zweifel IMMER 'neuinteressent' wählen. Ein verlorener Interessent kostet uns Umsatz, ein falsch einsortierter interner Anruf nur einen Klick. " +
+        "'mitarbeiter_intern' NUR wenn eindeutig ein eigener Mitarbeiter oder eine interne Abteilung anruft (Krankmeldung, Dienstplan, interne Rückfrage). " +
+        "'bestandskunde' nur wenn im Text ausdrücklich steht, dass es um eine BEREITS laufende Versorgung geht (Termine, Rechnung, Beschwerde zu Einsätzen). " +
+        "'sonstiges' nur bei eindeutig fachfremden Anrufen (Lieferant, Vertrieb, Werbung, falsch verbunden). " +
+        "Steht 'Anrufer-Typ: Unbekannt' oder liegt kein verwertbarer Gesprächsinhalt vor, dann 'neuinteressent' wählen — solche Anrufe müssen zurückgerufen werden.",
       tools: [
         {
           name: "verpasster_anruf",
@@ -331,9 +336,16 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
     // Verpasster 0800-Anruf: Nummer/Name/Zeit rausziehen, Lead fürs DE-Team.
     if (m.kind === "anruf") {
       const call = await extractCall(`Betreff: ${m.subject}\n\n${body}`);
-      // Vorsortierung: nur Neuinteressenten als offener Lead; der Rest wird
-      // direkt abgeschlossen (bleibt unter "Abgeschlossene" auffindbar).
-      const interessent = !call || call.kategorie === "neuinteressent";
+      // Vorsortierung bewusst zurückhaltend: NUR eindeutig interne Anrufe
+      // werden geschlossen. Bestandskunden (Beschwerden, Rechnungsfragen)
+      // und unklare Fälle bleiben offen — lieber einmal zu viel prüfen als
+      // einen echten Interessenten verlieren. Der Chip in der Notiz zeigt,
+      // wie die KI den Anruf eingeschätzt hat.
+      const interessent = !call || call.kategorie !== "mitarbeiter_intern";
+      const kategorieHinweis =
+        call && call.kategorie !== "neuinteressent"
+          ? `KI-Einschätzung: ${KATEGORIE_LABEL[call.kategorie] ?? call.kategorie}`
+          : "";
       const { error: insErr } = await admin.from("lead_calls").insert({
         call_date: m.receivedAt.slice(0, 10),
         quelle: "telefon0800",
@@ -344,6 +356,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
             "Verpasster Anruf",
             call?.zeitpunkt ? `um ${call.zeitpunkt}` : "",
             call?.notiz ?? "",
+            kategorieHinweis,
           ]
             .filter(Boolean)
             .join(" · ")
@@ -351,7 +364,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
         status: interessent ? "offen" : "verloren",
         ergebnis: interessent
           ? null
-          : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
+          : `interner Anruf (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
       });
       if (insErr) {
         processed.delete(m.id);
