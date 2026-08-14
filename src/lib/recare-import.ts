@@ -417,11 +417,11 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       }
       if (w.kategorie === "bewerbung") {
         const { deliverMail } = await import("@/lib/mailer");
-        const { FORWARD_TO } = await import("@/lib/lead-forward");
+        const { RECRUITING_TO } = await import("@/lib/lead-forward");
         const esc = (s: string) =>
           s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         const sent = await deliverMail({
-          to: FORWARD_TO,
+          to: RECRUITING_TO,
           subject: `Bewerbung über Website: ${w.name || "(ohne Name)"}`,
           html:
             `<p>Bewerbung über das Website-Kontaktformular:</p>` +

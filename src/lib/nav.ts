@@ -14,6 +14,7 @@ import {
   Sparkles,
   Target,
   Truck,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 /**
@@ -54,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/flyeraktionen", label: "Flyeraktionen", Icon: Megaphone },
       { href: "/online-anzeigen", label: "Online Anzeigen", Icon: Rocket },
       { href: "/meta-ads", label: "Meta Ads KI", Icon: Bot },
+      { href: "/recruiting", label: "Recruiting-Leads", Icon: UserPlus },
       { href: "/kommunikation", label: "Kommunikation", Icon: Send },
       { href: "/postfach", label: "Postfach", Icon: Inbox },
     ],

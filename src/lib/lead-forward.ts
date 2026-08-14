@@ -12,6 +12,17 @@ export const FORWARD_TO = (process.env.LEAD_FORWARD_TO || "recruiting@igsg.de")
   .map((s) => s.trim())
   .filter(Boolean);
 
+/**
+ * Ziel für Bewerbungen über das Website-Kontaktformular (KI-erkannt) —
+ * eigenes Postfach, konfigurierbar über RECRUITING_FORWARD_TO.
+ */
+export const RECRUITING_TO = (
+  process.env.RECRUITING_FORWARD_TO || "recruiting@pflegeunion.de"
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 /** Mitarbeiter-Anfrage? Erkennung über den Kampagnennamen. */
 export function isRecruitingLead(campaignName: string | null): boolean {
   if (!campaignName) return false;
