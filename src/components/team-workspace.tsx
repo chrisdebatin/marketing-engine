@@ -312,23 +312,32 @@ function ProcessSteps({
             verloren
           </span>
         )}
-        {undo && (
-          <button
-            type="button"
-            onClick={undo.run}
-            title="Fälschlich geklickt? Macht den letzten Prozess-Schritt rückgängig."
-            className="ml-auto flex items-center gap-1 self-center rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <Undo2 className="size-3" />
-            {undo.label}
-          </button>
-        )}
       </div>
-      {next && (
-        <p className="text-sm">
-          <span className="font-semibold text-primary">Nächster Schritt:</span>{" "}
-          <span className={next === "Abgeschlossen" ? "text-emerald-700" : ""}>{next}</span>
-        </p>
+      {/* Nächster Schritt + Zurück-Button in einer eigenen Zeile — in der
+          Schritt-Reihe wurde der Button bei 6 Schritten aus dem Bild
+          geschoben. */}
+      {(next || undo) && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          {next && (
+            <p className="text-sm">
+              <span className="font-semibold text-primary">Nächster Schritt:</span>{" "}
+              <span className={next === "Abgeschlossen" ? "text-emerald-700" : ""}>
+                {next}
+              </span>
+            </p>
+          )}
+          {undo && (
+            <button
+              type="button"
+              onClick={undo.run}
+              title="Fälschlich geklickt? Macht den letzten Prozess-Schritt rückgängig."
+              className="ml-auto flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Undo2 className="size-3.5" />
+              {undo.label}
+            </button>
+          )}
+        </div>
       )}
       {/* Pflicht-To-do: ohne Name/Adresse kann der Lead nicht sauber
           übergeben werden — deshalb sichtbar markiert. */}
