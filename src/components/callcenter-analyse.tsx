@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   Bot,
   Clock,
-  PhoneCall,
   PhoneIncoming,
   PhoneMissed,
   TriangleAlert,
@@ -14,19 +13,17 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatTile } from "@/components/ui/stat-tile";
 import { cn } from "@/lib/utils";
 
-/** Ein eingehender Anruf aus dem Telefonanlagen-Export (phone_calls). */
-export interface AnalyseCall {
-  /** ISO-Zeitpunkt des Anrufs. */
-  zeit: string;
-  hub: string | null;
-  angenommen: boolean;
-  /** Gesprächsdauer in Sekunden — 0 bei verpassten Anrufen. */
-  sekunden: number;
-}
-
-/** Ein 0800-Lead aus der KI-Vorsortierung der Verpasst-Mails (lead_calls). */
+/**
+ * Ein verpasster Anruf aus der Benachrichtigungs-Mail der Telefonanlage.
+ * Das ist die EINZIGE Datenquelle dieser Auswertung: Jede Mail = ein Anruf,
+ * bei dem niemand rangegangen ist und den die KI-Agentin Nora angenommen hat.
+ * Angenommene Anrufe erzeugen keine Mail und tauchen hier deshalb nicht auf.
+ */
 export interface AnalyseLead {
+  /** Zeitpunkt des Anrufs (aus der Mail), ISO. */
   zeit: string;
+  /** Uhrzeit-Stunde des Anrufs, 0–23 — aus dem Mailtext gelesen. */
+  stunde: number;
   /** KI-Kategorie, aus dem Ergebnis-Text abgeleitet. */
   kategorie: "neuinteressent" | "bestandskunde" | "mitarbeiter_intern" | "sonstiges" | "kein_anliegen";
   /** Fachbereich der Anfrage, falls erfasst. */
@@ -75,9 +72,6 @@ function prozent(teil: number, ganz: number): number {
   return ganz > 0 ? Math.round((teil / ganz) * 100) : 0;
 }
 
-function stundeVon(iso: string): number {
-  return new Date(iso).getHours();
-}
 
 /**
  * Donut: Anteile der Anliegen-Arten. Ring statt Vollkreis, damit die
@@ -180,35 +174,29 @@ function DonutChart({
  * KI-vorsortierten Verpasst-Mails (worum es ging).
  */
 export function CallcenterAnalyse({
-  calls,
   leads,
   tage,
   zeitraum,
 }: {
-  calls: AnalyseCall[];
   leads: AnalyseLead[];
-  /** Anzahl Tage, für die Telefonanlagen-Daten vorliegen. */
+  /** Anzahl Tage, an denen verpasste Anrufe eingegangen sind. */
   tage: number;
-  /** Abgedeckter Zeitraum der Telefonanlagen-Daten, für die Datenbasis-Zeile. */
+  /** Abgedeckter Zeitraum, für die Datenbasis-Zeile. */
   zeitraum?: { von: string; bis: string } | null;
 }) {
   const [tabelle, setTabelle] = useState(false);
 
   const k = useMemo(() => {
-    const gesamt = calls.length;
-    const angenommen = calls.filter((c) => c.angenommen).length;
-    const verpasst = gesamt - angenommen;
+    const gesamt = leads.length;
 
-    // Stunden-Achse auf den tatsächlich belegten Bereich zuschneiden (mit
-    // einer Stunde Rand), sonst stehen rechts nur leere Spalten. Der Rand
-    // bis mindestens BESETZT_BIS+2 bleibt sichtbar — dort liegt die Aussage.
-    // reduce statt Spread: calls kann sehr groß sein (Stack-Overflow bei
-    // Math.min(...arr)) und ist bei leerer Datenbasis leer.
-    const grenzen = calls.reduce(
-      (acc, c) => {
-        const h = stundeVon(c.zeit);
-        return { min: Math.min(acc.min, h), max: Math.max(acc.max, h) };
-      },
+    // Stunden-Achse auf den belegten Bereich zuschneiden (eine Stunde Rand),
+    // mindestens aber das Besetzungsfenster zeigen. reduce statt Spread,
+    // damit große Datenmengen keinen Stack-Overflow auslösen.
+    const grenzen = leads.reduce(
+      (acc, l) => ({
+        min: Math.min(acc.min, l.stunde),
+        max: Math.max(acc.max, l.stunde),
+      }),
       { min: BESETZT_VON, max: BESETZT_BIS + 1 },
     );
     const vonStunde = Math.max(0, grenzen.min - 1);
@@ -217,28 +205,31 @@ export function CallcenterAnalyse({
       { length: Math.max(bisStunde - vonStunde + 1, 1) },
       (_, i) => i + vonStunde,
     ).map((h) => {
-      const inStunde = calls.filter((c) => stundeVon(c.zeit) === h);
-      const an = inStunde.filter((c) => c.angenommen).length;
+      const inStunde = leads.filter((l) => l.stunde === h);
       return {
         h,
         gesamt: inStunde.length,
-        angenommen: an,
-        verpasst: inStunde.length - an,
+        interessenten: inStunde.filter((l) => l.kategorie === "neuinteressent")
+          .length,
         besetzt: h >= BESETZT_VON && h < BESETZT_BIS,
       };
     });
     const maxStunde = Math.max(1, ...stunden.map((s) => s.gesamt));
 
-    // Kernfrage: Was liegt nach Dienstschluss?
-    const nachSchluss = calls.filter((c) => stundeVon(c.zeit) >= BESETZT_BIS);
-    const vorBeginn = calls.filter((c) => stundeVon(c.zeit) < BESETZT_VON);
-    const ausserhalb = nachSchluss.length + vorBeginn.length;
-    const ausserhalbVerpasst = [...nachSchluss, ...vorBeginn].filter(
-      (c) => !c.angenommen,
+    // Kernfrage: Wie viele verpasste Anrufe liegen außerhalb der Besetzung?
+    const ausserhalbListe = leads.filter(
+      (l) => l.stunde >= BESETZT_BIS || l.stunde < BESETZT_VON,
+    );
+    const nachSchlussListe = leads.filter((l) => l.stunde >= BESETZT_BIS);
+    const ausserhalb = ausserhalbListe.length;
+    const nachSchluss = nachSchlussListe.length;
+    const nachSchlussAnteil = prozent(nachSchluss, gesamt);
+    // Verlorene Interessenten: echte Neuanfragen außerhalb der Besetzung.
+    const interessentenAusserhalb = ausserhalbListe.filter(
+      (l) => l.kategorie === "neuinteressent",
     ).length;
+    const verloreneProTag = tage > 0 ? interessentenAusserhalb / tage : 0;
 
-    // Kategorien der KI-vorsortierten Verpasst-Anrufe.
-    const gesamtLeads = leads.length;
     const jeKategorie = (
       Object.keys(KATEGORIE_META) as AnalyseLead["kategorie"][]
     )
@@ -249,6 +240,7 @@ export function CallcenterAnalyse({
       }))
       .filter((r) => r.anzahl > 0)
       .sort((a, b) => b.anzahl - a.anzahl);
+
     const interessenten = leads.filter(
       (l) => l.kategorie === "neuinteressent",
     ).length;
@@ -257,50 +249,35 @@ export function CallcenterAnalyse({
       (l) => l.kategorie === "kein_anliegen",
     ).length;
 
-    // Verlust-Schätzung: Interessenten-Quote der eingegangenen Anrufe auf die
-    // verpassten Anrufe außerhalb der Besetzung übertragen.
-    const interessentenQuote = gesamtLeads > 0 ? interessenten / gesamtLeads : 0;
-    const verloreneProTag =
-      tage > 0 ? (ausserhalbVerpasst * interessentenQuote) / tage : 0;
-
-    // Spitzenstunde und die erste Stunde nach Dienstschluss.
     const spitze = [...stunden].sort((a, b) => b.gesamt - a.gesamt)[0];
-    const nachSchlussAnteil = prozent(nachSchluss.length, gesamt);
 
     return {
       gesamt,
-      angenommen,
-      verpasst,
       stunden,
       maxStunde,
-      nachSchluss: nachSchluss.length,
-      nachSchlussVerpasst: nachSchluss.filter((c) => !c.angenommen).length,
-      nachSchlussAnteil,
       ausserhalb,
-      ausserhalbVerpasst,
+      nachSchluss,
+      nachSchlussAnteil,
+      interessentenAusserhalb,
+      verloreneProTag,
       jeKategorie,
-      gesamtLeads,
       interessenten,
       ohneRueckruf,
-      interessentenQuote,
-      verloreneProTag,
       spitze,
     };
-  }, [calls, leads, tage]);
+  }, [leads, tage]);
 
-  if (calls.length === 0 && leads.length === 0) {
+  if (leads.length === 0) {
     return (
       <SectionCard
         title="Callcenter-Analyse"
         icon={PhoneIncoming}
-        description="Noch keine Datenbasis vorhanden."
+        description="Noch keine verpassten Anrufe erfasst."
       >
         <p className="text-sm text-muted-foreground">
-          Für die Annahmequote und die Uhrzeiten-Verteilung wird der CSV-Export
-          der Telefonanlage gebraucht — den lädst du unter{" "}
-          <span className="font-medium text-foreground">Statistik</span> hoch.
-          Sobald ein Export drin ist, erscheint hier die vollständige
-          Auswertung.
+          Diese Auswertung beruht auf den Benachrichtigungs-Mails der
+          Telefonanlage über verpasste Anrufe. Sobald welche eingehen,
+          erscheint hier die Auswertung.
         </p>
       </SectionCard>
     );
@@ -313,59 +290,52 @@ export function CallcenterAnalyse({
         .cc-viz {
           --cc-an: #1baf7a; --cc-miss: #e5484d;
           --cc-1: #2a78d6; --cc-2: #eb6834; --cc-3: #1baf7a;
-          --cc-4: #eda100; --cc-5: #e87ba4;
+          --cc-4: #eda100; --cc-5: #e87ba4; --cc-rest: #c7d2e0;
         }
         @media (prefers-color-scheme: dark) {
           .cc-viz {
             --cc-an: #30c78d; --cc-miss: #ff6369;
             --cc-1: #3987e5; --cc-2: #ff7d47; --cc-3: #30c78d;
-            --cc-4: #ffb31a; --cc-5: #f58cb4;
+            --cc-4: #ffb31a; --cc-5: #f58cb4; --cc-rest: #4a5568;
           }
         }
       `}</style>
 
-      {/* Datenbasis offenlegen: zwei Quellen mit ggf. unterschiedlichem
-          Zeitraum — sonst liest man die Prozentwerte als einen Datensatz. */}
-      <p className="text-xs text-muted-foreground">
-        <b className="text-foreground">Datenbasis:</b> Annahmequote und Uhrzeiten
-        stammen aus dem Telefonanlagen-Export
+      {/* Datenbasis offenlegen — eine einzige Quelle, klar benannt. */}
+      <p className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <b className="text-foreground">Datenbasis:</b> ausschließlich die
+        Benachrichtigungs-Mails der Telefonanlage über{" "}
+        <b className="text-foreground">verpasste Anrufe</b> — {k.gesamt} Stück
         {zeitraum
-          ? ` (${new Date(`${zeitraum.von}T00:00:00`).toLocaleDateString("de-DE")}–${new Date(`${zeitraum.bis}T00:00:00`).toLocaleDateString("de-DE")}, ${tage} ${tage === 1 ? "Tag" : "Tage"})`
+          ? ` vom ${new Date(`${zeitraum.von}T00:00:00`).toLocaleDateString("de-DE")} bis ${new Date(`${zeitraum.bis}T00:00:00`).toLocaleDateString("de-DE")} (${tage} ${tage === 1 ? "Tag" : "Tage"})`
           : ""}
-        ; die Anliegen-Verteilung aus den KI-gelesenen Verpasst-Mails ({k.gesamtLeads}{" "}
-        Anrufe). Beide Zeiträume können abweichen — regelmäßige CSV-Uploads unter
-        &bdquo;Statistik&ldquo; machen die Auswertung belastbar.
+        . Uhrzeit und Anliegen stammen aus dem Mailtext, die Kategorie liest
+        die KI daraus. <b className="text-foreground">Wichtig:</b> Anrufe, die
+        jemand angenommen hat, erzeugen keine Mail und fehlen hier komplett —
+        eine Annahmequote lässt sich daraus nicht berechnen.
       </p>
 
       {/* ── Kennzahlen ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <StatTile
-          icon={PhoneIncoming}
-          tone="blue"
-          coloredValue
-          label="Eingehende Anrufe"
-          value={k.gesamt}
-          sub={
-            tage > 0
-              ? `${Math.round(k.gesamt / tage)} pro Tag · ${tage} ${tage === 1 ? "Tag" : "Tage"} Datenbasis`
-              : "keine Telefondaten"
-          }
-        />
-        <StatTile
-          icon={PhoneCall}
-          tone="green"
-          coloredValue
-          label="Von uns angenommen"
-          value={`${prozent(k.angenommen, k.gesamt)} %`}
-          sub={`${k.angenommen} von ${k.gesamt} Anrufen`}
-        />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
           icon={Bot}
           tone="amber"
-          coloredValue={k.verpasst > 0}
-          label="Bei Nora gelandet"
-          value={k.verpasst}
-          sub={`${prozent(k.verpasst, k.gesamt)} % — KI-Agentin nimmt ab, wenn niemand rangeht`}
+          coloredValue
+          label="Verpasste Anrufe"
+          value={k.gesamt}
+          sub={
+            tage > 0
+              ? `${(k.gesamt / tage).toFixed(1)} pro Tag · bei Nora gelandet`
+              : "bei Nora gelandet"
+          }
+        />
+        <StatTile
+          icon={UserPlus}
+          tone="purple"
+          coloredValue
+          label="Echte Neuanfragen"
+          value={k.interessenten}
+          sub={`${prozent(k.interessenten, k.gesamt)} % der verpassten Anrufe`}
         />
         <StatTile
           icon={PhoneMissed}
@@ -376,12 +346,12 @@ export function CallcenterAnalyse({
           sub="anonym & ohne Anliegen — verloren"
         />
         <StatTile
-          icon={UserPlus}
-          tone="purple"
-          coloredValue
-          label="Echte Neuanfragen"
-          value={`${prozent(k.interessenten, k.gesamtLeads)} %`}
-          sub={`${k.interessenten} von ${k.gesamtLeads} Nora-Anrufen`}
+          icon={Clock}
+          tone="blue"
+          coloredValue={k.ausserhalb > 0}
+          label={`Außerhalb ${BESETZT_VON}–${BESETZT_BIS} Uhr`}
+          value={k.ausserhalb}
+          sub={`${prozent(k.ausserhalb, k.gesamt)} % — davon ${k.interessentenAusserhalb} Neuanfragen`}
         />
       </div>
 
@@ -390,48 +360,46 @@ export function CallcenterAnalyse({
         <div className="flex flex-col gap-2 rounded-xl border border-amber-500/50 bg-amber-50/60 p-4 shadow-sm dark:bg-amber-500/[0.06]">
           <p className="flex items-center gap-2 text-base font-semibold">
             <TriangleAlert className="size-4.5 shrink-0 text-amber-600" />
-            {k.nachSchlussAnteil} % aller Anrufe kommen nach {BESETZT_BIS}:00 —
-            wenn niemand mehr am Telefon ist
+            {k.nachSchlussAnteil} % der verpassten Anrufe kommen nach{" "}
+            {BESETZT_BIS}:00 — wenn niemand mehr am Telefon ist
           </p>
           <p className="text-sm text-muted-foreground">
-            Das sind <b className="text-foreground">{k.nachSchluss} Anrufe</b> im
-            Auswertungszeitraum, davon{" "}
-            <b className="text-foreground">{k.nachSchlussVerpasst} nicht angenommen</b>.
-            Bei einer Neuanfragen-Quote von {prozent(k.interessenten, k.gesamtLeads)} %
-            entspricht das{" "}
+            Das sind <b className="text-foreground">{k.nachSchluss} Anrufe</b>,
+            die niemand angenommen hat. Außerhalb der Besetzungszeit
+            ({BESETZT_VON}–{BESETZT_BIS} Uhr) waren{" "}
             <b className="text-foreground">
-              rund {k.verloreneProTag.toFixed(1)} verlorenen Interessenten pro Tag
+              {k.interessentenAusserhalb} echte Neuanfragen
+            </b>{" "}
+            dabei — also{" "}
+            <b className="text-foreground">
+              rund {k.verloreneProTag.toFixed(1)} verlorene Interessenten pro Tag
             </b>
             {tage >= 5
               ? ` — hochgerechnet ${Math.round(k.verloreneProTag * 21)} pro Monat (21 Arbeitstage).`
               : "."}
           </p>
           <p className="text-xs text-muted-foreground">
-            Rechenweg: verpasste Anrufe außerhalb der Besetzung ({k.ausserhalbVerpasst})
-            × Neuanfragen-Quote ({prozent(k.interessenten, k.gesamtLeads)} %) ÷{" "}
-            {tage} {tage === 1 ? "Tag" : "Tage"} Datenbasis. Angenommen ist, dass
-            Anrufer nach Dienstschluss die gleiche Anliegen-Verteilung haben wie
-            tagsüber.
+            Gezählt, nicht geschätzt: Es sind die tatsächlich als
+            &bdquo;Neuinteressent&ldquo; eingestuften Anrufe außerhalb der
+            Besetzung, geteilt durch {tage} {tage === 1 ? "Tag" : "Tage"}.
             {tage < 5 && (
               <>
                 {" "}
                 <b className="text-amber-700 dark:text-amber-500">
-                  Achtung: nur {tage} {tage === 1 ? "Tag" : "Tage"} Datenbasis
+                  Nur {tage} {tage === 1 ? "Tag" : "Tage"} Datenbasis
                 </b>{" "}
-                — für eine belastbare Aussage bitte weitere Telefon-Exporte
-                unter &bdquo;Statistik&ldquo; hochladen. Eine Monats-Hochrechnung
-                zeigen wir erst ab 5 Tagen.
+                — eine Monats-Hochrechnung zeigen wir erst ab 5 Tagen.
               </>
             )}
           </p>
         </div>
       )}
 
-      {/* ── Zeitstrahl: Wann rufen die Leute an? ── */}
+      {/* ── Zeitstrahl: Wann kommen die verpassten Anrufe? ── */}
       <SectionCard
-        title="Wann rufen die Leute an?"
+        title="Wann kommen die verpassten Anrufe?"
         icon={Clock}
-        description={`Eingehende Anrufe je Uhrzeit. Grün = angenommen, rot = nicht durchgekommen. Der graue Bereich ist außerhalb der aktuellen Besetzung (${BESETZT_VON}–${BESETZT_BIS} Uhr).`}
+        description={`Verpasste Anrufe je Uhrzeit — lila der Anteil echter Neuanfragen. Der graue Bereich liegt außerhalb der aktuellen Besetzung (${BESETZT_VON}–${BESETZT_BIS} Uhr).`}
         actions={
           <button
             type="button"
@@ -449,9 +417,8 @@ export function CallcenterAnalyse({
               <thead>
                 <tr className="border-b text-left text-xs text-muted-foreground">
                   <th className="py-1.5 pr-2 font-medium">Uhrzeit</th>
-                  <th className="px-2 py-1.5 font-medium">Anrufe</th>
-                  <th className="px-2 py-1.5 font-medium">Angenommen</th>
-                  <th className="px-2 py-1.5 font-medium">Verpasst</th>
+                  <th className="px-2 py-1.5 font-medium">Verpasste Anrufe</th>
+                  <th className="px-2 py-1.5 font-medium">davon Neuanfragen</th>
                   <th className="px-2 py-1.5 font-medium">Besetzung</th>
                 </tr>
               </thead>
@@ -466,14 +433,8 @@ export function CallcenterAnalyse({
                       <td className="px-2 py-1.5 font-semibold tabular-nums">
                         {s.gesamt}
                       </td>
-                      <td className="px-2 py-1.5 tabular-nums">{s.angenommen}</td>
-                      <td
-                        className={cn(
-                          "px-2 py-1.5 tabular-nums",
-                          s.verpasst > 0 && "font-medium text-destructive",
-                        )}
-                      >
-                        {s.verpasst}
+                      <td className="px-2 py-1.5 tabular-nums">
+                        {s.interessenten}
                       </td>
                       <td className="px-2 py-1.5 text-xs text-muted-foreground">
                         {s.besetzt ? "besetzt" : "nicht besetzt"}
@@ -490,16 +451,16 @@ export function CallcenterAnalyse({
               <span className="flex items-center gap-1.5">
                 <span
                   className="size-2.5 rounded-[2px]"
-                  style={{ backgroundColor: "var(--cc-an)" }}
+                  style={{ backgroundColor: "var(--cc-1)" }}
                 />
-                angenommen
+                echte Neuanfrage
               </span>
               <span className="flex items-center gap-1.5">
                 <span
                   className="size-2.5 rounded-[2px]"
-                  style={{ backgroundColor: "var(--cc-miss)" }}
+                  style={{ backgroundColor: "var(--cc-rest)" }}
                 />
-                nicht durchgekommen
+                sonstige verpasste Anrufe
               </span>
               <span className="ml-auto text-muted-foreground">
                 Spitze: {String(k.spitze?.h ?? 0).padStart(2, "0")}:00 Uhr mit{" "}
@@ -514,10 +475,11 @@ export function CallcenterAnalyse({
                 height: "13rem",
               }}
               role="img"
-              aria-label="Eingehende Anrufe je Uhrzeit, angenommen und verpasst"
+              aria-label="Verpasste Anrufe je Uhrzeit, davon echte Neuanfragen"
             >
               {k.stunden.map((s) => {
                 const hoehe = (s.gesamt / k.maxStunde) * 100;
+                const rest = s.gesamt - s.interessenten;
                 return (
                   <div
                     key={s.h}
@@ -525,7 +487,7 @@ export function CallcenterAnalyse({
                       "flex h-full flex-col items-center justify-end gap-1 rounded-t-sm",
                       !s.besetzt && "bg-slate-100/70 dark:bg-slate-500/10",
                     )}
-                    title={`${String(s.h).padStart(2, "0")}:00 Uhr — ${s.gesamt} Anrufe (${s.angenommen} angenommen, ${s.verpasst} verpasst)${s.besetzt ? "" : " · außerhalb der Besetzung"}`}
+                    title={`${String(s.h).padStart(2, "0")}:00 Uhr — ${s.gesamt} verpasste Anrufe, davon ${s.interessenten} echte Neuanfragen${s.besetzt ? "" : " · außerhalb der Besetzung"}`}
                   >
                     {s.gesamt > 0 && (
                       <span className="text-[0.65rem] font-semibold tabular-nums">
@@ -536,26 +498,25 @@ export function CallcenterAnalyse({
                       className="flex w-full max-w-7 flex-col justify-end"
                       style={{ height: `${Math.max(hoehe, s.gesamt > 0 ? 4 : 0)}%` }}
                     >
-                      {/* verpasst oben, angenommen unten auf der Grundlinie */}
-                      {s.verpasst > 0 && (
+                      {/* Neuanfragen oben hervorgehoben, Rest darunter */}
+                      {s.interessenten > 0 && (
                         <div
                           className="w-full rounded-t-[4px]"
                           style={{
-                            height: `${(s.verpasst / s.gesamt) * 100}%`,
-                            backgroundColor: "var(--cc-miss)",
-                            // 2px Fläche zwischen den Segmenten
+                            height: `${(s.interessenten / s.gesamt) * 100}%`,
+                            backgroundColor: "var(--cc-1)",
                             boxShadow: "0 2px 0 0 var(--card)",
                           }}
                         />
                       )}
-                      {s.angenommen > 0 && (
+                      {rest > 0 && (
                         <div
                           className="w-full"
                           style={{
-                            height: `${(s.angenommen / s.gesamt) * 100}%`,
-                            backgroundColor: "var(--cc-an)",
+                            height: `${(rest / s.gesamt) * 100}%`,
+                            backgroundColor: "var(--cc-rest)",
                             borderRadius:
-                              s.verpasst > 0 ? "0" : "4px 4px 0 0",
+                              s.interessenten > 0 ? "0" : "4px 4px 0 0",
                           }}
                         />
                       )}
@@ -595,15 +556,15 @@ export function CallcenterAnalyse({
       </SectionCard>
 
       {/* ── Worum ging es? ── */}
-      {k.gesamtLeads > 0 && (
+      {k.gesamt > 0 && (
         <SectionCard
           title="Worum ging es bei den verpassten Anrufen?"
           icon={PhoneMissed}
-          description="KI-Auswertung der Verpasst-Mails: Die Agentin Nora nimmt ab, fasst zusammen — daraus wird die Kategorie abgeleitet. Nur Neuinteressenten landen als offener Lead in der Liste."
+          description="Die KI liest jede Verpasst-Mail und ordnet den Anruf ein. Nur Neuinteressenten landen als offener Lead in der Liste."
           className="cc-viz"
         >
           <div className="flex flex-col gap-4">
-            <DonutChart daten={k.jeKategorie} gesamt={k.gesamtLeads} />
+            <DonutChart daten={k.jeKategorie} gesamt={k.gesamt} />
             {/* Erklärung je Kategorie — was steckt hinter dem Segment? */}
             <ul className="flex flex-col gap-1 border-t pt-3">
               {k.jeKategorie.map((r) => (

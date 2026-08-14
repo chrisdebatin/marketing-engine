@@ -8,9 +8,9 @@ import { isRecruitingLead } from "@/lib/lead-forward";
 import { AgenturRueckweisungen } from "@/components/agentur-rueckweisungen";
 import {
   CallcenterAnalyse,
-  type AnalyseCall,
   type AnalyseLead,
 } from "@/components/callcenter-analyse";
+import { kategorieAusErgebnis, stundeAusNotiz } from "@/lib/callcenter";
 import { PdlRanking } from "@/components/pdl-ranking";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
 import { PageHeader } from "@/components/page-header";
@@ -57,55 +57,35 @@ export default async function CrmAdminPage() {
       .eq("occurred_on", heute),
     admin.from("pdl_versuche").select("erreicht").gte("created_at", `${heute}T00:00:00Z`),
   ]);
-  // ── Callcenter-Analyse: Telefonanlagen-Export (Annahmequote/Uhrzeiten) ──
-  // Fehlt die Tabelle (Migration noch nicht eingespielt), bleibt die Sektion
-  // leer und erklärt sich selbst — kein harter Fehler.
-  const phoneRes = await admin
-    .from("phone_calls")
-    .select("call_time, hub_name, direction, answered, talking_seconds")
-    .eq("direction", "inbound")
-    .limit(20000);
-  const phoneRows = phoneRes.error ? [] : (phoneRes.data ?? []);
-  const analyseCalls: AnalyseCall[] = phoneRows.map((c) => ({
-    zeit: c.call_time,
-    hub: c.hub_name,
-    angenommen: c.answered,
-    sekunden: c.talking_seconds ?? 0,
-  }));
+  // ── Callcenter-Analyse ──
+  // Einzige Quelle: die Verpasst-Mails der Telefonanlage. Uhrzeit steht im
+  // Mailtext, die Kategorie in der KI-Vorsortierung.
+  const analyseLeads: AnalyseLead[] = (callsRes.data ?? [])
+    .filter((l) => l.quelle === "telefon0800")
+    .flatMap((l) => {
+      const zeit = l.created_at ?? `${l.call_date}T12:00:00Z`;
+      const stunde = stundeAusNotiz(l.notiz, zeit);
+      if (stunde === null) return [];
+      return [
+        {
+          zeit,
+          stunde,
+          kategorie: kategorieAusErgebnis(l.ergebnis),
+          bereich: l.bereich,
+        },
+      ];
+    });
   const analyseTageSet = [
-    ...new Set(phoneRows.map((c) => c.call_time.slice(0, 10))),
+    ...new Set(
+      (callsRes.data ?? [])
+        .filter((l) => l.quelle === "telefon0800")
+        .map((l) => (l.created_at ?? `${l.call_date}T00:00:00Z`).slice(0, 10)),
+    ),
   ].sort();
   const analyseTage = analyseTageSet.length;
   const analyseZeitraum = analyseTage
     ? { von: analyseTageSet[0], bis: analyseTageSet[analyseTage - 1] }
     : null;
-
-  // Kategorie der verpassten 0800-Anrufe: steht im Ergebnis-Text der
-  // KI-Vorsortierung ("kein Neuinteressent (KI-vorsortiert: …)"), alles
-  // andere ist ein Neuinteressent.
-  const analyseLeads: AnalyseLead[] = (callsRes.data ?? [])
-    .filter((l) => l.quelle === "telefon0800")
-    .map((l) => {
-      const e = l.ergebnis ?? "";
-      // Erst die Vorsortierung selbst erkennen ("kein Neuinteressent …") —
-      // bei Altbestand fehlt die Kategorie in Klammern, der Anruf ist aber
-      // trotzdem keine Neuanfrage und darf die Quote nicht schönen.
-      const keinInteressent = /kein\s+neuinteressent/i.test(e);
-      const kategorie: AnalyseLead["kategorie"] = !keinInteressent
-        ? "neuinteressent"
-        : /kein anliegen|anonym/i.test(e)
-          ? "kein_anliegen"
-          : /bestandskunde/i.test(e)
-            ? "bestandskunde"
-            : /mitarbeiter|intern/i.test(e)
-              ? "mitarbeiter_intern"
-              : "sonstiges";
-      return {
-        zeit: l.created_at ?? `${l.call_date}T12:00:00Z`,
-        kategorie,
-        bereich: l.bereich,
-      };
-    });
 
   const targetName = new Map((targetsRes.data ?? []).map((t) => [t.id, t.name]));
   const anrufe = (anrufeRes.data ?? []).map((a) => ({
@@ -247,10 +227,9 @@ export default async function CrmAdminPage() {
       {sektion(
         "2",
         "Callcenter & Erreichbarkeit",
-        "eingehende Anrufe, Annahmequote, Uhrzeiten — und was uns fehlende Besetzung kostet",
+        "verpasste Anrufe: Uhrzeiten, Anliegen — und was uns fehlende Besetzung kostet",
       )}
       <CallcenterAnalyse
-        calls={analyseCalls}
         leads={analyseLeads}
         tage={analyseTage}
         zeitraum={analyseZeitraum}
