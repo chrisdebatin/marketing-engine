@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Headset, Plus, Trash2 } from "lucide-react";
 import {
@@ -69,6 +69,13 @@ export function LeadBoard({
   klinikNamen?: string[];
 }) {
   const [pending, startTransition] = useTransition();
+  // Wer erfasst gerade? Wird gemerkt (localStorage) und am Lead gespeichert.
+  const [erfasser, setErfasser] = useState("");
+  useEffect(() => {
+    const saved = window.localStorage?.getItem("lead-erfasser");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalige Hydration aus localStorage
+    if (saved) setErfasser(saved);
+  }, []);
   const [bereich, setBereich] = useState("");
   const [andereBereich, setAndereBereich] = useState(false);
   const [customBereich, setCustomBereich] = useState("");
@@ -90,6 +97,10 @@ export function LeadBoard({
 
   function save() {
     if (pending) return;
+    if (!erfasser) {
+      toast.error("Bitte oben antippen, wer gerade erfasst.");
+      return;
+    }
     if (!effektiverBereich) {
       toast.error(
         andereBereich
@@ -108,6 +119,7 @@ export function LeadBoard({
     }
     startTransition(async () => {
       const r = await createLeadCall({
+        erfasser,
         quelle,
         bereich: effektiverBereich,
         quelle_detail: DETAIL_QUELLEN.has(quelle) ? quelleDetail : "",
@@ -144,6 +156,29 @@ export function LeadBoard({
           <Headset className="size-4 text-primary" />
           Anruf loggen — Interessent
         </p>
+
+        {/* Wer erfasst gerade? Auswahl bleibt gespeichert und steht als
+            👤-Tag am Lead. */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Wer erfasst gerade? (Pflicht)
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {["Belinda", "Adelina", "Davina", "Chris"].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => {
+                  setErfasser(n);
+                  window.localStorage?.setItem("lead-erfasser", n);
+                }}
+                className={chip(erfasser === n)}
+              >
+                👤 {n}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">

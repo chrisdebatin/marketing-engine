@@ -99,6 +99,8 @@ export async function createLeadCall(input: {
   hub_id?: string;
   call_date?: string;
   notiz?: string;
+  /** Wer hat den Lead erfasst (Belinda/Adelina/Davina/Chris) — wird als Bearbeiter gespeichert. */
+  erfasser?: string;
 }): Promise<Result> {
   await requireSession();
 
@@ -122,6 +124,9 @@ export async function createLeadCall(input: {
   // Kommt der Lead über eine Institution (Klinik, Praxis …), im CRM verknüpfen.
   const target = quelleDetail ? await matchTargetByName(quelleDetail) : null;
   const callDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : todayIso();
+  // Erfasser = Bearbeiter: wer den Anruf annimmt, hat den Lead auch angefasst
+  // (gleiches Verhalten wie "Inbound-Anruf loggen" im Team-Workspace).
+  const erfasser = (input.erfasser ?? "").trim().slice(0, 100) || null;
   let { error } = await admin.from("lead_calls").insert({
     quelle,
     bereich,
@@ -131,6 +136,7 @@ export async function createLeadCall(input: {
     target_id: target?.id ?? null,
     call_date: callDate,
     notiz: (input.notiz ?? "").trim().slice(0, 500) || null,
+    bearbeiter: erfasser,
   });
   // Spalte target_id fehlt bis 0041, bereich bis 0035 — dann ohne sie speichern.
   if (error && (error.code === "PGRST204" || error.code === "42703")) {
