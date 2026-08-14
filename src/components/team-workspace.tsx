@@ -13,6 +13,7 @@ import {
   Pencil,
   Phone,
   PhoneCall,
+  Search,
   Undo2,
   Users,
   X,
@@ -1412,10 +1413,44 @@ function LeadTodos({
 
 
 /**
- * Kontakte-Verzeichnis: alle Institutionen (Krankenhäuser, Praxen …) und
- * Klienten (Leads) des Teams, kategorisiert und durchsuchbar — daneben die
- * Spalte mit allen offenen To-dos (Kontakte, bei denen etwas ansteht).
+ * Kontakte als Kanban-Board (für beide Teams identisch): Spalten nach
+ * Kontakt-Stand — heute in Kontakt, demnächst geplant, Rückmeldung
+ * ausstehend, zuletzt in Kontakt, noch nie in Kontakt. Große Suche über
+ * alles (Name, Telefon, E-Mail, Ort) plus Kategorie-Filter (Kunden,
+ * Krankenhäuser, Apotheken …).
  */
+
+const KAT_TONE: Record<string, string> = {
+  kunde: "bg-blue-100 text-blue-800",
+  krankenhaus: "bg-teal-100 text-teal-800",
+  praxis: "bg-purple-100 text-purple-800",
+  apotheke: "bg-rose-100 text-rose-800",
+  pflegeeinrichtung: "bg-amber-100 text-amber-800",
+  sanitaetshaus: "bg-cyan-100 text-cyan-800",
+  sonstiges: "bg-gray-100 text-gray-700",
+};
+
+type KontaktSpalte = "heute" | "geplant" | "rueckmeldung" | "zuletzt" | "nie";
+
+interface KontaktKarte {
+  key: string;
+  spalte: KontaktSpalte;
+  name: string;
+  kategorieKey: string;
+  kategorieLabel: string;
+  telefon: string | null;
+  /** Ort / Quelle / Standort-Zeile. */
+  info: string | null;
+  /** Kontakt-Stand ("zuletzt Anruf am …", "übergeben an …"). */
+  meta: string | null;
+  metaTone?: string;
+  statusLabel?: string;
+  statusTone?: string;
+  todo?: string | null;
+  sort: string;
+  search: string;
+}
+
 function KontakteView({
   inbound,
   outbound,
@@ -1426,6 +1461,11 @@ function KontakteView({
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("alle");
   const heute = todayIso();
+  const in7Tagen = (() => {
+    const d = new Date(`${heute}T00:00:00`);
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().slice(0, 10);
+  })();
 
   const leadKategorie = (l: InboundLead) =>
     l.quelle === "recare"
@@ -1434,218 +1474,308 @@ function KontakteView({
         ? "Klient"
         : "Interessent";
 
+  // ── Beide Welten (Klienten-Leads + Institutionen) auf EIN Kartenmodell ──
+  const karten: KontaktKarte[] = [];
+  for (const l of inbound) {
+    const heuteAktiv =
+      (l.datum ?? "").slice(0, 10) === heute ||
+      (l.erstbearbeitet_at ?? "").slice(0, 10) === heute;
+    const zukunftsTodo = l.todos.find((t) => t.faellig_am && t.faellig_am > heute);
+    const faelligesTodo = l.todos.find((t) => t.faellig_am && t.faellig_am <= heute);
+    let spalte: KontaktSpalte;
+    let meta: string | null;
+    let metaTone: string | undefined;
+    if (l.zugewiesen_at && !l.pdl_bestaetigt_at && l.status !== "verloren") {
+      spalte = "rueckmeldung";
+      meta = `an ${l.zugewiesen_hub ?? "Standort"} übergeben — PDL-Antwort offen`;
+      metaTone = "text-amber-700";
+    } else if (faelligesTodo) {
+      spalte = "rueckmeldung";
+      meta = `To-do fällig: ${faelligesTodo.text}`;
+      metaTone = "text-amber-700";
+    } else if (heuteAktiv) {
+      spalte = "heute";
+      meta =
+        (l.erstbearbeitet_at ?? "").slice(0, 10) === heute
+          ? "heute bearbeitet"
+          : "heute eingegangen";
+    } else if (zukunftsTodo) {
+      spalte = "geplant";
+      meta = `Wiedervorlage ${formatIsoDate(zukunftsTodo.faellig_am!)}: ${zukunftsTodo.text}`;
+    } else if (l.status === "offen") {
+      spalte = "nie";
+      meta = `eingegangen ${formatIsoDate(l.datum.slice(0, 10))} — noch nicht erreicht`;
+      metaTone = "text-red-700";
+    } else {
+      spalte = "zuletzt";
+      meta = l.erstbearbeitet_at
+        ? `zuletzt bearbeitet ${formatIsoDate(l.erstbearbeitet_at.slice(0, 10))}`
+        : `eingegangen ${formatIsoDate(l.datum.slice(0, 10))}`;
+    }
+    karten.push({
+      key: `l-${l.id}`,
+      spalte,
+      name: l.name,
+      kategorieKey: "kunde",
+      kategorieLabel: leadKategorie(l),
+      telefon: l.telefon,
+      info:
+        [l.adresse, leadQuelleLabel(l.quelle) || l.quelle]
+          .filter(Boolean)
+          .join(" · ") || null,
+      meta,
+      metaTone,
+      statusLabel: STATUS_LABEL[l.status] ?? l.status,
+      statusTone: leadStatusChip(l.status),
+      sort:
+        spalte === "geplant"
+          ? (zukunftsTodo?.faellig_am ?? "9999")
+          : (l.erstbearbeitet_at ?? l.datum ?? ""),
+      search:
+        `${l.name} ${l.telefon ?? ""} ${l.email ?? ""} ${l.adresse ?? ""} ${l.quelle_detail ?? ""} ${leadQuelleLabel(l.quelle)}`.toLowerCase(),
+    });
+  }
+  for (const t of outbound) {
+    const offenesTodo = t.todos[0] ?? null;
+    let spalte: KontaktSpalte;
+    let meta: string | null;
+    let metaTone: string | undefined;
+    if (!t.letzter_besuch) {
+      spalte = "nie";
+      meta = "noch kein Kontakt";
+    } else if (t.letzter_besuch === heute) {
+      spalte = "heute";
+      meta = `heute: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"}`;
+    } else if (
+      offenesTodo &&
+      (!offenesTodo.faellig_am || offenesTodo.faellig_am <= heute)
+    ) {
+      spalte = "rueckmeldung";
+      meta = `To-do: ${offenesTodo.text}`;
+      metaTone = "text-amber-700";
+    } else if (
+      t.naechster_besuch &&
+      t.naechster_besuch > heute &&
+      t.naechster_besuch <= in7Tagen
+    ) {
+      spalte = "geplant";
+      meta = `wieder dran am ${formatIsoDate(t.naechster_besuch)}`;
+    } else {
+      spalte = "zuletzt";
+      meta = `zuletzt ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}`;
+    }
+    karten.push({
+      key: `t-${t.id}`,
+      spalte,
+      name: t.name,
+      kategorieKey: t.kategorie,
+      kategorieLabel: placeKindLabel(t.kategorie),
+      telefon: null,
+      info:
+        [
+          t.ort,
+          t.hub ? `${t.hub}${t.hub_pdl ? ` · PDL ${t.hub_pdl}` : ""}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
+      meta,
+      metaTone,
+      todo: offenesTodo && spalte !== "rueckmeldung" ? offenesTodo.text : null,
+      sort:
+        spalte === "geplant"
+          ? (t.naechster_besuch ?? "9999")
+          : spalte === "nie"
+            ? `${t.relevanz ?? 9}-${t.name}`
+            : (t.letzter_besuch ?? ""),
+      search:
+        `${t.name} ${t.ort ?? ""} ${t.hub ?? ""} ${placeKindLabel(t.kategorie)}`.toLowerCase(),
+    });
+  }
+
   const kategorien = [
     { key: "alle", label: "Alle" },
-    { key: "klienten", label: "Klienten & Interessenten" },
+    { key: "kunde", label: "Kunden & Interessenten" },
     ...[...new Set(outbound.map((t) => t.kategorie))]
       .sort()
       .map((k) => ({ key: k, label: placeKindLabel(k) })),
   ];
 
-  const norm = (x: string) => x.toLowerCase();
-  const matches = (text: string) => !q.trim() || norm(text).includes(norm(q));
-
-  const insts = outbound.filter(
-    (t) =>
-      (filter === "alle" || filter === t.kategorie) &&
-      filter !== "klienten" &&
-      matches(`${t.name} ${t.ort ?? ""} ${t.hub ?? ""}`),
-  );
-  const klienten = inbound.filter(
-    (l) =>
-      (filter === "alle" || filter === "klienten") &&
-      matches(
-        `${l.name} ${l.telefon ?? ""} ${l.email ?? ""} ${l.adresse ?? ""} ${l.quelle_detail ?? ""}`,
-      ),
+  const sichtbar = karten.filter(
+    (k) =>
+      (filter === "alle" || filter === k.kategorieKey) &&
+      (!q.trim() || k.search.includes(q.trim().toLowerCase())),
   );
 
-  // Offene To-dos über alle Leads, fällige zuerst.
-  const offeneTodos = inbound
-    .flatMap((l) => l.todos.map((t) => ({ lead: l, todo: t })))
-    .sort((a, b) =>
-      (a.todo.faellig_am ?? "9999").localeCompare(b.todo.faellig_am ?? "9999"),
-    );
+  const SPALTEN: {
+    id: KontaktSpalte;
+    titel: string;
+    hint: string;
+    dir: "asc" | "desc";
+  }[] = [
+    {
+      id: "heute",
+      titel: "Heute in Kontakt",
+      hint: "heute gesprochen, bearbeitet oder eingegangen",
+      dir: "desc",
+    },
+    {
+      id: "geplant",
+      titel: "Demnächst geplant",
+      hint: "morgen bis in 7 Tagen dran (Wiedervorlagen & Anruf-Termine)",
+      dir: "asc",
+    },
+    {
+      id: "rueckmeldung",
+      titel: "Rückmeldung ausstehend",
+      hint: "wartet auf PDL-Antwort oder ein To-do ist fällig",
+      dir: "asc",
+    },
+    {
+      id: "zuletzt",
+      titel: "Zuletzt in Kontakt",
+      hint: "vergangene Kontakte — neueste zuerst",
+      dir: "desc",
+    },
+    {
+      id: "nie",
+      titel: "Noch nie in Kontakt",
+      hint: "noch kein Gespräch — nach Priorität",
+      dir: "asc",
+    },
+  ];
+  const cap = q.trim() ? 200 : 30;
 
   return (
-    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-5">
-      <div className="flex min-w-0 flex-col gap-3">
-        <p className="text-xs text-muted-foreground">
-          Gemeinsames Verzeichnis beider Teams — wenn jemand anruft, hier
-          nachschlagen: die Karte zeigt den letzten Status zum Kontakt.
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Suchen (Name, Telefon, E-Mail, Ort)…"
-            className="h-9 max-w-xs bg-background px-3"
-          />
-          {kategorien.map((k) => (
-            <button
-              key={k.key}
-              type="button"
-              onClick={() => setFilter(k.key)}
-              className={cn(
-                "rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                filter === k.key
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
+    <div className="flex flex-col gap-3">
+      <p className="text-xs text-muted-foreground">
+        Gemeinsames Verzeichnis beider Teams — wenn jemand anruft, hier suchen:
+        jede Karte zeigt den letzten Stand zum Kontakt.
+      </p>
 
-        {klienten.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Klienten &amp; Interessenten ({klienten.length})
-            </p>
-            <ul className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-              {klienten.map((l) => (
-                <li
-                  key={`${l.kind}-${l.id}`}
-                  className="flex flex-col gap-1 rounded-xl border bg-card p-3 text-sm shadow-sm"
-                >
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{l.name}</span>
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                      {leadKategorie(l)}
-                    </span>
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                        leadStatusChip(l.status),
-                      )}
-                    >
-                      {STATUS_LABEL[l.status] ?? l.status}
-                    </span>
-                  </span>
-                  <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    {l.telefon && (
-                      <a href={`tel:${l.telefon}`} className="text-primary hover:underline">
-                        {l.telefon}
-                      </a>
-                    )}
-                    {l.adresse && <span>{l.adresse}</span>}
-                    {l.zugewiesen_hub && <span>→ {l.zugewiesen_hub}</span>}
-                    <span>{leadQuelleLabel(l.quelle) || l.quelle}</span>
-                    <span>Eingang {formatIsoDate(l.datum.slice(0, 10))}</span>
-                  </span>
-                  {(l.ergebnis || l.pdl_ergebnis) && (
-                    <span className="text-xs text-muted-foreground">
-                      Zuletzt: {l.pdl_ergebnis ?? l.ergebnis}
-                      {l.bearbeiter ? ` (${l.bearbeiter})` : ""}
-                    </span>
-                  )}
-                  {l.todos.length > 0 && (
-                    <span className="text-xs text-amber-700">
-                      {l.todos.length} offenes To-do
-                      {l.todos.length === 1 ? "" : "s"}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {insts.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              Institutionen ({insts.length})
-            </p>
-            <ul className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-3">
-              {insts.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex flex-col gap-1 rounded-xl border bg-card p-3 text-sm shadow-sm"
-                >
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{t.name}</span>
-                    <LeadIdChip id={t.id} />
-                    <span className="rounded-full border px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      {placeKindLabel(t.kategorie)}
-                    </span>
-                  </span>
-                  <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    {t.ort && <span>{t.ort}</span>}
-                    {t.hub && (
-                      <span>
-                        {t.hub}
-                        {t.hub_pdl ? ` · PDL ${t.hub_pdl}` : ""}
-                      </span>
-                    )}
-                    <span>
-                      {t.letzter_besuch
-                        ? `zuletzt ${formatIsoDate(t.letzter_besuch)}`
-                        : "kein Kontakt"}
-                    </span>
-                  </span>
-                  {t.besuche.map((b) => (
-                    <span
-                      key={b.art}
-                      className={cn(
-                        "w-fit rounded-lg px-2 py-0.5 text-[11px] font-medium",
-                        b.art === "box"
-                          ? "bg-sky-100 text-sky-900"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {b.art === "box" ? "📦 CM-Box beliefert" : "📄 Flyer ausgelegt"} am{" "}
-                      {formatIsoDate(b.datum)}
-                      {b.von ? ` von ${b.von}` : ""}
-                    </span>
-                  ))}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {insts.length === 0 && klienten.length === 0 && (
-          <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-            Keine Treffer.
-          </p>
-        )}
+      {/* Große Suche über alles */}
+      <div className="relative">
+        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Alles durchsuchen — Name, Telefon, E-Mail, Ort …"
+          className="h-11 w-full rounded-xl border bg-card pr-3 pl-9 text-base shadow-sm"
+        />
       </div>
 
-      {/* Spalte: offene To-dos */}
-      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm lg:sticky lg:top-4">
-        <p className="text-sm font-semibold">
-          Offene To-dos ({offeneTodos.length})
-        </p>
-        {offeneTodos.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            Nichts offen. To-dos legst du direkt an der Lead-Karte an („+ To-do
-            mit Wiedervorlage&ldquo;).
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {offeneTodos.map(({ lead, todo }) => {
-              const faellig = todo.faellig_am !== null && todo.faellig_am <= heute;
-              return (
-                <li
-                  key={todo.id}
-                  className={cn(
-                    "rounded-lg border p-2 text-xs",
-                    faellig && "border-amber-500/50 bg-amber-500/[0.06]",
-                  )}
-                >
-                  <p className="font-medium">{lead.name}</p>
-                  <p className="text-muted-foreground">{todo.text}</p>
-                  {todo.faellig_am && (
-                    <p className={cn("mt-0.5 font-semibold", faellig ? "text-amber-700" : "text-muted-foreground")}>
-                      {faellig ? "fällig seit " : "fällig am "}
-                      {formatIsoDate(todo.faellig_am)}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+      {/* Kategorie-Filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        {kategorien.map((k) => (
+          <button
+            key={k.key}
+            type="button"
+            onClick={() => setFilter(k.key)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs font-medium",
+              filter === k.key
+                ? "border-primary bg-primary text-primary-foreground"
+                : "bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Kanban: mobil horizontal scrollbar, ab lg als 5-Spalten-Grid */}
+      <div className="flex items-start gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-5 lg:overflow-visible">
+        {SPALTEN.map((sp) => {
+          const cards = sichtbar
+            .filter((k) => k.spalte === sp.id)
+            .sort((a, b) =>
+              sp.dir === "asc"
+                ? a.sort.localeCompare(b.sort)
+                : b.sort.localeCompare(a.sort),
+            );
+          return (
+            <div
+              key={sp.id}
+              className="w-72 shrink-0 rounded-xl border bg-muted/40 p-2 lg:w-auto"
+            >
+              <div className="px-1.5 pt-1 pb-1.5">
+                <p className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {sp.titel}
+                  <span className="ml-auto rounded-full border bg-card px-1.5 py-0.5 text-[10px] normal-case tabular-nums">
+                    {cards.length}
+                  </span>
+                </p>
+                <p className="text-[10px] text-muted-foreground">{sp.hint}</p>
+              </div>
+              <ul className="flex flex-col gap-1.5">
+                {cards.length === 0 && (
+                  <li className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">
+                    leer
+                  </li>
+                )}
+                {cards.slice(0, cap).map((k) => (
+                  <li
+                    key={k.key}
+                    className="rounded-lg border bg-card p-2.5 text-sm shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="leading-snug font-semibold">{k.name}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                          KAT_TONE[k.kategorieKey] ?? KAT_TONE.sonstiges,
+                        )}
+                      >
+                        {k.kategorieLabel}
+                      </span>
+                      {k.statusLabel && (
+                        <span
+                          className={cn(
+                            "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                            k.statusTone,
+                          )}
+                        >
+                          {k.statusLabel}
+                        </span>
+                      )}
+                    </div>
+                    {k.info && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{k.info}</p>
+                    )}
+                    {k.telefon && (
+                      <a
+                        href={`tel:${k.telefon}`}
+                        className="mt-0.5 flex w-fit items-center gap-1 text-xs text-primary hover:underline"
+                      >
+                        <Phone className="size-3" />
+                        {k.telefon}
+                      </a>
+                    )}
+                    {k.meta && (
+                      <p
+                        className={cn(
+                          "mt-1 text-[11px] font-medium",
+                          k.metaTone ?? "text-muted-foreground",
+                        )}
+                      >
+                        {k.meta}
+                      </p>
+                    )}
+                    {k.todo && (
+                      <p className="mt-0.5 text-[11px] text-amber-700">
+                        To-do: {k.todo}
+                      </p>
+                    )}
+                  </li>
+                ))}
+                {cards.length > cap && (
+                  <li className="p-1.5 text-center text-[11px] text-muted-foreground">
+                    +{cards.length - cap} weitere — Suche oder Filter nutzen
+                  </li>
+                )}
+              </ul>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
