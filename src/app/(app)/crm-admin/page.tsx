@@ -22,11 +22,27 @@ export default async function CrmAdminPage() {
   // select("*") statt fester Spaltenliste: fehlt eine Spalte aus einer noch
   // nicht eingespielten Migration, liefert die Abfrage trotzdem Daten (die
   // betroffene Kennzahl bleibt dann einfach leer).
-  const [callsRes, metaRes, hubsRes] = await Promise.all([
+  const [callsRes, metaRes, hubsRes, anrufeRes, targetsRes] = await Promise.all([
     admin.from("lead_calls").select("*").limit(4000),
     admin.from("meta_leads").select("*").neq("status", "geloescht").limit(4000),
     admin.from("hubs").select("id, name, pdl_name"),
+    // Outbound-Anruf-Log (Kontakt-Historie) für die Anruf-Übersicht
+    admin
+      .from("crm_contacts")
+      .select("contact_date, bearbeiter, ansprechpartner, note, target_id")
+      .eq("kontakt_art", "anruf")
+      .order("contact_date", { ascending: false })
+      .limit(2000),
+    admin.from("crm_targets").select("id, name"),
   ]);
+  const targetName = new Map((targetsRes.data ?? []).map((t) => [t.id, t.name]));
+  const anrufe = (anrufeRes.data ?? []).map((a) => ({
+    datum: a.contact_date,
+    bearbeiter: a.bearbeiter ?? "unbekannt",
+    ziel: targetName.get(a.target_id ?? "") ?? "(Institution)",
+    ansprechpartner: a.ansprechpartner ?? null,
+    note: a.note ?? null,
+  }));
 
   const hubName = new Map((hubsRes.data ?? []).map((h) => [h.id, h.name]));
   const hubPdl: Record<string, string> = {};
@@ -96,6 +112,7 @@ export default async function CrmAdminPage() {
       <CrmStatsDashboard
         leads={leads}
         hubPdl={hubPdl}
+        anrufe={anrufe}
         now={new Date().toISOString()}
       />
 

@@ -93,14 +93,25 @@ function funnelRank(l: StatLead): number {
   return 0;
 }
 
+export interface AnrufRow {
+  datum: string; // JJJJ-MM-TT
+  bearbeiter: string;
+  ziel: string;
+  ansprechpartner: string | null;
+  note: string | null;
+}
+
 export function CrmStatsDashboard({
   leads,
   hubPdl,
+  anrufe,
   now,
 }: {
   leads: StatLead[];
   /** Hub-Name → PDL-Name (für die Übergabe-Tabelle). */
   hubPdl: Record<string, string>;
+  /** Outbound-Anruf-Log (crm_contacts, kontakt_art=anruf). */
+  anrufe: AnrufRow[];
   now: string;
 }) {
   const [range, setRange] = useState<number>(30); // Tage; 0 = alles
@@ -216,7 +227,32 @@ export function CrmStatsDashboard({
     const hubRows = [...byHub.entries()].sort((a, b) => b[1].uebergeben - a[1].uebergeben);
     const alleLiegezeiten = hubRows.flatMap(([, h]) => h.liegezeiten);
 
+    // ── Leads nach Standort (Pie): Top 5 + "Andere" (Palette-Limit) ──
+    const hubVerteilung = (() => {
+      const sorted = hubRows.map(([hub, h]) => ({ label: hub, value: h.uebergeben }));
+      const top = sorted.slice(0, 5);
+      const rest = sorted.slice(5).reduce((a, b) => a + b.value, 0);
+      return rest > 0 ? [...top, { label: "Andere", value: rest }] : top;
+    })();
+
+    // ── Outbound-Anrufe (Log) im Zeitraum ──
+    const startIso = new Date(startMs).toISOString().slice(0, 10);
+    const anrufeInRange = anrufe.filter((a) => a.datum >= startIso);
+    const nichtErreicht = (a: AnrufRow) => /^nicht erreicht/i.test(a.note ?? "");
+    const byCaller = new Map<string, { total: number; erreicht: number; nicht: number }>();
+    for (const a of anrufeInRange) {
+      const e = byCaller.get(a.bearbeiter) ?? { total: 0, erreicht: 0, nicht: 0 };
+      e.total++;
+      if (nichtErreicht(a)) e.nicht++;
+      else e.erreicht++;
+      byCaller.set(a.bearbeiter, e);
+    }
+    const callerRows = [...byCaller.entries()].sort((a, b) => b[1].total - a[1].total);
+
     return {
+      hubVerteilung,
+      anrufeInRange,
+      callerRows,
       inRange,
       buckets,
       weekly,
@@ -233,7 +269,7 @@ export function CrmStatsDashboard({
       hubRows,
       alleLiegezeiten,
     };
-  }, [leads, range, now, nowMs]);
+  }, [leads, anrufe, range, now, nowMs]);
 
   const maxHub = Math.max(1, ...data.hubRows.map(([, h]) => h.uebergeben));
   const maxBearb = Math.max(1, ...data.bearbeiterRows.map(([, b]) => b.total));
@@ -516,6 +552,32 @@ export function CrmStatsDashboard({
           Liegezeit = Übergabe bis Rückmeldung der PDL; offene Übergaben über
           48 Std sind markiert.
         </p>
+        {data.hubVerteilung.length > 0 && (
+          <div className="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+            <PieChart data={data.hubVerteilung} />
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Leads nach Standort
+              </p>
+              {data.hubVerteilung.map((s, i) => {
+                const total = data.hubVerteilung.reduce((a, b) => a + b.value, 0);
+                return (
+                  <p key={s.label} className="flex items-center gap-1.5 text-xs">
+                    <span
+                      className="size-2.5 rounded-[3px]"
+                      style={{ background: `var(${PIE_VARS[i]})` }}
+                    />
+                    {s.label}
+                    <span className="font-semibold tabular-nums">{s.value}</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      ({pct(s.value, total)})
+                    </span>
+                  </p>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <div className="mt-3 overflow-x-auto">
           {data.hubRows.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -587,7 +649,172 @@ export function CrmStatsDashboard({
           )}
         </div>
       </section>
+
+      {/* Outbound-Anrufe */}
+      <section className="rounded-xl border bg-card p-4 shadow-sm">
+        <h2 className="text-sm font-semibold">Outbound-Anrufe — wer hat telefoniert?</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Aus dem Anruf-Log der Outbound-Listen (beide Teams). Erreicht-Quote
+          aus der Erreicht?/Nicht-erreicht-Abfrage beim Loggen.
+        </p>
+        {data.callerRows.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Im Zeitraum wurden keine Outbound-Anrufe geloggt.
+          </p>
+        ) : (
+          <>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-3 font-medium">Bearbeiter</th>
+                    <th className="py-1.5 pr-3 font-medium">Anrufe</th>
+                    <th className="py-1.5 pr-3 font-medium">erreicht</th>
+                    <th className="py-1.5 pr-3 font-medium">nicht erreicht</th>
+                    <th className="py-1.5 font-medium">Erreicht-Quote</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {data.callerRows.map(([name, s]) => {
+                    const maxCalls = Math.max(1, ...data.callerRows.map(([, x]) => x.total));
+                    return (
+                      <tr key={name}>
+                        <td className="py-1.5 pr-3 font-medium">{name}</td>
+                        <td className="py-1.5 pr-3">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-24 shrink-0">
+                              <div
+                                className="h-full rounded-r-[4px]"
+                                style={{
+                                  width: `${(s.total / maxCalls) * 100}%`,
+                                  background: "var(--f3)",
+                                  minWidth: 4,
+                                }}
+                              />
+                            </div>
+                            <span className="tabular-nums">{s.total}</span>
+                          </div>
+                        </td>
+                        <td className="py-1.5 pr-3 tabular-nums text-emerald-700">{s.erreicht}</td>
+                        <td className="py-1.5 pr-3 tabular-nums text-muted-foreground">{s.nicht}</td>
+                        <td className="py-1.5 tabular-nums">{pct(s.erreicht, s.total)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs text-muted-foreground select-none">
+                Alle Anrufe im Zeitraum anzeigen ({data.anrufeInRange.length}) — mit Ergebnis
+              </summary>
+              <ul className="mt-2 divide-y">
+                {data.anrufeInRange.slice(0, 100).map((a, i) => {
+                  const nicht = /^nicht erreicht/i.test(a.note ?? "");
+                  return (
+                    <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5 text-sm">
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {a.datum.split("-").reverse().slice(0, 2).join(".") + "."}
+                      </span>
+                      <span className="font-medium">{a.ziel}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                          nicht
+                            ? "bg-red-100 text-red-800"
+                            : "bg-emerald-100 text-emerald-800",
+                        )}
+                      >
+                        {nicht ? "nicht erreicht" : "erreicht"}
+                      </span>
+                      {a.ansprechpartner && (
+                        <span className="text-xs text-muted-foreground">
+                          mit {a.ansprechpartner}
+                        </span>
+                      )}
+                      {a.note && (
+                        <span className="text-xs text-muted-foreground">
+                          {a.note.replace(/^nicht erreicht(\s*—\s*)?/i, "") || "—"}
+                        </span>
+                      )}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {a.bearbeiter}
+                      </span>
+                    </li>
+                  );
+                })}
+                {data.anrufeInRange.length > 100 && (
+                  <li className="py-1.5 text-center text-xs text-muted-foreground">
+                    +{data.anrufeInRange.length - 100} weitere — Zeitraum enger wählen
+                  </li>
+                )}
+              </ul>
+            </details>
+          </>
+        )}
+      </section>
     </div>
+  );
+}
+
+/* Pie-Slices nutzen dieselbe validierte kategoriale Palette wie der Kanal-Chart. */
+const PIE_VARS = ["--c-meta", "--c-website", "--c-0800", "--c-recare", "--c-agentur", "--c-andere"] as const;
+
+/** Donut-Pie (SVG) für "Leads nach Standort" — max. 5 Segmente + "Andere". */
+function PieChart({ data }: { data: { label: string; value: number }[] }) {
+  const total = data.reduce((a, b) => a + b.value, 0);
+  if (!total) return null;
+  const R = 56;
+  const C = 64;
+  const anteile = data.map((s) => s.value / total);
+  const arcs = data.map((s, i) => {
+    const anteil = anteile[i];
+    const offset = anteile.slice(0, i).reduce((a, b) => a + b, 0);
+    const start = -Math.PI / 2 + offset * Math.PI * 2;
+    const end = start + anteil * Math.PI * 2;
+    const x1 = C + R * Math.cos(start);
+    const y1 = C + R * Math.sin(start);
+    const x2 = C + R * Math.cos(end);
+    const y2 = C + R * Math.sin(end);
+    const gross = anteil > 0.5 ? 1 : 0;
+    // Voll-Kreis (nur ein Segment) braucht zwei Halbbögen
+    const d =
+      anteil >= 0.999
+        ? `M${C - R},${C} A${R},${R} 0 1 1 ${C + R},${C} A${R},${R} 0 1 1 ${C - R},${C}`
+        : `M${C},${C} L${x1},${y1} A${R},${R} 0 ${gross} 1 ${x2},${y2} Z`;
+    return { d, var: PIE_VARS[i] ?? "--c-andere", label: s.label, value: s.value };
+  });
+  return (
+    <svg
+      viewBox="0 0 128 128"
+      className="size-32 shrink-0"
+      role="img"
+      aria-label="Leads nach Standort"
+    >
+      {arcs.map((a) => (
+        <path
+          key={a.label}
+          d={a.d}
+          fill={`var(${a.var})`}
+          stroke="#fff"
+          strokeWidth={2}
+        >
+          <title>{`${a.label}: ${a.value}`}</title>
+        </path>
+      ))}
+      {/* Donut-Loch */}
+      <circle cx={C} cy={C} r={26} fill="var(--card, #fff)" />
+      <text
+        x={C}
+        y={C + 4}
+        textAnchor="middle"
+        fontSize={16}
+        fontWeight={700}
+        fill="currentColor"
+      >
+        {total}
+      </text>
+    </svg>
   );
 }
 
