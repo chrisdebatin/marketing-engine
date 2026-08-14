@@ -275,9 +275,12 @@ alter table public.meta_leads
 notify pgrst, 'reload schema';
 
 -- ── 0051: Leads löschbar (Soft-Delete, Sync legt sie nicht neu an) ─
+-- Hinweis: Der enge Check von damals ('offen','kontaktiert','geloescht')
+-- wird hier bewusst NICHT mehr gesetzt. Block 0052 ersetzt ihn ohnehin
+-- sofort durch die erweiterte Fassung; auf einer Datenbank mit echten
+-- Daten (Status 'erstgespraech' usw.) würde der enge Check hier scheitern
+-- und den gesamten Rest der Datei blockieren.
 alter table public.meta_leads drop constraint if exists meta_leads_status_check;
-alter table public.meta_leads add constraint meta_leads_status_check
-  check (status in ('offen', 'kontaktiert', 'geloescht'));
 
 notify pgrst, 'reload schema';
 
