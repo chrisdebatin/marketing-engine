@@ -429,48 +429,7 @@ export function CrmStatsDashboard({
           (Recare-Leads springen oft direkt zur Übergabe). {data.verloren} Lead
           {data.verloren === 1 ? "" : "s"} im Zeitraum verloren.
         </p>
-        <div className="mt-3 flex flex-col">
-          {data.steps.map((s, i) => {
-            const first = data.steps[0].count || 1;
-            const prev = i > 0 ? data.steps[i - 1].count : null;
-            const w = Math.max(s.count / first, s.count > 0 ? 0.04 : 0);
-            return (
-              <div key={s.label}>
-                {i > 0 && (
-                  <p className="py-0.5 pl-2 text-[11px] text-muted-foreground">
-                    ↓ {prev ? pct(s.count, prev) : "—"} vom vorherigen Schritt
-                  </p>
-                )}
-                <div className="flex items-center gap-3">
-                  <div className="w-36 shrink-0 sm:w-44">
-                    <p className="text-sm font-medium">{s.label}</p>
-                    <p className="text-[11px] text-muted-foreground">{s.hint}</p>
-                  </div>
-                  <div className="relative h-8 flex-1">
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-r-[4px]"
-                      style={{
-                        width: `${w * 100}%`,
-                        background: `var(--f${i + 1})`,
-                        minWidth: s.count > 0 ? 6 : 0,
-                      }}
-                      title={`${s.label}: ${s.count} Leads`}
-                    />
-                    <span
-                      className="absolute top-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums"
-                      style={{ left: `calc(${w * 100}% + 8px)` }}
-                    >
-                      {s.count}
-                      <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                        ({pct(s.count, data.steps[0].count)})
-                      </span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <FunnelChart steps={data.steps} />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -753,6 +712,88 @@ export function CrmStatsDashboard({
           </>
         )}
       </section>
+    </div>
+  );
+}
+
+/**
+ * Echte Trichter-Grafik: zentrierte Trapez-Segmente (validierte ordinale
+ * Blau-Rampe), Breite = Anteil an "Eingegangen", Conversion-Rate zwischen
+ * den Stufen, Schritt-Erklärung im Tooltip und als Mini-Legende darunter.
+ */
+function FunnelChart({
+  steps,
+}: {
+  steps: { label: string; hint: string; count: number }[];
+}) {
+  const first = steps[0]?.count ?? 0;
+  if (!first) {
+    return (
+      <p className="mt-3 text-sm text-muted-foreground">
+        Noch keine Leads im Zeitraum.
+      </p>
+    );
+  }
+  const widths = steps.map((s) => Math.max(24, (s.count / first) * 100));
+  return (
+    <div className="mx-auto mt-4 flex w-full max-w-xl flex-col items-center">
+      {steps.map((s, i) => {
+        const wTop = widths[i];
+        const wBottom = widths[i + 1] ?? Math.max(16, wTop * 0.7);
+        const l = (100 - wTop) / 2;
+        const r = 100 - l;
+        const lb = (100 - wBottom) / 2;
+        const rb = 100 - lb;
+        const prev = i > 0 ? steps[i - 1].count : null;
+        const hell = i < 2; // f1/f2 sind hell → dunkle Schrift
+        return (
+          <div key={s.label} className="flex w-full flex-col items-center">
+            {i > 0 && (
+              <p className="py-0.5 text-[11px] font-medium text-muted-foreground">
+                ▾ {prev ? pct(s.count, prev) : "—"} vom vorherigen Schritt
+              </p>
+            )}
+            <div
+              className="flex h-14 w-full flex-col items-center justify-center text-center"
+              style={{
+                clipPath: `polygon(${l}% 0, ${r}% 0, ${rb}% 100%, ${lb}% 100%)`,
+                background: `var(--f${i + 1})`,
+              }}
+              title={`${s.label}: ${s.count} Leads (${pct(s.count, first)} von allen) — ${s.hint}`}
+            >
+              <span
+                className={cn(
+                  "px-2 text-xs leading-tight font-semibold",
+                  hell ? "text-slate-900" : "text-white",
+                )}
+              >
+                {s.label}
+              </span>
+              <span
+                className={cn(
+                  "text-sm leading-tight font-bold tabular-nums",
+                  hell ? "text-slate-900" : "text-white",
+                )}
+              >
+                {s.count}
+                <span className="ml-1 text-[10px] font-normal opacity-80">
+                  ({pct(s.count, first)})
+                </span>
+              </span>
+            </div>
+          </div>
+        );
+      })}
+      {/* Mini-Legende: was jede Stufe bedeutet */}
+      <p className="mt-3 text-center text-[10px] leading-relaxed text-muted-foreground">
+        {steps.map((s, i) => (
+          <span key={s.label}>
+            {i > 0 && " · "}
+            <span className="font-medium text-foreground/70">{s.label}</span> ={" "}
+            {s.hint}
+          </span>
+        ))}
+      </p>
     </div>
   );
 }
