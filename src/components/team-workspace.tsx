@@ -526,8 +526,18 @@ export function TeamWorkspace({
       !istPending(l) &&
       !istGeschlossen(l),
   );
+  // Abgelehnte Recare-Anfragen bekommen eine eigene Sektion (Recare-Ausgang
+  // dokumentieren: abgelehnt, keine Kapazität, nicht im Einzugsbereich).
+  const istRecareAbgelehnt = (l: InboundLead) =>
+    l.quelle === "recare" &&
+    l.status === "verloren" &&
+    !l.pdl_bestaetigt_at &&
+    Boolean(l.ergebnis);
+  const recareAbgelehnt = inbound
+    .filter(istRecareAbgelehnt)
+    .sort((a, b) => (b.datum ?? "").localeCompare(a.datum ?? ""));
   const doneLeads = inbound.filter(
-    (l) => l.status === "verloren" && !istGeschlossen(l),
+    (l) => l.status === "verloren" && !istGeschlossen(l) && !istRecareAbgelehnt(l),
   );
 
   // Zähler je Quelle (nur offene) + Tages-Gruppen, neueste zuerst.
@@ -1349,6 +1359,56 @@ export function TeamWorkspace({
             </div>
           ))}
 
+          {/* Abgelehnte Recare-Anfragen: eigener Bereich, damit nachvollziehbar
+              bleibt, welche Klinik-Anfragen wir warum nicht angenommen haben. */}
+          {recareAbgelehnt.length > 0 && (
+            <details className="group mt-3 rounded-xl border bg-card shadow-sm">
+              <summary className="cursor-pointer list-none p-4 text-sm font-semibold select-none">
+                Abgelehnte Recare-Anfragen ({recareAbgelehnt.length})
+                <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                  aufklappen — von uns abgelehnt (Grund je Zeile)
+                </span>
+              </summary>
+              <ul className="divide-y border-t">
+                {recareAbgelehnt.map((l) => (
+                  <li
+                    key={`${l.kind}-${l.id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-sm"
+                  >
+                    <span className="w-20 shrink-0 text-xs text-muted-foreground tabular-nums">
+                      {formatIsoDate(l.datum.slice(0, 10))}
+                    </span>
+                    <span className="font-medium">{l.name}</span>
+                    <LeadIdChip id={l.id} />
+                    {l.quelle_detail && (
+                      <span className="text-xs text-muted-foreground">
+                        {l.quelle_detail}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
+                      {l.ergebnis}
+                    </span>
+                    {l.bearbeiter && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {l.bearbeiter}
+                      </span>
+                    )}
+                    {canAct && (
+                      <button
+                        type="button"
+                        title="Doch wieder aufnehmen — Lead kommt zurück in die offene Liste"
+                        onClick={() => setStatus(l, "offen")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        wieder öffnen
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+
           {/* Alte Leads: abgelehnte (verloren) und aufgenommene — kompakt,
               damit die aktive Liste oben schlank bleibt. */}
           {doneLeads.length > 0 && (
@@ -1975,14 +2035,17 @@ function LeadTodos({
  * Krankenhäuser, Apotheken …).
  */
 
-const KAT_TONE: Record<string, string> = {
-  kunde: "bg-blue-100 text-blue-800",
-  krankenhaus: "bg-teal-100 text-teal-800",
-  praxis: "bg-purple-100 text-purple-800",
-  apotheke: "bg-rose-100 text-rose-800",
-  pflegeeinrichtung: "bg-amber-100 text-amber-800",
-  sanitaetshaus: "bg-cyan-100 text-cyan-800",
-  sonstiges: "bg-gray-100 text-gray-700",
+/** Chip- und Seitenrand-Farbe je Kategorie (Referenz-Mock: Akzent links). */
+const KAT_TONE: Record<string, { chip: string; border: string }> = {
+  kunde: { chip: "bg-violet-100 text-violet-800", border: "border-l-violet-400" },
+  recare: { chip: "bg-teal-100 text-teal-800", border: "border-l-teal-400" },
+  klient: { chip: "bg-emerald-100 text-emerald-800", border: "border-l-emerald-400" },
+  krankenhaus: { chip: "bg-teal-100 text-teal-800", border: "border-l-teal-400" },
+  praxis: { chip: "bg-purple-100 text-purple-800", border: "border-l-purple-400" },
+  apotheke: { chip: "bg-rose-100 text-rose-800", border: "border-l-rose-400" },
+  pflegeeinrichtung: { chip: "bg-amber-100 text-amber-800", border: "border-l-amber-400" },
+  sanitaetshaus: { chip: "bg-cyan-100 text-cyan-800", border: "border-l-cyan-400" },
+  sonstiges: { chip: "bg-gray-100 text-gray-700", border: "border-l-slate-300" },
 };
 
 type KontaktSpalte = "heute" | "geplant" | "rueckmeldung" | "zuletzt" | "nie";
@@ -1993,6 +2056,8 @@ interface KontaktKarte {
   name: string;
   kategorieKey: string;
   kategorieLabel: string;
+  /** Farb-Schlüssel für Chip + linken Seitenrand (KAT_TONE). */
+  toneKey: string;
   telefon: string | null;
   /** Ort / Quelle / Standort-Zeile. */
   info: string | null;
@@ -2077,6 +2142,12 @@ function KontakteView({
       spalte,
       name: l.name,
       kategorieKey: "kunde",
+      toneKey:
+        l.quelle === "recare"
+          ? "recare"
+          : l.status === "aufgenommen"
+            ? "klient"
+            : "kunde",
       kategorieLabel: leadKategorie(l),
       telefon: l.telefon,
       info:
@@ -2130,6 +2201,7 @@ function KontakteView({
       spalte,
       name: t.name,
       kategorieKey: t.kategorie,
+      toneKey: t.kategorie,
       kategorieLabel: placeKindLabel(t.kategorie),
       telefon: null,
       info:
@@ -2916,6 +2988,17 @@ function RecareOutcome({
         <Button
           type="button"
           size="sm"
+          variant="outline"
+          disabled={busy}
+          title="Anfrage abgelehnt (z. B. Versorgung passt nicht, außerhalb des Einzugsbereichs). Der Lead verschwindet aus der Liste und steht unten unter „Abgelehnte Recare-Anfragen“."
+          className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+          onClick={() => set("Pat. abgelehnt", "verloren")}
+        >
+          <X className="size-3.5" /> Pat. abgelehnt
+        </Button>
+        <Button
+          type="button"
+          size="sm"
           variant="ghost"
           disabled={busy}
           className="text-muted-foreground"
@@ -3610,27 +3693,49 @@ function OutboundSidebar({ anrufe, today }: { anrufe: AnrufLog[]; today: string 
  */
 function KanbanKarte({ k, token }: { k: KontaktKarte; token: string }) {
   const [offen, setOffen] = useState(false);
+  const tone = KAT_TONE[k.toneKey] ?? KAT_TONE.sonstiges;
   return (
-    <li className="rounded-lg border bg-card p-2.5 text-sm shadow-sm">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="leading-snug font-semibold">{k.name}</span>
-        <span
-          className={cn(
-            "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-            KAT_TONE[k.kategorieKey] ?? KAT_TONE.sonstiges,
-          )}
-        >
-          {k.kategorieLabel}
-        </span>
-        {k.statusLabel && (
+    <li
+      className={cn(
+        "rounded-lg border border-l-4 bg-card p-2.5 text-sm shadow-sm",
+        tone.border,
+      )}
+    >
+      <div className="flex items-start gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          <span className="leading-snug font-semibold">{k.name}</span>
           <span
             className={cn(
               "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-              k.statusTone,
+              tone.chip,
             )}
           >
-            {k.statusLabel}
+            {k.kategorieLabel}
           </span>
+          {k.statusLabel && (
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                k.statusTone,
+              )}
+            >
+              {k.statusLabel}
+            </span>
+          )}
+          {k.spalte === "rueckmeldung" && (
+            <span title="wartet auf Rückmeldung" aria-hidden>
+              ⏳
+            </span>
+          )}
+        </div>
+        {k.telefon && (
+          <a
+            href={`tel:${k.telefon}`}
+            title={`${k.name} anrufen`}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20"
+          >
+            <Phone className="size-3.5" />
+          </a>
         )}
       </div>
       {k.info && <p className="mt-0.5 text-xs text-muted-foreground">{k.info}</p>}
