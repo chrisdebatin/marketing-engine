@@ -567,6 +567,28 @@ export interface Database {
         >;
         Relationships: [];
       };
+      pdl_versuche: {
+        Row: {
+          id: string;
+          hub_id: string;
+          lead_kind: string | null;
+          lead_id: string | null;
+          erreicht: boolean;
+          von: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          hub_id: string;
+          lead_kind?: string | null;
+          lead_id?: string | null;
+          erreicht: boolean;
+          von?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["pdl_versuche"]["Insert"]>;
+        Relationships: [];
+      };
       lead_todos: {
         Row: {
           id: string;

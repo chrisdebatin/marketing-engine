@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { AgenturRueckweisungen } from "@/components/agentur-rueckweisungen";
+import { PdlRanking } from "@/components/pdl-ranking";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { ZieleSection } from "@/app/(app)/crm/ziele-section";
@@ -115,6 +116,8 @@ export default async function CrmAdminPage() {
         anrufe={anrufe}
         now={new Date().toISOString()}
       />
+
+      <PdlRanking />
 
       <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
 

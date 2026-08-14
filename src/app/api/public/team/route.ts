@@ -46,6 +46,7 @@ export async function POST(req: Request) {
     erreicht?: boolean;
     wiedervorlage?: string;
     bereich?: string;
+    hub_id?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -198,6 +199,33 @@ export async function POST(req: Request) {
       .eq("id", id);
     if (error) return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
     await markFirstTouch(id).catch(() => {});
+    return NextResponse.json({ ok: true });
+  }
+
+  // Erreichbarkeits-Log: Anruf-Versuch bei einer PDL vermerken (erreicht /
+  // nicht erreicht) — ändert NICHTS am Lead, speist nur das PDL-Ranking.
+  if (action === "pdl-versuch") {
+    const hubId = (body.hub_id ?? "").trim();
+    if (!hubId) return NextResponse.json({ error: "Standort fehlt." }, { status: 400 });
+    const { error } = await admin.from("pdl_versuche").insert({
+      hub_id: hubId,
+      lead_kind: kind,
+      lead_id: (body.id ?? "").trim() || null,
+      erreicht: body.erreicht !== false,
+      von: member.name,
+    });
+    if (error) {
+      const missing =
+        error.code === "42P01" || error.code === "PGRST204" || error.code === "PGRST205";
+      return NextResponse.json(
+        {
+          error: missing
+            ? "Erreichbarkeits-Log fehlt noch — bitte supabase/apply_all_pending.sql (0060) ausführen."
+            : "Speichern fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({ ok: true });
   }
 

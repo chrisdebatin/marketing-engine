@@ -49,6 +49,7 @@ export interface InboundLead {
   notiz: string | null;
   ergebnis: string | null;
   hub: string | null;
+  zugewiesen_hub_id: string | null;
   zugewiesen_hub: string | null;
   zugewiesen_pdl: string | null;
   zugewiesen_at: string | null;
@@ -1013,6 +1014,14 @@ export function TeamWorkspace({
                         <MapPin className="size-3.5" /> Nicht im Einzugsbereich
                       </Button>
                     )}
+                  {canAct &&
+                    !l.pdl_bestaetigt_at &&
+                    l.status !== "verloren" &&
+                    (l.zugewiesen_hub_id != null ||
+                      (l.quelle === "recare" &&
+                        ["offen", "kontaktiert"].includes(l.status))) && (
+                      <PdlVersuchButtons lead={l} token={token} />
+                    )}
                 </div>
                 {canAct && !l.zugewiesen_hub && l.status !== "verloren" &&
                   (l.status === "erstgespraech" || l.quelle === "recare") && (
@@ -1234,6 +1243,7 @@ function InboundCallLog({
         email: null,
         adresse: adresse.trim() || null,
         bereich: bereich || null,
+        zugewiesen_hub_id: null,
         erstbearbeitet_at: new Date().toISOString(),
         quelle,
         quelle_detail: null,
@@ -1843,6 +1853,66 @@ function KontakteView({
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * Erreichbarkeits-Log: ✓/✗-Vermerk je Anruf-Versuch bei der PDL — ändert
+ * nichts am Lead, speist nur das PDL-Ranking im CRM-Admin (wo müssen wir
+ * mit Schulung/Sensibilisierung nachbessern?).
+ */
+function PdlVersuchButtons({ lead, token }: { lead: InboundLead; token: string }) {
+  const hubId = lead.zugewiesen_hub_id ?? lead.vorschlag_hub_id;
+  const pdl = lead.zugewiesen_pdl ?? lead.vorschlag_pdl;
+  const [meldung, setMeldung] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!hubId) return null;
+
+  async function log(erreicht: boolean) {
+    setBusy(true);
+    try {
+      await teamAction(token, {
+        action: "pdl-versuch",
+        kind: lead.kind,
+        id: lead.id,
+        hub_id: hubId,
+        erreicht,
+      });
+      setMeldung(erreicht ? "✓ vermerkt" : "✗ vermerkt");
+      setTimeout(() => setMeldung(null), 2500);
+    } catch (e) {
+      setMeldung(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span
+      className="flex flex-wrap items-center gap-1.5"
+      title={`Jeden Anruf-Versuch bei ${pdl ? `PDL ${pdl}` : "der PDL"} hier vermerken — fürs Erreichbarkeits-Ranking im CRM-Admin. Ändert nichts am Lead.`}
+    >
+      <span className="text-[11px] text-muted-foreground">PDL angerufen?</span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => log(true)}
+        className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 hover:bg-emerald-100"
+      >
+        ✓ erreicht
+      </button>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => log(false)}
+        className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-100"
+      >
+        ✗ nicht erreicht
+      </button>
+      {meldung && (
+        <span className="text-[11px] text-muted-foreground">{meldung}</span>
+      )}
+    </span>
   );
 }
 
