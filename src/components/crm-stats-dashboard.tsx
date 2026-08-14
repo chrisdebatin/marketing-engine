@@ -868,13 +868,14 @@ function FunnelDetail({
 }) {
   // Aufschlüsselung nach Kanal und Bearbeiter — beantwortet "woher kam das"
   // und "wer hat es gemacht" ohne Scrollen durch die Liste.
-  const jeQuelle = [...new Map<string, number>(
-    step.leads.reduce<[string, number][]>((acc, l) => {
-      const key = channelOf(l);
-      const vorher = acc.find(([k]) => k === key)?.[1] ?? 0;
-      return [...acc.filter(([k]) => k !== key), [key, vorher + 1]];
-    }, []),
-  )].sort((a, b) => b[1] - a[1]);
+  // Alle Kanäle zeigen, auch mit 0 — "Meta: 0" ist eine Aussage,
+  // ein fehlender Eintrag wirkt dagegen wie ein Fehler.
+  const jeQuelle = CHANNELS.map((c) => ({
+    key: c.key as string,
+    n: step.leads.filter((l) => channelOf(l) === c.key).length,
+  }))
+    .filter((r) => r.n > 0 || r.key !== "andere")
+    .sort((a, b) => b.n - a.n);
   const jeBearbeiter = [...new Map<string, number>(
     step.leads.reduce<[string, number][]>((acc, l) => {
       const key = l.bearbeiter ?? "—";
@@ -931,10 +932,13 @@ function FunnelDetail({
               <div className="rounded-lg border bg-muted/20 p-3">
                 <p className="text-xs font-semibold">Woher kamen sie?</p>
                 <ul className="mt-1.5 flex flex-col gap-1">
-                  {jeQuelle.map(([key, n]) => (
+                  {jeQuelle.map(({ key, n }) => (
                     <li
                       key={key}
-                      className="flex items-center justify-between gap-2 text-sm"
+                      className={cn(
+                        "flex items-center justify-between gap-2 text-sm",
+                        n === 0 && "text-muted-foreground",
+                      )}
                     >
                       <span>{kanalLabel(key)}</span>
                       <span className="font-semibold tabular-nums">{n}</span>
