@@ -167,6 +167,8 @@ export async function sendMail(input: {
   subject: string;
   html: string;
   bcc?: string[];
+  /** Dateianhänge; content base64-kodiert. */
+  attachments?: { filename: string; contentType: string; content: string }[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const token = await getAccessToken();
   if (!token) {
@@ -186,6 +188,16 @@ export async function sendMail(input: {
         body: { contentType: "HTML", content: input.html },
         toRecipients: recipients(input.to),
         ...(input.bcc?.length ? { bccRecipients: recipients(input.bcc) } : {}),
+        ...(input.attachments?.length
+          ? {
+              attachments: input.attachments.map((a) => ({
+                "@odata.type": "#microsoft.graph.fileAttachment",
+                name: a.filename,
+                contentType: a.contentType,
+                contentBytes: a.content,
+              })),
+            }
+          : {}),
       },
       saveToSentItems: true,
     }),

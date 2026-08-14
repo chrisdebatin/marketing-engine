@@ -22,10 +22,19 @@ export function mailConfigured(): boolean {
   return outlookConfigured() || smtpConfigured();
 }
 
+/** Dateianhang — content ist base64-kodiert (wie von Graph erwartet). */
+export interface MailAttachment {
+  filename: string;
+  contentType: string;
+  /** base64 */
+  content: string;
+}
+
 async function sendViaSmtp(input: {
   to: string[];
   subject: string;
   html: string;
+  attachments?: MailAttachment[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const port = Number(process.env.SMTP_PORT || 465);
   const transporter = nodemailer.createTransport({
@@ -43,6 +52,15 @@ async function sendViaSmtp(input: {
       to: input.to.join(", "),
       subject: input.subject,
       html: input.html,
+      ...(input.attachments?.length
+        ? {
+            attachments: input.attachments.map((a) => ({
+              filename: a.filename,
+              content: Buffer.from(a.content, "base64"),
+              contentType: a.contentType,
+            })),
+          }
+        : {}),
     });
     return { ok: true };
   } catch (err) {
@@ -59,6 +77,7 @@ export async function deliverMail(input: {
   to: string[];
   subject: string;
   html: string;
+  attachments?: MailAttachment[];
 }): Promise<{ ok: true; via: "outlook" | "smtp" } | { ok: false; error: string }> {
   if (outlookConfigured() && (await getAccessToken())) {
     const res = await sendGraphMail(input);

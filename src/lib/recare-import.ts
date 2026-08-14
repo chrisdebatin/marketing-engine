@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { buildPdf } from "@/lib/pdf";
 import { getAccessToken, inboxMails } from "@/lib/outlook";
 import { normName } from "@/lib/crm-log";
 
@@ -485,7 +486,35 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
               )
               .join("") +
             `</table>` +
-            `<p style="color:#888;font-size:12px">Original-Mail:</p><pre style="white-space:pre-wrap;font-size:12px">${esc(body.slice(0, 4000))}</pre>`,
+            `<p style="color:#888;font-size:12px">Die Bewerbung liegt als PDF im Anhang. Original-Mail:</p><pre style="white-space:pre-wrap;font-size:12px">${esc(body.slice(0, 4000))}</pre>`,
+          attachments: [
+            {
+              filename: `Bewerbung_${(w.name || "ohne_Name").replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 40)}.pdf`,
+              contentType: "application/pdf",
+              content: buildPdf([
+                { text: "Bewerbung", art: "h1" },
+                { text: w.name || "(ohne Name)", art: "h2" },
+                { text: "Kontaktdaten", art: "h2" },
+                { text: "Name", art: "kv", wert: w.name || "–" },
+                { text: "Telefon", art: "kv", wert: w.telefon || "–" },
+                { text: "E-Mail", art: "kv", wert: w.email || "–" },
+                { text: "Ort", art: "kv", wert: w.ort || "–" },
+                { text: "Herkunft", art: "kv", wert: "Website-Kontaktformular" },
+                {
+                  text: "Eingegangen",
+                  art: "kv",
+                  wert: new Date(m.receivedAt).toLocaleString("de-DE", {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }),
+                },
+                { text: "Anliegen", art: "h2" },
+                { text: w.anliegen || "keine Angabe" },
+                { text: "Original-Nachricht", art: "h2" },
+                { text: body.slice(0, 3000) },
+              ]),
+            },
+          ],
         });
         const { error: insErr } = await admin.from("lead_calls").insert({
           call_date: m.receivedAt.slice(0, 10),
