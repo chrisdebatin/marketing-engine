@@ -21,7 +21,7 @@ export interface RecareSyncResult {
   error: string | null;
 }
 
-type LeadMailKind = "recare" | "anruf" | "website";
+type LeadMailKind = "recare" | "anruf" | "website" | "agentur";
 
 /** Offensichtlicher System-Noise (Kontosicherheit, Bounces) — nie ein Lead. */
 const NOISE_SENDERS =
@@ -43,6 +43,15 @@ function classifyMail(m: {
   if (NOISE_SENDERS.test(m.fromAddress)) return null;
   if (m.subject.toLowerCase().includes("customer call")) return "anruf";
   const hay = `${m.subject} ${m.fromAddress} ${m.body ?? m.preview}`.toLowerCase();
+  // Lead-Agentur "Pflegehilfe Direkt": zugewiesene Leads (meist als WG:
+  // weitergeleitet — der Marker steht im Mail-Text, nicht im Absender).
+  if (
+    hay.includes("pflegehilfe direkt") ||
+    hay.includes("pflege-hilfe-direkt") ||
+    hay.includes("neuer lead zugewiesen")
+  ) {
+    return "agentur";
+  }
   if (hay.includes("recare") || hay.includes("nachversorg")) return "recare";
   return "website";
 }
@@ -354,6 +363,48 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
     // Website-/Kontaktformular-Anfrage: Claude ordnet ein.
     // Kundenanfrage → offener Lead (Kundenservice-Team); Bewerbung → Mail ans
     // Recruiting + als abgeschlossen abgelegt; Sonstiges → nur vermerken.
+    // Lead-Agentur (Pflegehilfe Direkt): zugewiesener Kunden-Lead — gleiche
+    // Feld-Extraktion wie Website-Anfragen, aber immer als Lead importieren
+    // (Agentur-Mails sind nie Bewerbungen/Spam) und quelle = agentur.
+    if (m.kind === "agentur") {
+      const w = await extractWebsite(`Von: ${m.fromAddress}\nBetreff: ${m.subject}\n\n${body}`);
+      if (!w) {
+        processed.delete(m.id);
+        skipped++;
+        continue;
+      }
+      const lower = body.toLowerCase();
+      const bereich = lower.includes("intensiv")
+        ? "intensiv"
+        : /alltagshilfe|hauswirtschaft|betreuung und entlastung/.test(lower)
+          ? "alltagshilfe"
+          : lower.includes("ambulante")
+            ? "ambulant"
+            : "pflege";
+      const agenturValues = {
+        call_date: m.receivedAt.slice(0, 10),
+        quelle: "agentur",
+        bereich,
+        quelle_detail: "Pflegehilfe Direkt",
+        lead_name: w.name.slice(0, 200) || "(ohne Name)",
+        telefon: w.telefon.slice(0, 60) || null,
+        email: w.email.slice(0, 200) || null,
+        notiz: [w.anliegen, w.ort ? `Ort: ${w.ort}` : ""].filter(Boolean).join(" · ").slice(0, 1000) || null,
+        status: "offen",
+      };
+      let { error: insErr } = await admin
+        .from("lead_calls")
+        .insert({ ...agenturValues, adresse: w.ort.slice(0, 200) || null });
+      if (insErr && (insErr.code === "PGRST204" || insErr.code === "42703")) {
+        ({ error: insErr } = await admin.from("lead_calls").insert(agenturValues));
+      }
+      if (insErr) {
+        processed.delete(m.id);
+        skipped++;
+      } else imported++;
+      continue;
+    }
+
     if (m.kind === "website") {
       const w = await extractWebsite(`Von: ${m.fromAddress}\nBetreff: ${m.subject}\n\n${body}`);
       if (!w) {
