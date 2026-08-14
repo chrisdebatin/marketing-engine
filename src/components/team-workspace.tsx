@@ -92,6 +92,15 @@ export interface OutboundTarget {
 const SELECT_CLASS =
   "rounded-lg border border-input bg-transparent px-2 text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
 
+/** Farbiger Seitenrand der Lead-Karte = Status auf einen Blick (Referenz-Mock). */
+const STATUS_BORDER: Record<string, string> = {
+  offen: "border-l-amber-400",
+  kontaktiert: "border-l-blue-500",
+  erstgespraech: "border-l-purple-500",
+  aufgenommen: "border-l-emerald-500",
+  verloren: "border-l-slate-300",
+};
+
 const STATUS_LABEL: Record<string, string> = {
   offen: "Offen",
   kontaktiert: "Kontaktiert",
@@ -773,11 +782,22 @@ export function TeamWorkspace({
                 {g.leads.map((l) => (
               <li
                 key={`${l.kind}-${l.id}`}
-                className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-sm"
+                className={cn(
+                  "flex flex-col gap-2.5 rounded-xl border border-l-4 bg-card p-4 shadow-sm",
+                  STATUS_BORDER[l.status] ?? "border-l-transparent",
+                )}
               >
-                {/* Kopf: Wer (Name) zuerst, Status daneben, Timer oben rechts —
-                    Herkunft & Zeit als ruhigere zweite Zeile darunter. */}
-                <div className="flex flex-col gap-1">
+                {/* Kopf: Icon-Disc, Wer (Name) zuerst, Status daneben, Timer
+                    oben rechts — Herkunft & Zeit als ruhigere zweite Zeile. */}
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    {l.kind === "meta" ? (
+                      <Inbox className="size-4" />
+                    ) : (
+                      <PhoneCall className="size-4" />
+                    )}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {isFresh(l) && (
                       <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" title="neu" />
@@ -831,6 +851,7 @@ export function TeamWorkspace({
                         {leadBereichLabel(l.bereich)}
                       </span>
                     )}
+                  </div>
                   </div>
                 </div>
                 <LeadStammdaten
@@ -1277,36 +1298,55 @@ function InboundCallLog({
     }
   }
 
+  const feldLabel = (text: string) => (
+    <span className="text-xs font-medium text-foreground">{text}</span>
+  );
+
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-primary/25 bg-primary/[0.04] p-3.5 shadow-sm">
-      <p className="flex items-center gap-1.5 text-sm font-semibold">
-        <PhoneCall className="size-4 text-primary" />
-        Inbound-Anruf loggen
-      </p>
-      <p className="-mt-1 text-xs text-muted-foreground">
-        Anruf angenommen? Hier eintragen — erscheint sofort als offener Lead.
-      </p>
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name des Anrufers"
-        className="h-9 bg-background"
-      />
-      <Input
-        type="tel"
-        value={telefon}
-        onChange={(e) => setTelefon(e.target.value)}
-        placeholder="Telefonnummer"
-        className="h-9 bg-background"
-      />
-      <Input
-        value={adresse}
-        onChange={(e) => setAdresse(e.target.value)}
-        placeholder="Adresse / Ort (optional)"
-        className="h-9 bg-background"
-      />
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-        Wofür interessiert sich der Anrufer?
+    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-start gap-2.5">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <PhoneCall className="size-4" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold">Inbound-Anruf loggen</p>
+          <p className="text-xs text-muted-foreground">
+            Anruf angenommen? Hier eintragen — erscheint sofort als offener
+            Lead.
+          </p>
+        </div>
+      </div>
+      <label className="flex flex-col gap-1">
+        {feldLabel("Name des Anrufers")}
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="z. B. Max Mustermann"
+          className="h-9 bg-background"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        {feldLabel("Telefonnummer")}
+        <Input
+          type="tel"
+          value={telefon}
+          onChange={(e) => setTelefon(e.target.value)}
+          placeholder="z. B. 0176 12345678"
+          className="h-9 bg-background"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        {feldLabel("Adresse / Ort (optional)")}
+        <Input
+          value={adresse}
+          onChange={(e) => setAdresse(e.target.value)}
+          placeholder="z. B. 47198 Duisburg"
+          className="h-9 bg-background"
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        {feldLabel("Wofür interessiert sich der Anrufer?")}
         <select
           value={bereich}
           onChange={(e) => setBereich(e.target.value)}
@@ -1318,8 +1358,8 @@ function InboundCallLog({
           <option value="alltagshilfe">Hauswirtschaft / Alltagshilfe</option>
         </select>
       </label>
-      <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
-        Wie sind sie auf uns aufmerksam geworden?
+      <label className="flex flex-col gap-1">
+        {feldLabel("Wie sind sie auf uns aufmerksam geworden?")}
         <select
           value={quelle}
           onChange={(e) => setQuelle(e.target.value)}
@@ -1337,21 +1377,35 @@ function InboundCallLog({
           ))}
         </select>
       </label>
-      <Textarea
-        value={notiz}
-        onChange={(e) => setNotiz(e.target.value)}
-        rows={2}
-        placeholder="Worum ging es? (optional)"
-      />
+      <label className="flex flex-col gap-1">
+        {feldLabel("Worum ging es? (optional)")}
+        <Textarea
+          value={notiz}
+          onChange={(e) => setNotiz(e.target.value)}
+          rows={2}
+          placeholder="Notiz hinzufügen…"
+        />
+      </label>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <Button
         type="button"
-        size="sm"
         disabled={busy || !quelle || (!name.trim() && !telefon.trim())}
         onClick={save}
+        className="w-full"
       >
+        <PhoneCall className="size-4" />
         {busy ? "Speichere…" : "Als Lead anlegen"}
       </Button>
+    </div>
+
+    {/* Tipp-Karte wie im Referenz-Mock */}
+    <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-900">
+      <span aria-hidden>💡</span>
+      <p>
+        <span className="font-semibold">Tipp:</span> Je mehr Infos Sie hier
+        eintragen, desto schneller können wir den Lead bearbeiten.
+      </p>
+    </div>
     </div>
   );
 }
