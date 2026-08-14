@@ -9,6 +9,7 @@ import {
   Inbox,
   Map,
   Megaphone,
+  PhoneIncoming,
   Send,
   Settings,
   Sparkles,
@@ -76,6 +77,12 @@ export const CRM_ADMIN_NAV_ITEM: NavItem = {
   label: "CRM-Admin",
   Icon: ChartColumn,
 };
+/** Nur für Admins: Erreichbarkeit & Anliegen der eingehenden Anrufe. */
+export const CALLCENTER_NAV_ITEM: NavItem = {
+  href: "/callcenter",
+  label: "Callcenter",
+  Icon: PhoneIncoming,
+};
 export function navGroups(isAdmin: boolean): NavGroup[] {
   if (!isAdmin) return NAV_GROUPS;
   return NAV_GROUPS.map((g) => {
@@ -84,7 +91,9 @@ export function navGroups(isAdmin: boolean): NavGroup[] {
       return {
         ...g,
         items: g.items.flatMap((i) =>
-          i.href === "/crm" ? [i, CRM_ADMIN_NAV_ITEM] : [i],
+          i.href === "/crm"
+            ? [i, CRM_ADMIN_NAV_ITEM, CALLCENTER_NAV_ITEM]
+            : [i],
         ),
       };
     }

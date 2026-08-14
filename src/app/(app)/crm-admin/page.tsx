@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Megaphone, Package, PhoneCall, Trophy, UserCheck, Users } from "lucide-react";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -254,6 +255,12 @@ export default async function CrmAdminPage() {
         tage={analyseTage}
         zeitraum={analyseZeitraum}
       />
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Eigener Bereich mit CSV-Upload:{" "}
+        <Link href="/callcenter" className="text-primary underline">
+          Callcenter-Analyse
+        </Link>
+      </p>
 
       {sektion("3", "Kontakte heute", "alle Berührungen des Tages — Klienten, Anrufe, Flyer & Boxen, Aufnahmen")}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">

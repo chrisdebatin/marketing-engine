@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
+  Bot,
   Clock,
   PhoneCall,
   PhoneIncoming,
@@ -79,6 +80,99 @@ function stundeVon(iso: string): number {
 }
 
 /**
+ * Donut: Anteile der Anliegen-Arten. Ring statt Vollkreis, damit die
+ * Gesamtzahl in die Mitte passt — die wichtigste Zahl bleibt groß und
+ * lesbar. Segmente mit 2px Lücke, Legende immer daneben (Identität nie
+ * nur über Farbe).
+ */
+function DonutChart({
+  daten,
+  gesamt,
+}: {
+  daten: { key: string; label: string; farbe: string; anzahl: number }[];
+  gesamt: number;
+}) {
+  const R = 70;
+  const STROKE = 26;
+  const umfang = 2 * Math.PI * R;
+  // Prefix-Summen statt laufender Variable (react-hooks/immutability).
+  const starts = daten.reduce<number[]>(
+    (acc, d, i) => [...acc, (acc[i] ?? 0) + d.anzahl],
+    [0],
+  );
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4">
+      <svg
+        viewBox="0 0 180 180"
+        className="size-44 shrink-0 -rotate-90"
+        role="img"
+        aria-label={`Anliegen-Verteilung: ${daten.map((d) => `${d.label} ${d.anzahl}`).join(", ")}`}
+      >
+        {daten.map((d, i) => {
+          const anteil = d.anzahl / gesamt;
+          const offset = (starts[i] / gesamt) * umfang;
+          // 2px Lücke zwischen den Segmenten
+          const laenge = Math.max(anteil * umfang - 2, 0.5);
+          return (
+            <circle
+              key={d.key}
+              cx="90"
+              cy="90"
+              r={R}
+              fill="none"
+              stroke={d.farbe}
+              strokeWidth={STROKE}
+              strokeDasharray={`${laenge} ${umfang - laenge}`}
+              strokeDashoffset={-offset}
+            >
+              <title>{`${d.label}: ${d.anzahl} (${prozent(d.anzahl, gesamt)} %)`}</title>
+            </circle>
+          );
+        })}
+        {/* Mittelwert im Ring — wieder aufrecht drehen */}
+        <g className="rotate-90" style={{ transformOrigin: "90px 90px" }}>
+          <text
+            x="90"
+            y="86"
+            textAnchor="middle"
+            className="fill-foreground text-[1.75rem] font-bold tabular-nums"
+          >
+            {gesamt}
+          </text>
+          <text
+            x="90"
+            y="104"
+            textAnchor="middle"
+            className="fill-muted-foreground text-[0.7rem]"
+          >
+            Anrufe
+          </text>
+        </g>
+      </svg>
+
+      <ul className="flex min-w-0 flex-col gap-2">
+        {daten.map((d) => (
+          <li key={d.key} className="flex items-center gap-2.5 text-sm">
+            <span
+              className="size-3 shrink-0 rounded-[3px]"
+              style={{ backgroundColor: d.farbe }}
+            />
+            <span className="min-w-0 flex-1 font-medium">{d.label}</span>
+            <span className="shrink-0 font-semibold tabular-nums">
+              {d.anzahl}
+            </span>
+            <span className="w-12 shrink-0 text-right text-muted-foreground tabular-nums">
+              {prozent(d.anzahl, gesamt)} %
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
  * Callcenter-Analyse: Wie viele Anrufe kommen rein, wie viele nehmen wir an,
  * wann rufen die Leute an — und wie viele Interessenten verlieren wir
  * außerhalb der Besetzung. Zwei Datenquellen, bewusst getrennt ausgewiesen:
@@ -105,8 +199,24 @@ export function CallcenterAnalyse({
     const angenommen = calls.filter((c) => c.angenommen).length;
     const verpasst = gesamt - angenommen;
 
-    // Stunden-Dichte 6–21 Uhr: außerhalb liegen praktisch keine Anrufe.
-    const stunden = Array.from({ length: 16 }, (_, i) => i + 6).map((h) => {
+    // Stunden-Achse auf den tatsächlich belegten Bereich zuschneiden (mit
+    // einer Stunde Rand), sonst stehen rechts nur leere Spalten. Der Rand
+    // bis mindestens BESETZT_BIS+2 bleibt sichtbar — dort liegt die Aussage.
+    // reduce statt Spread: calls kann sehr groß sein (Stack-Overflow bei
+    // Math.min(...arr)) und ist bei leerer Datenbasis leer.
+    const grenzen = calls.reduce(
+      (acc, c) => {
+        const h = stundeVon(c.zeit);
+        return { min: Math.min(acc.min, h), max: Math.max(acc.max, h) };
+      },
+      { min: BESETZT_VON, max: BESETZT_BIS + 1 },
+    );
+    const vonStunde = Math.max(0, grenzen.min - 1);
+    const bisStunde = Math.min(23, grenzen.max + 1);
+    const stunden = Array.from(
+      { length: Math.max(bisStunde - vonStunde + 1, 1) },
+      (_, i) => i + vonStunde,
+    ).map((h) => {
       const inStunde = calls.filter((c) => stundeVon(c.zeit) === h);
       const an = inStunde.filter((c) => c.angenommen).length;
       return {
@@ -142,6 +252,10 @@ export function CallcenterAnalyse({
     const interessenten = leads.filter(
       (l) => l.kategorie === "neuinteressent",
     ).length;
+    // Anonym + kein Anliegen: niemand, den man zurückrufen könnte.
+    const ohneRueckruf = leads.filter(
+      (l) => l.kategorie === "kein_anliegen",
+    ).length;
 
     // Verlust-Schätzung: Interessenten-Quote der eingegangenen Anrufe auf die
     // verpassten Anrufe außerhalb der Besetzung übertragen.
@@ -167,6 +281,7 @@ export function CallcenterAnalyse({
       jeKategorie,
       gesamtLeads,
       interessenten,
+      ohneRueckruf,
       interessentenQuote,
       verloreneProTag,
       spitze,
@@ -223,7 +338,7 @@ export function CallcenterAnalyse({
       </p>
 
       {/* ── Kennzahlen ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatTile
           icon={PhoneIncoming}
           tone="blue"
@@ -240,17 +355,25 @@ export function CallcenterAnalyse({
           icon={PhoneCall}
           tone="green"
           coloredValue
-          label="Angenommen"
+          label="Von uns angenommen"
           value={`${prozent(k.angenommen, k.gesamt)} %`}
           sub={`${k.angenommen} von ${k.gesamt} Anrufen`}
         />
         <StatTile
+          icon={Bot}
+          tone="amber"
+          coloredValue={k.verpasst > 0}
+          label="Bei Nora gelandet"
+          value={k.verpasst}
+          sub={`${prozent(k.verpasst, k.gesamt)} % — KI-Agentin nimmt ab, wenn niemand rangeht`}
+        />
+        <StatTile
           icon={PhoneMissed}
           tone="red"
-          coloredValue={k.verpasst > 0}
-          label="Nicht durchgekommen"
-          value={k.verpasst}
-          sub={`${prozent(k.verpasst, k.gesamt)} % — landen bei der KI-Agentin Nora`}
+          coloredValue={k.ohneRueckruf > 0}
+          label="Ohne Rückruf-Chance"
+          value={k.ohneRueckruf}
+          sub="anonym & ohne Anliegen — verloren"
         />
         <StatTile
           icon={UserPlus}
@@ -258,7 +381,7 @@ export function CallcenterAnalyse({
           coloredValue
           label="Echte Neuanfragen"
           value={`${prozent(k.interessenten, k.gesamtLeads)} %`}
-          sub={`${k.interessenten} von ${k.gesamtLeads} verpassten Anrufen`}
+          sub={`${k.interessenten} von ${k.gesamtLeads} Nora-Anrufen`}
         />
       </div>
 
@@ -464,8 +587,8 @@ export function CallcenterAnalyse({
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Fett = aktuell besetzt ({BESETZT_VON}–{BESETZT_BIS} Uhr). Alle Werte
-              per Mouse-over und über &bdquo;Als Tabelle&ldquo;.
+              Fett = aktuell besetzt ({BESETZT_VON}–{BESETZT_BIS} Uhr). Alle
+              Werte per Mouse-over und über &bdquo;Als Tabelle&ldquo;.
             </p>
           </div>
         )}
@@ -479,39 +602,21 @@ export function CallcenterAnalyse({
           description="KI-Auswertung der Verpasst-Mails: Die Agentin Nora nimmt ab, fasst zusammen — daraus wird die Kategorie abgeleitet. Nur Neuinteressenten landen als offener Lead in der Liste."
           className="cc-viz"
         >
-          <div className="flex flex-col gap-3">
-            {/* Anteils-Balken: eine Zeile, direkt beschriftet */}
-            <div className="flex h-8 w-full overflow-hidden rounded-md">
+          <div className="flex flex-col gap-4">
+            <DonutChart daten={k.jeKategorie} gesamt={k.gesamtLeads} />
+            {/* Erklärung je Kategorie — was steckt hinter dem Segment? */}
+            <ul className="flex flex-col gap-1 border-t pt-3">
               {k.jeKategorie.map((r) => (
-                <div
+                <li
                   key={r.key}
-                  title={`${r.label}: ${r.anzahl} (${prozent(r.anzahl, k.gesamtLeads)} %) — ${r.erklaerung}`}
-                  style={{
-                    width: `${(r.anzahl / k.gesamtLeads) * 100}%`,
-                    backgroundColor: r.farbe,
-                    // 2px Fläche als Trenner zwischen den Segmenten
-                    borderRight: "2px solid var(--card)",
-                  }}
-                />
-              ))}
-            </div>
-            <ul className="flex flex-col gap-1.5">
-              {k.jeKategorie.map((r) => (
-                <li key={r.key} className="flex items-baseline gap-2 text-sm">
+                  className="flex items-baseline gap-2 text-xs text-muted-foreground"
+                >
                   <span
-                    className="mt-1 size-2.5 shrink-0 rounded-[2px]"
+                    className="size-2 shrink-0 translate-y-px rounded-[2px]"
                     style={{ backgroundColor: r.farbe }}
                   />
-                  <span className="font-medium">{r.label}</span>
-                  <span className="font-semibold tabular-nums">
-                    {r.anzahl}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums">
-                    ({prozent(r.anzahl, k.gesamtLeads)} %)
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    — {r.erklaerung}
-                  </span>
+                  <span className="font-medium text-foreground">{r.label}</span>
+                  <span>— {r.erklaerung}</span>
                 </li>
               ))}
             </ul>
