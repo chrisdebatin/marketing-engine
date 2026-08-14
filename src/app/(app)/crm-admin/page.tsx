@@ -5,6 +5,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
+import { leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 import { AgenturRueckweisungen } from "@/components/agentur-rueckweisungen";
 import {
   CallcenterAnalyse,
@@ -115,6 +116,10 @@ export default async function CrmAdminPage() {
       zugewiesenAt: l.zugewiesen_at ?? null,
       bestaetigtAt: l.pdl_bestaetigt_at ?? null,
       pdlErgebnis: l.pdl_ergebnis ?? null,
+      id: l.id,
+      name: l.lead_name,
+      telefon: l.telefon,
+      ort: ("adresse" in l ? (l as { adresse?: string | null }).adresse : null) ?? null,
     })),
     // Meta: nur Kunden-Leads (Recruiting läuft separat übers Recruiting-Postfach).
     ...(metaRes.data ?? [])
@@ -131,6 +136,10 @@ export default async function CrmAdminPage() {
         zugewiesenAt: l.zugewiesen_at ?? null,
         bestaetigtAt: l.pdl_bestaetigt_at ?? null,
         pdlErgebnis: l.pdl_ergebnis ?? null,
+        id: l.id,
+        name: leadFullName(l.field_data),
+        telefon: leadPhone(l.field_data),
+        ort: ("adresse" in l ? (l as { adresse?: string | null }).adresse : null) ?? null,
       })),
   ].filter((l) => l.created);
 

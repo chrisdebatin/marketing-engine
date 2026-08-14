@@ -43,6 +43,11 @@ export interface StatLead {
   zugewiesenAt: string | null;
   bestaetigtAt: string | null;
   pdlErgebnis: string | null;
+  /** Für die Detail-Ansicht je Funnel-Stufe. */
+  id?: string;
+  name?: string | null;
+  telefon?: string | null;
+  ort?: string | null;
 }
 
 /* Kanäle mit fester Farb-Zuordnung (validierte kategoriale Palette). */
@@ -93,6 +98,22 @@ function pct(part: number, whole: number): string {
   if (!whole) return "—";
   return `${Math.round((part / whole) * 100)} %`;
 }
+
+/** Klartext + Farbe je Lead-Status für die Funnel-Detailansicht. */
+const STATUS_LABEL: Record<string, string> = {
+  offen: "offen",
+  kontaktiert: "kontaktiert",
+  erstgespraech: "Erstgespräch",
+  aufgenommen: "aufgenommen",
+  verloren: "verloren",
+};
+const STATUS_TONE: Record<string, string> = {
+  offen: "bg-amber-100 text-amber-800",
+  kontaktiert: "bg-blue-100 text-blue-800",
+  erstgespraech: "bg-purple-100 text-purple-800",
+  aufgenommen: "bg-emerald-100 text-emerald-800",
+  verloren: "bg-red-100 text-red-800",
+};
 
 /** Wie weit ist ein Lead im Prozess gekommen? (kumulative Funnel-Stufe) */
 function funnelRank(l: StatLead): number {
@@ -196,7 +217,12 @@ export function CrmStatsDashboard({
       { label: "Erstgespräch", hint: "Beratung terminiert / geführt" },
       { label: "An PDL übergeben", hint: "Standort informiert" },
       { label: "Aufgenommen", hint: "in Versorgung bestätigt" },
-    ].map((s, i) => ({ ...s, count: inRange.filter((l) => funnelRank(l) >= i).length }));
+    ].map((s, i) => {
+      // Leads dieser Stufe mitgeben — die Detail-Ansicht zeigt Namen,
+      // Quelle und Bearbeiter beim Klick auf die Karte.
+      const leads = inRange.filter((l) => funnelRank(l) >= i);
+      return { ...s, count: leads.length, leads };
+    });
     const verloren = inRange.filter((l) => l.status === "verloren" && !l.bestaetigtAt).length;
 
     // ── Bearbeiter ──
@@ -826,11 +852,195 @@ const PIKTO_ANZAHL = 20;
  * Größenordnung. Zwischen den Karten steht die Conversion zum vorherigen
  * Schritt — dort sieht man sofort, wo Leads liegen bleiben.
  */
+/**
+ * Detail-Ansicht einer Funnel-Stufe: welche Leads stecken dahinter, woher
+ * kamen sie und wer hat sie bearbeitet. Öffnet sich per Klick auf die
+ * Schrittkarte — sonst bleiben die Zahlen unüberprüfbar.
+ */
+function FunnelDetail({
+  step,
+  gesamt,
+  onClose,
+}: {
+  step: { label: string; hint: string; count: number; leads: StatLead[] };
+  gesamt: number;
+  onClose: () => void;
+}) {
+  // Aufschlüsselung nach Kanal und Bearbeiter — beantwortet "woher kam das"
+  // und "wer hat es gemacht" ohne Scrollen durch die Liste.
+  const jeQuelle = [...new Map<string, number>(
+    step.leads.reduce<[string, number][]>((acc, l) => {
+      const key = channelOf(l);
+      const vorher = acc.find(([k]) => k === key)?.[1] ?? 0;
+      return [...acc.filter(([k]) => k !== key), [key, vorher + 1]];
+    }, []),
+  )].sort((a, b) => b[1] - a[1]);
+  const jeBearbeiter = [...new Map<string, number>(
+    step.leads.reduce<[string, number][]>((acc, l) => {
+      const key = l.bearbeiter ?? "—";
+      const vorher = acc.find(([k]) => k === key)?.[1] ?? 0;
+      return [...acc.filter(([k]) => k !== key), [key, vorher + 1]];
+    }, []),
+  )].sort((a, b) => b[1] - a[1]);
+
+  const kanalLabel = (key: string) =>
+    CHANNELS.find((c) => c.key === key)?.label ?? key;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-10"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-3xl flex-col gap-4 rounded-xl border bg-card p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold tracking-tight">
+              {step.label} — {step.count} Lead{step.count === 1 ? "" : "s"}
+            </h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {step.hint} · {pct(step.count, gesamt)} von allen Leads im
+              Zeitraum
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Kumulativ gezählt: enthält auch Leads, die inzwischen weiter sind
+              — die Spalte &bdquo;Steht jetzt bei&ldquo; zeigt den aktuellen
+              Stand.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Schließen"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <XCircle className="size-4" />
+          </button>
+        </div>
+
+        {step.leads.length === 0 ? (
+          <p className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+            Kein Lead hat diese Stufe im gewählten Zeitraum erreicht.
+          </p>
+        ) : (
+          <>
+            {/* Verdichtung: Kanäle und Bearbeiter */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-xs font-semibold">Woher kamen sie?</p>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {jeQuelle.map(([key, n]) => (
+                    <li
+                      key={key}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span>{kanalLabel(key)}</span>
+                      <span className="font-semibold tabular-nums">{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-lg border bg-muted/20 p-3">
+                <p className="text-xs font-semibold">Wer hat bearbeitet?</p>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {jeBearbeiter.map(([key, n]) => (
+                    <li
+                      key={key}
+                      className="flex items-center justify-between gap-2 text-sm"
+                    >
+                      <span>{key === "—" ? "noch niemand" : key}</span>
+                      <span className="font-semibold tabular-nums">{n}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Einzelne Leads */}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-2 font-medium">Name</th>
+                    <th className="px-2 py-1.5 font-medium">Quelle</th>
+                    <th className="px-2 py-1.5 font-medium">Bearbeiter</th>
+                    <th className="px-2 py-1.5 font-medium">Steht jetzt bei</th>
+                    <th className="px-2 py-1.5 font-medium">Standort</th>
+                    <th className="px-2 py-1.5 font-medium">Eingang</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...step.leads]
+                    .sort((a, b) => (b.created ?? "").localeCompare(a.created ?? ""))
+                    .slice(0, 200)
+                    .map((l, i) => (
+                      <tr key={l.id ?? i} className="border-b last:border-b-0">
+                        <td className="py-1.5 pr-2 font-medium">
+                          {l.name?.trim() || "(ohne Name)"}
+                          {l.ort ? (
+                            <span className="block text-xs font-normal text-muted-foreground">
+                              {l.ort}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {kanalLabel(channelOf(l))}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {l.bearbeiter ?? (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-xs font-medium",
+                              STATUS_TONE[l.status] ??
+                                "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {STATUS_LABEL[l.status] ?? l.status}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          {l.hub ?? (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs tabular-nums text-muted-foreground">
+                          {l.created
+                            ? new Date(l.created).toLocaleDateString("de-DE", {
+                                day: "2-digit",
+                                month: "2-digit",
+                              })
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {step.leads.length > 200 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Zeigt die 200 neuesten von {step.leads.length} — Zeitraum
+                  enger wählen.
+                </p>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FunnelChart({
   steps,
 }: {
-  steps: { label: string; hint: string; count: number }[];
+  steps: { label: string; hint: string; count: number; leads: StatLead[] }[];
 }) {
+  const [detail, setDetail] = useState<number | null>(null);
   const first = steps[0]?.count ?? 0;
   if (!first) {
     return (
@@ -842,6 +1052,13 @@ function FunnelChart({
 
   return (
     <div className="mt-4 flex flex-col gap-4">
+      {detail !== null && steps[detail] && (
+        <FunnelDetail
+          step={steps[detail]}
+          gesamt={first}
+          onClose={() => setDetail(null)}
+        />
+      )}
       {/* Schrittkarten mit Conversion-Pfeilen dazwischen */}
       <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
         {steps.map((s, i) => {
@@ -868,13 +1085,15 @@ function FunnelChart({
                   </span>
                 </div>
               )}
-              <div
+              <button
+                type="button"
+                onClick={() => setDetail(i)}
                 className={cn(
-                  "flex w-[9.5rem] shrink-0 flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center shadow-sm sm:w-44",
+                  "flex w-[9.5rem] shrink-0 cursor-pointer flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center shadow-sm transition-shadow hover:shadow-md sm:w-44",
                   // Erste Stufe hervorheben: das ist die Grundgesamtheit
                   i === 0 && "border-primary/40 ring-1 ring-primary/20",
                 )}
-                title={`${s.label}: ${s.count} Leads (${pct(s.count, first)} von allen) — ${s.hint}`}
+                title={`${s.label}: ${s.count} Leads (${pct(s.count, first)} von allen) — ${s.hint}. Klicken für die Namen.`}
               >
                 <span
                   className={cn(
@@ -924,7 +1143,10 @@ function FunnelChart({
                     />
                   ))}
                 </span>
-              </div>
+                <span className="text-[0.7rem] font-medium text-primary">
+                  Details ansehen
+                </span>
+              </button>
             </div>
           );
         })}
