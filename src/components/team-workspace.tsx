@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   Check,
+  ChevronDown,
   FileText,
   Hand,
   Headset,
@@ -3586,6 +3587,70 @@ function OutboundKpis({
 }
 
 /**
+ * Verbindlicher Gesprächsleitfaden für Outbound-Anrufe (Kliniken, Praxen,
+ * Apotheken). Wortlaut in `saetze` ist zum Ablesen gedacht, `hinweis`
+ * erklärt das Vorgehen. Platzhalter in eckigen Klammern selbst füllen.
+ */
+const GESPRAECHSLEITFADEN: {
+  titel: string;
+  saetze: string[];
+  hinweis?: string;
+}[] = [
+  {
+    titel: "Begrüßung & richtige Stelle",
+    saetze: [
+      "Guten Tag, mein Name ist [Name] von der Pflegeunion, einem ambulanten Pflegedienst in [Region]. Spreche ich mit dem Entlassmanagement / Sozialdienst?",
+      "Könnten Sie mich bitte mit dem Case Management verbinden?",
+    ],
+    hinweis:
+      "Zweiter Satz nur, falls nein. Namen der Person notieren — gehört ins Anruf-Formular unter „Ansprechpartner“.",
+  },
+  {
+    titel: "Kennen Sie uns schon?",
+    saetze: [
+      "Darf ich kurz fragen – ist Ihnen die Pflegeunion bereits ein Begriff?",
+    ],
+    hinweis:
+      "Wenn ja: kurz halten, direkt zum Grund. Wenn nein: in einem Satz einordnen.",
+  },
+  {
+    titel: "Grund des Anrufs",
+    saetze: [
+      "Ich rufe aus zwei Gründen an: Zum einen möchte ich Ihnen unsere aktuell freien Kapazitäten melden, zum anderen eine Erweiterung unseres Leistungsangebots.",
+    ],
+  },
+  {
+    titel: "Was uns auszeichnet",
+    saetze: [
+      "Die Pflegeunion hat ein sehr breites Leistungsspektrum – von Alltagshilfe über Grund- und Behandlungspflege bis hin zur Intensivpflege, dazu Physiotherapie, Ergotherapie und Logopädie sowie Pflegehilfsmittel. Wir begleiten unsere Patientinnen und Patienten ganzheitlich aus einer Hand.",
+    ],
+    hinweis:
+      "Kurz ergänzen: kurzfristige Aufnahmen möglich, verlässliche Rückmeldung, Gebiet [PLZ/Region].",
+  },
+  {
+    titel: "Ziel: nächster Schritt",
+    saetze: [
+      "Damit Sie uns im passenden Fall parat haben – was wäre Ihnen am liebsten: ich schicke Ihnen kurz eine E-Mail mit unserem Leistungsprofil, unsere Pflegedienstleitung kommt persönlich vorbei und stellt sich Ihnen vor, oder wir bringen Ihnen Infomaterial/Flyer vorbei?",
+    ],
+    hinweis:
+      "Abschluss sichern: E-Mail-Adresse notieren, Termin festhalten oder richtigen Ansprechpartner + Durchwahl erfragen. Ergebnis unten ins Anruf-Formular eintragen.",
+  },
+  {
+    titel: "Neutralität anerkennen",
+    saetze: [
+      "Die Wahl bleibt selbstverständlich bei der Patientin – wir möchten nur als verfügbare Option auf Ihrem Radar sein.",
+    ],
+    hinweis: "Wichtig bei Kliniken.",
+  },
+  {
+    titel: "Abschluss",
+    saetze: [
+      "Vielen Dank für Ihre Zeit! Ich fasse zusammen: [nächster Schritt]. Das schicke ich Ihnen noch heute. Einen schönen Tag!",
+    ],
+  },
+];
+
+/**
  * Rechte Spalte der Outbound-Ansicht: Gesprächsleitfaden, persönliche
  * Schnell-Notiz (bleibt im Browser), Tipp des Tages und Wochen-Performance.
  */
@@ -3605,28 +3670,46 @@ function OutboundSidebar({ anrufe, today }: { anrufe: AnrufLog[]; today: string 
 
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-4">
-      {/* Gesprächsleitfaden */}
+      {/* Gesprächsleitfaden — Wortlaut aufklappbar, damit man ihn beim
+          Telefonieren ablesen kann. Schritt 1 ist standardmäßig offen. */}
       <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
           <Headset className="size-4 text-primary" />
           Gesprächsleitfaden
         </p>
-        <ol className="flex flex-col gap-2 text-xs text-muted-foreground">
-          {(
-            [
-              ["Begrüßung", "Freundlich vorstellen und Grund des Anrufs nennen."],
-              ["Bedarf erfragen", "Nach aktuellem Bedarf und Versorgungssituation fragen."],
-              ["Pflegeunion vorstellen", "Kurz erklären, wie wir unterstützen können."],
-              ["Nächster Schritt", "Erstgespräch vereinbaren oder Rückruf einplanen."],
-            ] as const
-          ).map(([titel, text], i) => (
-            <li key={titel} className="flex items-start gap-2">
-              <span className="mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                {i + 1}
-              </span>
-              <span>
-                <span className="font-medium text-foreground">{titel}:</span> {text}
-              </span>
+        <p className="-mt-1 text-[11px] text-muted-foreground">
+          Schritt antippen zum Aufklappen — Wortlaut zum Ablesen.
+        </p>
+        <ol className="flex flex-col gap-1.5">
+          {GESPRAECHSLEITFADEN.map((s, i) => (
+            <li key={s.titel}>
+              <details
+                open={i === 0}
+                className="group rounded-lg border bg-background/60"
+              >
+                <summary className="flex cursor-pointer list-none items-start gap-2 p-2 select-none">
+                  <span className="mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 text-xs font-medium">
+                    {s.titel}
+                  </span>
+                  <ChevronDown className="mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="flex flex-col gap-1.5 border-t px-2 py-2 text-[11px] leading-relaxed">
+                  {s.saetze.map((satz, n) => (
+                    <p
+                      key={n}
+                      className="rounded border-l-2 border-primary/30 bg-primary/[0.04] py-1 pl-2 text-foreground italic"
+                    >
+                      „{satz}&ldquo;
+                    </p>
+                  ))}
+                  {s.hinweis && (
+                    <p className="text-muted-foreground">{s.hinweis}</p>
+                  )}
+                </div>
+              </details>
             </li>
           ))}
         </ol>
