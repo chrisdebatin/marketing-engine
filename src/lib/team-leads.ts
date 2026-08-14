@@ -219,6 +219,41 @@ export async function buildTeamInbound(
   return inbound;
 }
 
+export interface TeamAnruf {
+  datum: string; // JJJJ-MM-TT
+  erreicht: boolean;
+  bearbeiter: string | null;
+}
+
+/**
+ * Outbound-Anruf-Log eines Teams (letzte 7 Tage, SERVER ONLY) — für die
+ * KPI-Zeile der Outbound-Ansicht (Tagesziel, Gesprächsquote, Wochen-Performance).
+ * Team-Split über die Ziel-Kategorie wie bei der Anrufliste.
+ */
+export async function buildTeamAnrufe(
+  team: "kundenservice" | "callcenter",
+): Promise<TeamAnruf[]> {
+  const admin = createAdminClient();
+  const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const [{ data: contacts }, { data: targets }] = await Promise.all([
+    admin
+      .from("crm_contacts")
+      .select("target_id, contact_date, note, bearbeiter")
+      .eq("kontakt_art", "anruf")
+      .gte("contact_date", cutoff),
+    admin.from("crm_targets").select("id, kategorie"),
+  ]);
+  const excluded = team === "callcenter" ? "praxis" : "krankenhaus";
+  const kat = new Map((targets ?? []).map((t) => [t.id, t.kategorie ?? "sonstiges"]));
+  return (contacts ?? [])
+    .filter((c) => kat.get(c.target_id ?? "") !== excluded)
+    .map((c) => ({
+      datum: c.contact_date,
+      erreicht: !/^nicht erreicht/i.test(c.note ?? ""),
+      bearbeiter: c.bearbeiter ?? null,
+    }));
+}
+
 /**
  * Outbound-Anrufliste eines Teams (SERVER ONLY) — Kategorie-Split wie auf
  * den persönlichen Seiten: praxis exklusiv Kundenservice, krankenhaus

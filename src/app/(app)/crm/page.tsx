@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth";
-import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
+import { buildTeamAnrufe, buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { CrmBoard } from "@/components/crm-board";
 import { CrmIntro } from "@/components/crm-intro";
 import { PageHeader } from "@/components/page-header";
@@ -23,12 +23,15 @@ export default async function CrmPage() {
   // Gedrosselt (1×/Minute) und fehler-tolerant.
   const { syncRecareMails } = await import("@/lib/recare-import");
   await syncRecareMails().catch(() => null);
-  const [ksInbound, ccInbound, ksOutbound, ccOutbound] = await Promise.all([
-    buildTeamInbound("kundenservice"),
-    buildTeamInbound("callcenter"),
-    buildTeamOutbound("kundenservice"),
-    buildTeamOutbound("callcenter"),
-  ]);
+  const [ksInbound, ccInbound, ksOutbound, ccOutbound, ksAnrufe, ccAnrufe] =
+    await Promise.all([
+      buildTeamInbound("kundenservice"),
+      buildTeamInbound("callcenter"),
+      buildTeamOutbound("kundenservice"),
+      buildTeamOutbound("callcenter"),
+      buildTeamAnrufe("kundenservice"),
+      buildTeamAnrufe("callcenter"),
+    ]);
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { data: hubRows } = await createAdminClient().from("hubs").select("id, name");
   const hubs = (hubRows ?? []).map((h) => ({ id: h.id, name: h.name }));
@@ -64,6 +67,7 @@ export default async function CrmPage() {
       memberName={editorName}
       inbound={team === "kundenservice" ? ksInbound : ccInbound}
       outbound={team === "kundenservice" ? ksOutbound : ccOutbound}
+      anrufe={team === "kundenservice" ? ksAnrufe : ccAnrufe}
       kontakteInbound={kontakteInbound}
       kontakteOutbound={kontakteOutbound}
       hubs={hubs}

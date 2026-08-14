@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatTile } from "@/components/ui/stat-tile";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { leadStatusChip } from "@/components/ui/chip";
@@ -436,6 +437,7 @@ export function TeamWorkspace({
   inboundLog = true,
   kontakteInbound,
   kontakteOutbound,
+  anrufe = [],
 }: {
   token: string;
   memberName: string;
@@ -445,6 +447,8 @@ export function TeamWorkspace({
   /** Gemeinsames Kontakte-Verzeichnis (beide Teams) — Fallback: eigene Daten. */
   kontakteInbound?: InboundLead[];
   kontakteOutbound?: OutboundTarget[];
+  /** Outbound-Anruf-Log der letzten 7 Tage (KPI-Zeile der Anruf-Ansicht). */
+  anrufe?: { datum: string; erreicht: boolean; bearbeiter: string | null }[];
   /** true = Gesamtsicht (z. B. /crm): kein Auto-Reload, keine Anrufliste. Mit
    * editable=true bleiben die Lead-Aktionen trotzdem nutzbar (Admin-Session). */
   monitor?: boolean;
@@ -459,6 +463,7 @@ export function TeamWorkspace({
   const [inbound, setInbound] = useState(initialInbound);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
+  const [outTab, setOutTab] = useState<"liste" | "wieder" | "erledigt">("liste");
   const canAct = !monitor || editable;
 
   const router = useRouter();
@@ -566,6 +571,15 @@ export function TeamWorkspace({
   const outboundLater = sortTargets(outboundDayMap.get("__spaeter__") ?? []).sort(
     (a, b) => (a.naechster_besuch ?? "9999").localeCompare(b.naechster_besuch ?? "9999"),
   );
+  // Drei Outbound-Reiter: Anrufliste (heute), Wiedervorlagen (kommende Tage
+  // + Später), Erledigt (heute bereits telefoniert/besucht).
+  const heuteGruppe = outboundDays.find((g) => g.key === today)?.targets ?? [];
+  const futureDays = outboundDays.filter((g) => g.key !== today);
+  const erledigtHeute = [...outbound]
+    .filter((t) => t.letzter_besuch === today)
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  const wiederAnzahl =
+    futureDays.reduce((s, g) => s + g.targets.length, 0) + outboundLater.length;
 
   async function claim(l: InboundLead) {
     setError(null);
@@ -1135,86 +1149,226 @@ export function TeamWorkspace({
       )}
 
       {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">
-            Deine Anrufliste als Tagesplan: heute einfach von oben nach unten
-            abtelefonieren. Nicht erreicht? Der Kontakt rutscht automatisch auf
-            morgen — erreichte bekommen ihre Wiedervorlage aus der Notiz.
-          </p>
-          <OutboundMap
-            targets={sortedOutbound.map((t) => ({
-              id: t.id,
-              name: t.name,
-              ort: t.ort,
-              hub: t.hub,
-              hub_pdl: t.hub_pdl,
-              faellig: due(t),
-              letzter_besuch: t.letzter_besuch,
-            }))}
-          />
-          {outboundDays.map((g) => (
-            <div key={g.key} className="flex flex-col gap-2">
-              <p
-                className={cn(
-                  "mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide uppercase first:mt-0",
-                  g.key === today ? "text-amber-700" : "text-muted-foreground",
-                )}
-              >
-                <CalendarClock className="size-3.5" />
-                {outboundDayLabel(g.key, today)}
-                <span className="h-px flex-1 bg-border" />
-                <span className="font-normal normal-case">
-                  {g.targets.length} Anruf{g.targets.length === 1 ? "" : "e"}
-                </span>
-              </p>
-              <ol className="flex flex-col gap-2">
-                {g.targets.map((t, i) => (
-                  <OutboundRow
-                    key={t.id}
-                    target={t}
-                    index={i + 1}
-                    today={today}
-                    token={token}
-                    memberName={memberName}
-                    isDue={due(t)}
-                    onLogged={(patch) =>
-                      setOutbound((cur) =>
-                        cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
-                      )
-                    }
-                  />
+        <div className="flex flex-col gap-4">
+          {/* KPI-Zeile: Tagesziel-Donut + Quoten aus dem Anruf-Log */}
+          <OutboundKpis anrufe={anrufe} faellig={dueCount} today={today} />
+
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_290px] lg:items-start">
+            <div className="flex min-w-0 flex-col gap-3">
+              {/* Reiter: Anrufliste / Wiedervorlagen / Erledigt */}
+              <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
+                {(
+                  [
+                    { key: "liste", label: "Anrufliste", n: heuteGruppe.length },
+                    { key: "wieder", label: "Wiedervorlagen", n: wiederAnzahl },
+                    { key: "erledigt", label: "Erledigt", n: erledigtHeute.length },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setOutTab(t.key)}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium",
+                      outTab === t.key
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {t.label}
+                    {t.n > 0 && (
+                      <span
+                        className={cn(
+                          "rounded-full px-1.5 text-xs font-semibold tabular-nums",
+                          outTab === t.key
+                            ? "bg-white/20"
+                            : "bg-primary/10 text-primary",
+                        )}
+                      >
+                        {t.n}
+                      </span>
+                    )}
+                  </button>
                 ))}
-              </ol>
+              </div>
+
+              {outTab === "liste" && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Heute dran — von oben nach unten abtelefonieren (überfällig
+                    zuerst). Nicht erreicht? Steht morgen automatisch wieder
+                    hier.
+                  </p>
+                  {heuteGruppe.length === 0 ? (
+                    <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                      Alles abtelefoniert. 🎉 Die nächsten Kontakte stehen unter
+                      „Wiedervorlagen&ldquo;.
+                    </p>
+                  ) : (
+                    <ol id="naechster-anruf" className="flex scroll-mt-4 flex-col gap-2">
+                      {heuteGruppe.map((t, i) => (
+                        <OutboundRow
+                          key={t.id}
+                          target={t}
+                          index={i + 1}
+                          today={today}
+                          token={token}
+                          memberName={memberName}
+                          isDue
+                          onLogged={(patch) =>
+                            setOutbound((cur) =>
+                              cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                            )
+                          }
+                        />
+                      ))}
+                    </ol>
+                  )}
+                </>
+              )}
+
+              {outTab === "wieder" && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Geplante Anrufe der nächsten Tage — aus Wiedervorlage-Daten,
+                    KI-gelesenen Notizen und dem Standard-Rhythmus.
+                  </p>
+                  {futureDays.length === 0 && outboundLater.length === 0 && (
+                    <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                      Keine Wiedervorlagen geplant.
+                    </p>
+                  )}
+                  {futureDays.map((g) => (
+                    <div key={g.key} className="flex flex-col gap-2">
+                      <p className="mt-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase first:mt-0">
+                        <CalendarClock className="size-3.5" />
+                        {outboundDayLabel(g.key, today)}
+                        <span className="h-px flex-1 bg-border" />
+                        <span className="font-normal normal-case">
+                          {g.targets.length} Anruf{g.targets.length === 1 ? "" : "e"}
+                        </span>
+                      </p>
+                      <ol className="flex flex-col gap-2">
+                        {g.targets.map((t, i) => (
+                          <OutboundRow
+                            key={t.id}
+                            target={t}
+                            index={i + 1}
+                            today={today}
+                            token={token}
+                            memberName={memberName}
+                            isDue={false}
+                            onLogged={(patch) =>
+                              setOutbound((cur) =>
+                                cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                              )
+                            }
+                          />
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                  {outboundLater.length > 0 && (
+                    <details className="group mt-2 rounded-xl border bg-card shadow-sm">
+                      <summary className="cursor-pointer list-none p-3.5 text-sm font-semibold select-none">
+                        Später ({outboundLater.length} Kontakte ab {formatIsoDate(outboundLater[0]?.naechster_besuch)})
+                        <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
+                          aufklappen
+                        </span>
+                      </summary>
+                      <ol className="flex flex-col gap-2 border-t p-3.5">
+                        {outboundLater.map((t, i) => (
+                          <OutboundRow
+                            key={t.id}
+                            target={t}
+                            index={i + 1}
+                            today={today}
+                            token={token}
+                            memberName={memberName}
+                            isDue={false}
+                            onLogged={(patch) =>
+                              setOutbound((cur) =>
+                                cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
+                              )
+                            }
+                          />
+                        ))}
+                      </ol>
+                    </details>
+                  )}
+                </>
+              )}
+
+              {outTab === "erledigt" && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    Heute bereits kontaktiert — der nächste Termin ist automatisch
+                    gesetzt.
+                  </p>
+                  {erledigtHeute.length === 0 ? (
+                    <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                      Heute noch nichts geloggt.
+                    </p>
+                  ) : (
+                    <ul className="divide-y rounded-xl border bg-card shadow-sm">
+                      {erledigtHeute.map((t) => (
+                        <li
+                          key={t.id}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm"
+                        >
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                            <Check className="size-3.5" />
+                          </span>
+                          <span className="font-medium">{t.name}</span>
+                          <LeadIdChip id={t.id} />
+                          {t.besuchs_notiz && (
+                            <span className="max-w-72 truncate text-xs text-muted-foreground" title={t.besuchs_notiz}>
+                              „{t.besuchs_notiz}“
+                            </span>
+                          )}
+                          <span className="ml-auto text-xs text-muted-foreground">
+                            wieder dran ab {formatIsoDate(t.naechster_besuch)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+
+              <OutboundMap
+                targets={sortedOutbound.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  ort: t.ort,
+                  hub: t.hub,
+                  hub_pdl: t.hub_pdl,
+                  faellig: due(t),
+                  letzter_besuch: t.letzter_besuch,
+                }))}
+              />
             </div>
-          ))}
-          {outboundLater.length > 0 && (
-            <details className="group mt-2 rounded-xl border bg-card shadow-sm">
-              <summary className="cursor-pointer list-none p-3.5 text-sm font-semibold select-none">
-                Später ({outboundLater.length} Kontakte ab {formatIsoDate(outboundLater[0]?.naechster_besuch)})
-                <span className="ml-2 text-xs font-normal text-muted-foreground group-open:hidden">
-                  aufklappen
-                </span>
-              </summary>
-              <ol className="flex flex-col gap-2 border-t p-3.5">
-                {outboundLater.map((t, i) => (
-                  <OutboundRow
-                    key={t.id}
-                    target={t}
-                    index={i + 1}
-                    today={today}
-                    token={token}
-                    memberName={memberName}
-                    isDue={false}
-                    onLogged={(patch) =>
-                      setOutbound((cur) =>
-                        cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
-                      )
-                    }
-                  />
-                ))}
-              </ol>
-            </details>
-          )}
+
+            <OutboundSidebar anrufe={anrufe} today={today} />
+          </div>
+
+          {/* Abschluss-Banner: direkt zum wichtigsten Anruf springen */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Bereit für den nächsten Anruf?</p>
+              <p className="text-xs text-muted-foreground">
+                Oben in der Anrufliste steht der wichtigste Kontakt zuerst —
+                Formular öffnen, telefonieren, Ergebnis loggen.
+              </p>
+            </div>
+            <a
+              href="#naechster-anruf"
+              onClick={() => setOutTab("liste")}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              <PhoneCall className="size-4" /> Nächsten Anruf starten
+            </a>
+          </div>
         </div>
       )}
     </div>
@@ -3005,5 +3159,219 @@ function OutboundRow({
         </div>
       )}
     </li>
+  );
+}
+
+
+
+/** Anruf-Log-Zeile fürs Outbound-Cockpit (aus buildTeamAnrufe). */
+interface AnrufLog {
+  datum: string;
+  erreicht: boolean;
+  bearbeiter: string | null;
+}
+
+/**
+ * KPI-Zeile der Outbound-Ansicht: Tagesziel als Donut (geloggte Anrufe vs.
+ * noch fällige), Gesprächsquote und Zähler — alles aus dem echten Anruf-Log.
+ */
+function OutboundKpis({
+  anrufe,
+  faellig,
+  today,
+}: {
+  anrufe: AnrufLog[];
+  faellig: number;
+  today: string;
+}) {
+  const heute = anrufe.filter((a) => a.datum === today);
+  const erreicht = heute.filter((a) => a.erreicht).length;
+  const nicht = heute.length - erreicht;
+  const ziel = heute.length + faellig;
+  const anteil = ziel > 0 ? heute.length / ziel : 0;
+  const R = 30;
+  const C = 2 * Math.PI * R;
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      {/* Tagesziel-Donut */}
+      <div className="col-span-2 flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm sm:col-span-1">
+        <svg viewBox="0 0 80 80" className="size-16 shrink-0 -rotate-90">
+          <circle cx={40} cy={40} r={R} fill="none" strokeWidth={10} className="stroke-muted" />
+          <circle
+            cx={40}
+            cy={40}
+            r={R}
+            fill="none"
+            strokeWidth={10}
+            strokeLinecap="round"
+            strokeDasharray={`${C * anteil} ${C}`}
+            className="stroke-primary"
+          />
+        </svg>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">Heutiges Ziel</p>
+          <p className="text-xl leading-tight font-bold tabular-nums">
+            {heute.length} / {ziel}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {Math.round(anteil * 100)} % Tagesziel erreicht
+          </p>
+        </div>
+      </div>
+      <StatTile
+        icon={Check}
+        tone="green"
+        coloredValue
+        label="Gesprächsquote"
+        value={heute.length > 0 ? `${Math.round((erreicht / heute.length) * 100)} %` : "—"}
+        sub={`${erreicht} Gespräch${erreicht === 1 ? "" : "e"} heute`}
+      />
+      <StatTile
+        icon={PhoneCall}
+        tone="purple"
+        label="Anrufe heute"
+        value={String(heute.length)}
+        sub="geloggt (beide Ausgänge)"
+      />
+      <StatTile
+        icon={X}
+        tone="red"
+        label="Nicht erreicht"
+        value={String(nicht)}
+        sub="morgen automatisch wieder fällig"
+      />
+      <StatTile
+        icon={Inbox}
+        tone="blue"
+        label="Offen in der Liste"
+        value={String(faellig)}
+        sub="heute fällig (inkl. überfällig)"
+      />
+    </div>
+  );
+}
+
+/**
+ * Rechte Spalte der Outbound-Ansicht: Gesprächsleitfaden, persönliche
+ * Schnell-Notiz (bleibt im Browser), Tipp des Tages und Wochen-Performance.
+ */
+function OutboundSidebar({ anrufe, today }: { anrufe: AnrufLog[]; today: string }) {
+  const [notiz, setNotiz] = useState("");
+  const [gespeichert, setGespeichert] = useState(false);
+  useEffect(() => {
+    const saved = window.localStorage?.getItem("outbound-schnellnotiz");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- einmalige Hydration aus localStorage
+    if (saved) setNotiz(saved);
+  }, []);
+
+  const woche = anrufe.length;
+  const erreichtWoche = anrufe.filter((a) => a.erreicht).length;
+  const quote = woche > 0 ? Math.round((erreichtWoche / woche) * 100) : 0;
+  const heuteN = anrufe.filter((a) => a.datum === today).length;
+
+  return (
+    <aside className="flex flex-col gap-3 lg:sticky lg:top-4">
+      {/* Gesprächsleitfaden */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Headset className="size-4 text-primary" />
+          Gesprächsleitfaden
+        </p>
+        <ol className="flex flex-col gap-2 text-xs text-muted-foreground">
+          {(
+            [
+              ["Begrüßung", "Freundlich vorstellen und Grund des Anrufs nennen."],
+              ["Bedarf erfragen", "Nach aktuellem Bedarf und Versorgungssituation fragen."],
+              ["Pflegeunion vorstellen", "Kurz erklären, wie wir unterstützen können."],
+              ["Nächster Schritt", "Erstgespräch vereinbaren oder Rückruf einplanen."],
+            ] as const
+          ).map(([titel, text], i) => (
+            <li key={titel} className="flex items-start gap-2">
+              <span className="mt-0.5 flex size-4.5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                {i + 1}
+              </span>
+              <span>
+                <span className="font-medium text-foreground">{titel}:</span> {text}
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {/* Schnell-Notiz (persönlich, bleibt im Browser) */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Pencil className="size-4 text-primary" />
+          Schnell-Notiz
+        </p>
+        <Textarea
+          value={notiz}
+          onChange={(e) => {
+            setNotiz(e.target.value);
+            setGespeichert(false);
+          }}
+          rows={3}
+          placeholder="Notiz nach dem Anruf schnell erfassen…"
+        />
+        <Button
+          type="button"
+          size="sm"
+          className="w-full"
+          onClick={() => {
+            window.localStorage?.setItem("outbound-schnellnotiz", notiz);
+            setGespeichert(true);
+            setTimeout(() => setGespeichert(false), 2000);
+          }}
+        >
+          {gespeichert ? "Gespeichert ✓" : "Speichern"}
+        </Button>
+        <p className="text-[10px] text-muted-foreground">
+          Nur für dich — bleibt in diesem Browser. Ergebnisse zum Kontakt
+          bitte übers Anruf-Formular loggen.
+        </p>
+      </div>
+
+      {/* Tipp des Tages */}
+      <div className="rounded-xl border border-primary/20 bg-primary/[0.05] p-4 text-xs">
+        <p className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
+          💡 Tipp des Tages
+        </p>
+        <p className="text-muted-foreground">
+          Die besten Zeiten für Anrufe sind zwischen{" "}
+          <span className="font-semibold text-foreground">09:00–11:30 Uhr</span>{" "}
+          und <span className="font-semibold text-foreground">14:00–16:00 Uhr</span>.
+        </p>
+      </div>
+
+      {/* Team-Performance der letzten 7 Tage */}
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+        <p className="text-sm font-semibold">Team-Performance</p>
+        <p className="-mt-1 text-[10px] text-muted-foreground">letzte 7 Tage</p>
+        <div className="flex flex-col gap-2 text-xs">
+          <div>
+            <div className="flex justify-between">
+              <span>Anrufe</span>
+              <span className="font-semibold tabular-nums">
+                {woche} <span className="font-normal text-muted-foreground">({heuteN} heute)</span>
+              </span>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between">
+              <span>Gespräche (erreicht)</span>
+              <span className="font-semibold tabular-nums">
+                {erreichtWoche} · {quote} %
+              </span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${quote}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
   );
 }

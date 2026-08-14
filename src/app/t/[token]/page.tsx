@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Headset, PhoneCall } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
+import { buildTeamAnrufe, buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { syncRecareMails } from "@/lib/recare-import";
 import { PageHeader } from "@/components/page-header";
 import { TeamWorkspace } from "@/components/team-workspace";
@@ -45,12 +45,13 @@ export default async function TeamMemberPage({
 
   const team = isCallcenter ? ("callcenter" as const) : ("kundenservice" as const);
   const otherTeam = isCallcenter ? ("kundenservice" as const) : ("callcenter" as const);
-  const [inbound, outbound, otherInbound, otherOutbound, { data: hubRows }] =
+  const [inbound, outbound, otherInbound, otherOutbound, anrufe, { data: hubRows }] =
     await Promise.all([
       buildTeamInbound(team),
       buildTeamOutbound(team),
       buildTeamInbound(otherTeam),
       buildTeamOutbound(otherTeam),
+      buildTeamAnrufe(team),
       admin.from("hubs").select("id, name"),
     ]);
   // Kontakte-Verzeichnis: bei allen gleich — Leads + Institutionen beider
@@ -86,6 +87,7 @@ export default async function TeamMemberPage({
         inboundLog={!isCallcenter}
         inbound={inbound}
         outbound={outbound}
+        anrufe={anrufe}
         kontakteInbound={kontakteInbound}
         kontakteOutbound={kontakteOutbound}
         hubs={(hubRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
