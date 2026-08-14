@@ -19,6 +19,7 @@ import {
   Send,
   Phone,
   PhoneCall,
+  PhoneOff,
   Search,
   Undo2,
   User,
@@ -3352,6 +3353,15 @@ function LostReason({ onSave }: { onSave: (grund: string) => void }) {
           onClick={() => onSave("Doch kein Interesse")}
         >
           <X className="size-3.5" /> Doch kein Interesse
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          title="Keine oder falsche Telefonnummer/Adresse — der Lead ist nicht erreichbar. Bei Agentur-Leads Grundlage der Reklamation."
+          onClick={() => onSave("Kontaktdaten fehlen / falsch")}
+        >
+          <PhoneOff className="size-3.5" /> Kontaktdaten fehlen / falsch
         </Button>
         <Button
           type="button"
