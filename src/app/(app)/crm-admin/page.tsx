@@ -119,8 +119,17 @@ export default async function CrmAdminPage() {
     if (h.pdl_name) hubPdl[h.name] = h.pdl_name;
   }
 
+  // Von der KI vorsortierte Nicht-Leads (Bestandskunden, interne Anrufe,
+  // anonyme Anrufe ohne Anliegen) gehören nicht in die Lead-Auswertung —
+  // sie waren nie Interessenten und würden Funnel und Conversion verzerren.
+  // Sie stehen weiterhin in der Callcenter-Analyse, wo sie hingehören.
+  const echteLeads = (callsRes.data ?? []).filter(
+    (l) => !/kein\s+neuinteressent/i.test(l.ergebnis ?? ""),
+  );
+  const vorsortiertRaus = (callsRes.data ?? []).length - echteLeads.length;
+
   const leads: StatLead[] = [
-    ...(callsRes.data ?? []).map((l) => ({
+    ...echteLeads.map((l) => ({
       kind: "call" as const,
       quelle: l.quelle,
       bereich: l.bereich,
@@ -241,7 +250,13 @@ export default async function CrmAdminPage() {
         description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Callcenter, Kontakte des Tages, Bewerbungen, PDL-Ranking.`}
       />
 
-      {sektion("1", "Leads", "Eingänge, Kanäle, Funnel und Bearbeitung — Zeitraum oben rechts wählbar")}
+      {sektion(
+        "1",
+        "Leads",
+        vorsortiertRaus > 0
+          ? `Eingänge, Kanäle, Funnel und Bearbeitung — ohne ${vorsortiertRaus} von der KI vorsortierte Nicht-Interessenten (siehe Callcenter)`
+          : "Eingänge, Kanäle, Funnel und Bearbeitung — Zeitraum oben rechts wählbar",
+      )}
       <CrmStatsDashboard
         leads={leads}
         hubPdl={hubPdl}
