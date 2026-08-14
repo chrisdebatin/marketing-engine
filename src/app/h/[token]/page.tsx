@@ -18,6 +18,7 @@ import {
 import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 import {
   OrderShop,
+  StepsArt,
   type OrderWithItems,
   type ShopOrderItemLine,
 } from "@/components/order-shop";
@@ -534,9 +535,13 @@ export default async function HubShareLinkPage({
             id: "material",
             label: "Material",
             content: (
-              <section className="flex flex-col gap-3">
+              <section className="flex flex-col gap-4">
         <div>
-          <h2 className="text-xl font-semibold">Material bestellen</h2>
+          <h2 className="text-2xl font-bold tracking-tight">
+            Material bestellen
+          </h2>
+          {/* Farbverlauf-Unterstrich als Seiten-Akzent (Referenz-Look) */}
+          <span className="mt-1.5 block h-1 w-20 rounded-full bg-gradient-to-r from-primary to-orange-400" />
         </div>
         <StepBox
           title="So geht's:"
@@ -561,8 +566,7 @@ export default async function HubShareLinkPage({
               <strong className="text-foreground">
                 „Etwas anderes benötigt?&rdquo;
               </strong>{" "}
-              frei beschreiben und direkt bestellen. Den Status sehen Sie unter
-              „Deine Bestellungen&rdquo;.
+              frei beschreiben und direkt bestellen.
             </>,
           ]}
           footer={
@@ -613,17 +617,26 @@ function StepBox({
   footer?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm">
-      <p className="flex items-center gap-2 font-semibold">
-        <ListChecks className="size-4 text-primary" />
-        {title}
-      </p>
-      <ol className="ml-5 flex list-decimal flex-col gap-1 text-muted-foreground">
-        {steps.map((s, i) => (
-          <li key={i}>{s}</li>
-        ))}
-      </ol>
-      {footer && <p className="text-xs text-muted-foreground">{footer}</p>}
+    <div className="flex items-start gap-4 rounded-xl border border-primary/20 bg-primary/[0.04] p-5 text-sm">
+      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <ListChecks className="size-5" />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <p className="text-base font-semibold">{title}</p>
+        {/* Nummerierte Kreise statt list-decimal: klare Schrittfolge */}
+        <ol className="flex flex-col gap-2.5">
+          {steps.map((s, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[0.7rem] font-bold text-primary-foreground">
+                {i + 1}
+              </span>
+              <span className="text-muted-foreground">{s}</span>
+            </li>
+          ))}
+        </ol>
+        {footer && <p className="text-xs text-muted-foreground">{footer}</p>}
+      </div>
+      <StepsArt />
     </div>
   );
 }
