@@ -7,6 +7,7 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
+  ClipboardList,
   FileText,
   Hand,
   Headset,
@@ -140,14 +141,34 @@ const QUELLE_TONE: Record<string, string> = {
 };
 
 /**
+ * Sind die Stammdaten vollständig genug, um den Lead zu übergeben?
+ * Name und Adresse/Ort muss die MA im Erstkontakt aufnehmen — fehlt eins
+ * davon, erscheint ein To-do an der Karte und der Schritt bleibt offen.
+ */
+function datenVollstaendig(l: InboundLead): boolean {
+  const name = (l.name ?? "").trim();
+  // Platzhalter-Namen der Importe zählen nicht als erfasster Name.
+  const echterName =
+    name.length > 2 &&
+    !/^(verpasster anruf|\(ohne name\)|unbekannt)$/i.test(name);
+  const adresse = (l.adresse ?? "").trim().length > 2;
+  return echterName && adresse;
+}
+
+/**
  * Prozess-Stepper je Lead: wo steht die Anfrage, was ist der nächste Schritt?
- * B2C-Funnel: Eingegangen → Kontaktiert → Erstgespräch → Übergeben → Aufgenommen.
+ * B2C-Funnel: Eingegangen → Kontaktiert → Daten aufgenommen → Interesse
+ * bestätigt → [Beratungstermin] → Übergeben → Aufgenommen.
+ * Der Beratungstermin gibt es nur an Direktbuchungs-Standorten (Düsseldorf,
+ * Gevelsberg) — nur dort darf das Callcenter Termine vereinbaren.
  * Recare verkürzt: Eingegangen → PDL-Klärung → Übergeben → Aufgenommen.
  */
 function processInfo(l: InboundLead): {
   steps: { label: string; done: boolean; current: boolean }[];
   next: string | null;
   lost: boolean;
+  /** Stammdaten fehlen → To-do an der Karte anzeigen. */
+  datenFehlen: boolean;
 } {
   const lost = l.status === "verloren" && !l.pdl_bestaetigt_at;
   const uebergeben = Boolean(l.zugewiesen_hub);
@@ -156,7 +177,11 @@ function processInfo(l: InboundLead): {
     Boolean(l.pdl_bestaetigt_at && !/nicht|kein/i.test(l.pdl_ergebnis ?? ""));
   const kontaktiert =
     ["kontaktiert", "erstgespraech", "aufgenommen"].includes(l.status) || uebergeben;
-  const erstgespraech = ["erstgespraech", "aufgenommen"].includes(l.status) || uebergeben;
+  const interesse = ["erstgespraech", "aufgenommen"].includes(l.status) || uebergeben;
+  const datenOk = datenVollstaendig(l);
+  // Nach der Übergabe ist die Datenaufnahme zwangsläufig passiert.
+  const datenDone = datenOk || uebergeben || aufgenommen;
+  const datenFehlen = !datenOk && !uebergeben && !aufgenommen && !lost;
 
   const defs =
     l.quelle === "recare"
@@ -169,7 +194,12 @@ function processInfo(l: InboundLead): {
       : [
           { label: "Eingegangen", done: true },
           { label: "Kontaktiert", done: kontaktiert },
-          { label: "Erstgespräch", done: erstgespraech },
+          { label: "Daten aufgenommen", done: datenDone },
+          { label: "Interesse bestätigt", done: interesse },
+          // Nur Düsseldorf/Gevelsberg: Callcenter vereinbart den Termin selbst
+          ...(l.direct_booking
+            ? [{ label: "Beratungstermin vereinbart", done: interesse }]
+            : []),
           { label: "Übergeben", done: uebergeben },
           { label: "Aufgenommen", done: aufgenommen },
         ];
@@ -182,19 +212,25 @@ function processInfo(l: InboundLead): {
   else if (uebergeben) next = "Auf Rückmeldung der PDL warten";
   else if (l.quelle === "recare")
     next = "PDL anrufen & Kapazität klären, dann übergeben";
-  else if (l.status === "offen" && !l.bearbeiter) next = "Übernehmen & anrufen";
+  else if (l.status === "offen" && !l.bearbeiter)
+    next = "Übernehmen, anrufen, Daten abfragen & Interesse klären";
   else if (l.status === "offen")
     next = l.telefon
-      ? "Anrufen"
+      ? "Anrufen, Daten abfragen & Interesse klären"
       : l.email
-        ? "Keine Telefonnummer — per E-Mail Infos abfragen"
+        ? "Keine Telefonnummer — per E-Mail Daten & Interesse abfragen"
         : "Kontaktdaten unvollständig — Infos abfragen";
   else if (l.status === "kontaktiert")
+    next = !datenOk
+      ? "Fehlende Daten aufnehmen (Name & Adresse), dann Interesse bestätigen"
+      : l.direct_booking
+        ? "Interesse bestätigen & Beratungstermin vereinbaren (Kalender + MediFox)"
+        : "Interesse bestätigen";
+  else if (l.status === "erstgespraech")
     next = l.direct_booking
-      ? "Erstgespräch vereinbaren (Kalender + MediFox)"
-      : "Erstgespräch vereinbaren";
-  else if (l.status === "erstgespraech") next = "An Standort/PDL übergeben";
-  return { steps, next, lost };
+      ? "An Beratungsperson/PDL übergeben"
+      : "An Standort/PDL übergeben";
+  return { steps, next, lost, datenFehlen };
 }
 
 function ProcessSteps({
@@ -204,37 +240,39 @@ function ProcessSteps({
   lead: InboundLead;
   undo?: { label: string; run: () => void } | null;
 }) {
-  const { steps, next, lost } = processInfo(lead);
+  const { steps, next, lost, datenFehlen } = processInfo(lead);
   return (
     <div className="flex flex-col gap-1.5">
       {/* Horizontaler Stepper wie in der Design-Referenz: erledigt = grüner
           Haken-Kreis, aktueller Schritt = blauer Nummern-Kreis, offen = grau —
           mit Zeitstempel unter dem Label, wo einer bekannt ist. */}
-      <div className="flex flex-wrap items-start gap-x-1.5 gap-y-2">
+      <div className="flex flex-wrap items-start gap-x-2 gap-y-2.5">
         {steps.map((s, i) => {
           const stamp = stampFor(lead, s.label);
           return (
-            <span key={s.label} className="flex items-start gap-1.5">
+            <span key={s.label} className="flex items-start gap-2">
               {i > 0 && (
-                <span className="mt-1 text-sm leading-none text-muted-foreground/40">›</span>
+                <span className="mt-1.5 text-base leading-none text-muted-foreground/40">
+                  ›
+                </span>
               )}
-              <span className={cn("flex items-center gap-1.5", lost && "opacity-50")}>
+              <span className={cn("flex items-center gap-2", lost && "opacity-50")}>
                 <span
                   className={cn(
-                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                    "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold",
                     s.done
                       ? "bg-emerald-500 text-white"
                       : s.current
-                        ? "bg-primary text-primary-foreground"
+                        ? "bg-primary text-primary-foreground ring-4 ring-primary/15"
                         : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {s.done ? <Check className="size-3" /> : i + 1}
+                  {s.done ? <Check className="size-4" /> : i + 1}
                 </span>
                 <span className="flex flex-col leading-tight">
                   <span
                     className={cn(
-                      "text-xs",
+                      "text-sm",
                       s.done
                         ? "font-medium"
                         : s.current
@@ -247,7 +285,7 @@ function ProcessSteps({
                   {stamp && (s.done || s.current) && (
                     <span
                       className={cn(
-                        "text-[10px] tabular-nums",
+                        "text-[11px] tabular-nums",
                         s.current ? "text-primary/80" : "text-muted-foreground",
                       )}
                     >
@@ -277,9 +315,29 @@ function ProcessSteps({
         )}
       </div>
       {next && (
-        <p className="text-xs">
+        <p className="text-sm">
           <span className="font-semibold text-primary">Nächster Schritt:</span>{" "}
           <span className={next === "Abgeschlossen" ? "text-emerald-700" : ""}>{next}</span>
+        </p>
+      )}
+      {/* Pflicht-To-do: ohne Name/Adresse kann der Lead nicht sauber
+          übergeben werden — deshalb sichtbar markiert. */}
+      {datenFehlen && (
+        <p className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-900">
+          <ClipboardList className="size-3.5 shrink-0" />
+          To-do: Daten aufnehmen —{" "}
+          {[
+            !((lead.name ?? "").trim().length > 2 &&
+              !/^(verpasster anruf|\(ohne name\)|unbekannt)$/i.test(
+                (lead.name ?? "").trim(),
+              ))
+              ? "Name"
+              : null,
+            (lead.adresse ?? "").trim().length > 2 ? null : "Adresse/Ort",
+          ]
+            .filter(Boolean)
+            .join(" & ")}{" "}
+          fehlt (oben per Stift nachtragen).
         </p>
       )}
     </div>
@@ -784,7 +842,7 @@ export function TeamWorkspace({
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {(view === "inbound" || (view === "tabs" && (monitor || tab === "inbound"))) && (
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-5">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start lg:gap-5">
           {canAct && inboundLog && (
             <div className="lg:sticky lg:top-4">
               <InboundCallLog
@@ -1341,7 +1399,7 @@ export function TeamWorkspace({
                               className="border-purple-300 text-purple-800 hover:bg-purple-50"
                               onClick={() => setStatus(l, "erstgespraech")}
                             >
-                              <Check className="size-3.5" /> Erstgespräch vereinbart
+                              <Check className="size-3.5" /> Interesse bestätigt
                             </Button>
                           )}
                           <LostReason
@@ -3193,7 +3251,7 @@ function ErstgespraechChecklist({
         className="border-purple-300 text-purple-800 hover:bg-purple-50"
         onClick={() => setOpen(true)}
       >
-        <Check className="size-3.5" /> Erstgespräch vereinbart
+        <Check className="size-3.5" /> Interesse + Beratungstermin
       </Button>
     );
   }
