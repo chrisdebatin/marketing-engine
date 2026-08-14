@@ -167,7 +167,13 @@ function processInfo(l: InboundLead): {
   return { steps, next, lost };
 }
 
-function ProcessSteps({ lead }: { lead: InboundLead }) {
+function ProcessSteps({
+  lead,
+  undo,
+}: {
+  lead: InboundLead;
+  undo?: { label: string; run: () => void } | null;
+}) {
   const { steps, next, lost } = processInfo(lead);
   return (
     <div className="flex flex-col gap-1.5">
@@ -227,6 +233,17 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
           <span className="ml-1 self-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             verloren
           </span>
+        )}
+        {undo && (
+          <button
+            type="button"
+            onClick={undo.run}
+            title="Fälschlich geklickt? Macht den letzten Prozess-Schritt rückgängig."
+            className="ml-auto flex items-center gap-1 self-center rounded-md px-1.5 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <Undo2 className="size-3" />
+            {undo.label}
+          </button>
         )}
       </div>
       {next && (
@@ -574,6 +591,48 @@ export function TeamWorkspace({
     }
   }
 
+  /** Übergabe an die PDL zurücknehmen (solange keine Bestätigung vorliegt). */
+  async function unassignHub(l: InboundLead) {
+    setError(null);
+    try {
+      await teamAction(token, { action: "unassign-hub", kind: l.kind, id: l.id });
+      setInbound((cur) =>
+        cur.map((x) =>
+          x.id === l.id
+            ? {
+                ...x,
+                zugewiesen_hub: null,
+                zugewiesen_pdl: null,
+                zugewiesen_at: null,
+                pdl_bestaetigt_at: null,
+                pdl_ergebnis: null,
+              }
+            : x,
+        ),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    }
+  }
+
+  /**
+   * "Fälschlich geklickt?" — ein Prozess-Schritt zurück: Übergabe zurücknehmen,
+   * Erstgespräch → Kontaktiert, Kontaktiert → Offen. Nach der PDL-Bestätigung
+   * ist nichts mehr zurücknehmbar (der Standort hat den Fall bestätigt).
+   */
+  function undoFor(l: InboundLead): { label: string; run: () => void } | null {
+    if (!canAct || l.pdl_bestaetigt_at || l.status === "verloren") return null;
+    if (l.zugewiesen_hub)
+      return { label: "Übergabe zurücknehmen", run: () => unassignHub(l) };
+    if (l.status === "aufgenommen")
+      return { label: "zurück auf Erstgespräch", run: () => setStatus(l, "erstgespraech") };
+    if (l.status === "erstgespraech")
+      return { label: "zurück auf Kontaktiert", run: () => setStatus(l, "kontaktiert") };
+    if (l.status === "kontaktiert")
+      return { label: "zurück auf Offen", run: () => setStatus(l, "offen") };
+    return null;
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {view === "tabs" && !monitor && (
@@ -851,32 +910,7 @@ export function TeamWorkspace({
                         {canAct && (
                           <button
                             type="button"
-                            onClick={async () => {
-                              setError(null);
-                              try {
-                                await teamAction(token, {
-                                  action: "unassign-hub",
-                                  kind: l.kind,
-                                  id: l.id,
-                                });
-                                setInbound((cur) =>
-                                  cur.map((x) =>
-                                    x.id === l.id
-                                      ? {
-                                          ...x,
-                                          zugewiesen_hub: null,
-                                          zugewiesen_pdl: null,
-                                          zugewiesen_at: null,
-                                          pdl_bestaetigt_at: null,
-                                          pdl_ergebnis: null,
-                                        }
-                                      : x,
-                                  ),
-                                );
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : "Fehler");
-                              }
-                            }}
+                            onClick={() => unassignHub(l)}
                             className="flex items-center gap-1 font-medium text-muted-foreground hover:text-foreground"
                           >
                             <Undo2 className="size-3" /> Übergabe zurücknehmen
@@ -887,7 +921,7 @@ export function TeamWorkspace({
                   </p>
                 )}
                 <div className="border-t pt-2.5">
-                  <ProcessSteps lead={l} />
+                  <ProcessSteps lead={l} undo={undoFor(l)} />
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 border-t pt-2.5">
                   {canAct && !l.bearbeiter && (
