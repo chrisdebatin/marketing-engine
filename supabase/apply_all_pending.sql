@@ -2,8 +2,14 @@
 -- einfügen und ausführen:
 -- https://supabase.com/dashboard/project/xbzcplpaalccjiyjhypr/sql/new
 --
--- Stand: offen sind 0030–0033 — alles davor ist eingespielt.
--- (Bereits eingespielte Blöcke werden dank "if not exists" einfach übersprungen.)
+-- Stand: Blöcke bis 0061. Die Datei ist idempotent — komplett von oben
+-- markieren und ausführen; bereits eingespielte Blöcke werden dank
+-- "if not exists" bzw. "drop constraint if exists" übersprungen.
+--
+-- WICHTIG: Der SQL-Editor bricht beim ERSTEN Fehler ab, alles danach wird
+-- nicht mehr ausgeführt. Wenn unten eine Fehlermeldung erscheint, ist der
+-- Rest NICHT angekommen — Fehler beheben und erneut komplett ausführen.
+-- Am Ende muss "alles_da" = true stehen (letzte Abfrage).
 
 -- ── 0030: Relevanz-Kategorie (1–3) für CRM-Ziel-Orte ────────────────
 alter table public.crm_targets add column if not exists relevanz smallint
@@ -40,7 +46,7 @@ create table if not exists public.phone_calls (
 );
 create index if not exists phone_calls_time_idx on public.phone_calls (call_time desc);
 alter table public.phone_calls disable row level security;
-ß
+
 notify pgrst, 'reload schema';
 
 -- ── 0033: Wöchentliche Kapazitäts-Meldung je Hub ────────────────────
@@ -418,3 +424,27 @@ create index if not exists pdl_auftraege_target_idx on public.pdl_auftraege (tar
 alter table public.pdl_auftraege disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── Selbst-Check: muss alles_da = true liefern ──────────────────────
+-- Steht hier false oder erscheint diese Zeile gar nicht, ist die Datei
+-- vorher mit einem Fehler abgebrochen.
+select
+  to_regclass('public.lead_todos')    is not null as lead_todos,
+  to_regclass('public.pdl_versuche')  is not null as pdl_versuche,
+  to_regclass('public.pdl_auftraege') is not null as pdl_auftraege,
+  exists (select 1 from information_schema.columns
+          where table_name='lead_calls' and column_name='erstbearbeitet_at') as lead_erstbearbeitet,
+  exists (select 1 from information_schema.columns
+          where table_name='lead_calls' and column_name='adresse') as lead_adresse,
+  exists (select 1 from information_schema.columns
+          where table_name='crm_targets' and column_name='kurzinfo') as target_kurzinfo,
+  (to_regclass('public.lead_todos')    is not null
+   and to_regclass('public.pdl_versuche')  is not null
+   and to_regclass('public.pdl_auftraege') is not null
+   and exists (select 1 from information_schema.columns
+               where table_name='lead_calls' and column_name='erstbearbeitet_at')
+   and exists (select 1 from information_schema.columns
+               where table_name='lead_calls' and column_name='adresse')
+   and exists (select 1 from information_schema.columns
+               where table_name='crm_targets' and column_name='kurzinfo')
+  ) as alles_da;
