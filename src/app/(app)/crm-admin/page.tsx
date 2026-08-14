@@ -5,6 +5,11 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { AgenturRueckweisungen } from "@/components/agentur-rueckweisungen";
+import {
+  CallcenterAnalyse,
+  type AnalyseCall,
+  type AnalyseLead,
+} from "@/components/callcenter-analyse";
 import { PdlRanking } from "@/components/pdl-ranking";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
 import { PageHeader } from "@/components/page-header";
@@ -51,6 +56,56 @@ export default async function CrmAdminPage() {
       .eq("occurred_on", heute),
     admin.from("pdl_versuche").select("erreicht").gte("created_at", `${heute}T00:00:00Z`),
   ]);
+  // ── Callcenter-Analyse: Telefonanlagen-Export (Annahmequote/Uhrzeiten) ──
+  // Fehlt die Tabelle (Migration noch nicht eingespielt), bleibt die Sektion
+  // leer und erklärt sich selbst — kein harter Fehler.
+  const phoneRes = await admin
+    .from("phone_calls")
+    .select("call_time, hub_name, direction, answered, talking_seconds")
+    .eq("direction", "inbound")
+    .limit(20000);
+  const phoneRows = phoneRes.error ? [] : (phoneRes.data ?? []);
+  const analyseCalls: AnalyseCall[] = phoneRows.map((c) => ({
+    zeit: c.call_time,
+    hub: c.hub_name,
+    angenommen: c.answered,
+    sekunden: c.talking_seconds ?? 0,
+  }));
+  const analyseTageSet = [
+    ...new Set(phoneRows.map((c) => c.call_time.slice(0, 10))),
+  ].sort();
+  const analyseTage = analyseTageSet.length;
+  const analyseZeitraum = analyseTage
+    ? { von: analyseTageSet[0], bis: analyseTageSet[analyseTage - 1] }
+    : null;
+
+  // Kategorie der verpassten 0800-Anrufe: steht im Ergebnis-Text der
+  // KI-Vorsortierung ("kein Neuinteressent (KI-vorsortiert: …)"), alles
+  // andere ist ein Neuinteressent.
+  const analyseLeads: AnalyseLead[] = (callsRes.data ?? [])
+    .filter((l) => l.quelle === "telefon0800")
+    .map((l) => {
+      const e = l.ergebnis ?? "";
+      // Erst die Vorsortierung selbst erkennen ("kein Neuinteressent …") —
+      // bei Altbestand fehlt die Kategorie in Klammern, der Anruf ist aber
+      // trotzdem keine Neuanfrage und darf die Quote nicht schönen.
+      const keinInteressent = /kein\s+neuinteressent/i.test(e);
+      const kategorie: AnalyseLead["kategorie"] = !keinInteressent
+        ? "neuinteressent"
+        : /kein anliegen|anonym/i.test(e)
+          ? "kein_anliegen"
+          : /bestandskunde/i.test(e)
+            ? "bestandskunde"
+            : /mitarbeiter|intern/i.test(e)
+              ? "mitarbeiter_intern"
+              : "sonstiges";
+      return {
+        zeit: l.created_at ?? `${l.call_date}T12:00:00Z`,
+        kategorie,
+        bereich: l.bereich,
+      };
+    });
+
   const targetName = new Map((targetsRes.data ?? []).map((t) => [t.id, t.name]));
   const anrufe = (anrufeRes.data ?? []).map((a) => ({
     datum: a.contact_date,
@@ -177,7 +232,7 @@ export default async function CrmAdminPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="CRM-Admin"
-        description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Kontakte des Tages, PDL-Ranking.`}
+        description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Callcenter & Erreichbarkeit, Kontakte des Tages, PDL-Ranking.`}
       />
 
       {sektion("1", "Leads", "Eingänge, Kanäle, Funnel und Bearbeitung — Zeitraum oben rechts wählbar")}
@@ -188,7 +243,19 @@ export default async function CrmAdminPage() {
         now={new Date().toISOString()}
       />
 
-      {sektion("2", "Kontakte heute", "alle Berührungen des Tages — Klienten, Anrufe, Flyer & Boxen, Aufnahmen")}
+      {sektion(
+        "2",
+        "Callcenter & Erreichbarkeit",
+        "eingehende Anrufe, Annahmequote, Uhrzeiten — und was uns fehlende Besetzung kostet",
+      )}
+      <CallcenterAnalyse
+        calls={analyseCalls}
+        leads={analyseLeads}
+        tage={analyseTage}
+        zeitraum={analyseZeitraum}
+      />
+
+      {sektion("3", "Kontakte heute", "alle Berührungen des Tages — Klienten, Anrufe, Flyer & Boxen, Aufnahmen")}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <StatTile
           icon={Users}
@@ -245,10 +312,10 @@ export default async function CrmAdminPage() {
         </p>
       )}
 
-      {sektion("3", "PDL-Ranking", "Erreichbarkeit & Marketing-Aktivität je Standort — Handlungsbedarf zuerst")}
+      {sektion("4", "PDL-Ranking", "Erreichbarkeit & Marketing-Aktivität je Standort — Handlungsbedarf zuerst")}
       <PdlRanking />
 
-      {sektion("4", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
+      {sektion("5", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
       <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
 
       {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —

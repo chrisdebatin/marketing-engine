@@ -143,7 +143,12 @@ interface ExtractedCall {
   name: string;
   zeitpunkt: string;
   notiz: string;
-  kategorie: "neuinteressent" | "bestandskunde" | "mitarbeiter_intern" | "sonstiges";
+  kategorie:
+    | "neuinteressent"
+    | "bestandskunde"
+    | "mitarbeiter_intern"
+    | "sonstiges"
+    | "kein_anliegen";
 }
 
 /**
@@ -164,7 +169,9 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
         "'mitarbeiter_intern' NUR wenn eindeutig ein eigener Mitarbeiter oder eine interne Abteilung anruft (Krankmeldung, Dienstplan, interne Rückfrage). " +
         "'bestandskunde' nur wenn im Text ausdrücklich steht, dass es um eine BEREITS laufende Versorgung geht (Termine, Rechnung, Beschwerde zu Einsätzen). " +
         "'sonstiges' nur bei eindeutig fachfremden Anrufen (Lieferant, Vertrieb, Werbung, falsch verbunden). " +
-        "Steht 'Anrufer-Typ: Unbekannt' oder liegt kein verwertbarer Gesprächsinhalt vor, dann 'neuinteressent' wählen — solche Anrufe müssen zurückgerufen werden.",
+        "'kein_anliegen' = der Anrufer hat NICHTS gesagt und ist NICHT erreichbar: Die KI-Agentin (Nora) hat nur begrüßt/Hilfe angeboten, es liegt kein inhaltlicher Beitrag und kein konkretes Anliegen des Anrufers vor UND es ist keine Rufnummer vorhanden (Rufnummer anonym/unterdrückt, Rückruf nicht möglich). Solche Anrufe sind kein Lead — es gibt niemanden, den man zurückrufen könnte. " +
+        "Achtung Abgrenzung: Liegt eine Rufnummer vor, ist es NIE 'kein_anliegen' — dann im Zweifel 'neuinteressent', denn man kann zurückrufen. " +
+        "Steht 'Anrufer-Typ: Unbekannt', ist aber eine Rufnummer vorhanden oder ein Anliegen erkennbar, dann 'neuinteressent' wählen — solche Anrufe müssen zurückgerufen werden.",
       tools: [
         {
           name: "verpasster_anruf",
@@ -178,7 +185,13 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
               notiz: { type: "string" },
               kategorie: {
                 type: "string",
-                enum: ["neuinteressent", "bestandskunde", "mitarbeiter_intern", "sonstiges"],
+                enum: [
+                  "neuinteressent",
+                  "bestandskunde",
+                  "mitarbeiter_intern",
+                  "sonstiges",
+                  "kein_anliegen",
+                ],
               },
             },
             required: ["telefon", "name", "zeitpunkt", "notiz", "kategorie"],
@@ -202,6 +215,7 @@ const KATEGORIE_LABEL: Record<string, string> = {
   bestandskunde: "Bestandskunde",
   mitarbeiter_intern: "Mitarbeiter/intern",
   sonstiges: "Sonstiges",
+  kein_anliegen: "kein Anliegen / anonym, kein Rückruf möglich",
 };
 
 interface ExtractedWebsite {
