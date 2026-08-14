@@ -336,12 +336,12 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
     // Verpasster 0800-Anruf: Nummer/Name/Zeit rausziehen, Lead fürs DE-Team.
     if (m.kind === "anruf") {
       const call = await extractCall(`Betreff: ${m.subject}\n\n${body}`);
-      // Vorsortierung bewusst zurückhaltend: NUR eindeutig interne Anrufe
-      // werden geschlossen. Bestandskunden (Beschwerden, Rechnungsfragen)
-      // und unklare Fälle bleiben offen — lieber einmal zu viel prüfen als
-      // einen echten Interessenten verlieren. Der Chip in der Notiz zeigt,
-      // wie die KI den Anruf eingeschätzt hat.
-      const interessent = !call || call.kategorie !== "mitarbeiter_intern";
+      // Vorsortierung: nur Neuinteressenten landen als offener Lead in der
+      // Liste — Bestandskunden, interne und fachfremde Anrufe werden direkt
+      // geschlossen (bleiben unter "Alte & abgelehnte Leads" auffindbar und
+      // sind dort per "wieder öffnen" zurückholbar). Der Prompt ist bewusst
+      // interessenten-freundlich: unklare Anrufe zählen als Neuinteressent.
+      const interessent = !call || call.kategorie === "neuinteressent";
       const kategorieHinweis =
         call && call.kategorie !== "neuinteressent"
           ? `KI-Einschätzung: ${KATEGORIE_LABEL[call.kategorie] ?? call.kategorie}`
@@ -364,7 +364,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
         status: interessent ? "offen" : "verloren",
         ergebnis: interessent
           ? null
-          : `interner Anruf (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
+          : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
       });
       if (insErr) {
         processed.delete(m.id);
