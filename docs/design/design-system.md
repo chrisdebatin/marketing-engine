@@ -9,8 +9,8 @@ the webdesign subagent (`.claude/agents/webdesign.md`) applies these rules.
 significant UI changes. It is **more authoritative than generic contemporary
 web-design trends**.
 
-> If the PNG is missing at that path, ask the owner to add it. Until then, the
-> description below captures it: a classic productivity-SaaS CRM dashboard on a
+> The PNG is checked in at that path — open it, don't rely on the summary.
+> For text-only contexts, the description: a classic productivity-SaaS CRM dashboard on a
 > near-white canvas. Persistent white left sidebar with icon+label items and a
 > solid blue rounded rectangle marking the active page; red badge counters.
 > Top bar with search, notifications, avatar. Content: a row of four white KPI
