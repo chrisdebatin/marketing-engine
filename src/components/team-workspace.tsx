@@ -6,6 +6,7 @@ import {
   CalendarClock,
   Check,
   Hand,
+  Headset,
   Inbox,
   Mail,
   MapPin,
@@ -35,6 +36,8 @@ export interface InboundLead {
   adresse: string | null;
   /** Interesse des Anrufers (alltagshilfe/ambulant/intensiv) — null bei Altbestand/Meta. */
   bereich: string | null;
+  /** Erste Bearbeitung (Stepper-Zeitstempel "Kontaktiert"). */
+  erstbearbeitet_at: string | null;
   quelle: string;
   quelle_detail: string | null;
   datum: string;
@@ -164,30 +167,61 @@ function processInfo(l: InboundLead): {
 function ProcessSteps({ lead }: { lead: InboundLead }) {
   const { steps, next, lost } = processInfo(lead);
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs">
-        {steps.map((s, i) => (
-          <span key={s.label} className="flex items-center gap-1" title={stampFor(lead, s.label) ?? undefined}>
-            {i > 0 && <span className="text-muted-foreground/40">›</span>}
-            <span
-              className={cn(
-                "flex items-center gap-0.5",
-                lost
-                  ? "text-muted-foreground/50"
-                  : s.done
-                    ? "font-medium text-emerald-700"
-                    : s.current
-                      ? "font-semibold text-primary"
-                      : "text-muted-foreground/60",
+    <div className="flex flex-col gap-1.5">
+      {/* Horizontaler Stepper wie in der Design-Referenz: erledigt = grüner
+          Haken-Kreis, aktueller Schritt = blauer Nummern-Kreis, offen = grau —
+          mit Zeitstempel unter dem Label, wo einer bekannt ist. */}
+      <div className="flex flex-wrap items-start gap-x-1.5 gap-y-2">
+        {steps.map((s, i) => {
+          const stamp = stampFor(lead, s.label);
+          return (
+            <span key={s.label} className="flex items-start gap-1.5">
+              {i > 0 && (
+                <span className="mt-1 text-sm leading-none text-muted-foreground/40">›</span>
               )}
-            >
-              {s.done ? "✓ " : ""}
-              {s.label}
+              <span className={cn("flex items-center gap-1.5", lost && "opacity-50")}>
+                <span
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
+                    s.done
+                      ? "bg-emerald-500 text-white"
+                      : s.current
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {s.done ? <Check className="size-3" /> : i + 1}
+                </span>
+                <span className="flex flex-col leading-tight">
+                  <span
+                    className={cn(
+                      "text-xs",
+                      s.done
+                        ? "font-medium"
+                        : s.current
+                          ? "font-semibold text-primary"
+                          : "text-muted-foreground",
+                    )}
+                  >
+                    {s.label}
+                  </span>
+                  {stamp && (s.done || s.current) && (
+                    <span
+                      className={cn(
+                        "text-[10px] tabular-nums",
+                        s.current ? "text-primary/80" : "text-muted-foreground",
+                      )}
+                    >
+                      {stamp}
+                    </span>
+                  )}
+                </span>
+              </span>
             </span>
-          </span>
-        ))}
+          );
+        })}
         {lost && (
-          <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
+          <span className="ml-1 self-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
             verloren
           </span>
         )}
@@ -206,6 +240,8 @@ function ProcessSteps({ lead }: { lead: InboundLead }) {
 function stampFor(lead: InboundLead, label: string): string | null {
   const zeit = (iso: string | null) => (iso ? exactStamp(iso) : null);
   if (label === "Eingegangen") return zeit(lead.datum);
+  if (label === "Kontaktiert" || label === "PDL-Klärung")
+    return zeit(lead.erstbearbeitet_at);
   if (label === "Übergeben") return zeit(lead.zugewiesen_at);
   if (label === "Aufgenommen") return zeit(lead.pdl_bestaetigt_at);
   return null;
@@ -674,7 +710,7 @@ export function TeamWorkspace({
                 {g.leads.map((l) => (
               <li
                 key={`${l.kind}-${l.id}`}
-                className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
+                className="flex flex-col gap-2.5 rounded-xl border bg-card p-4 shadow-sm"
               >
                 {/* Kopf: Wer (Name) zuerst, Status daneben, Timer oben rechts —
                     Herkunft & Zeit als ruhigere zweite Zeile darunter. */}
@@ -683,7 +719,7 @@ export function TeamWorkspace({
                     {isFresh(l) && (
                       <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" title="neu" />
                     )}
-                    <span className="text-[15px] leading-snug font-semibold">
+                    <span className="text-lg leading-snug font-bold tracking-tight">
                       {l.name}
                     </span>
                     <LeadIdChip id={l.id} />
@@ -745,7 +781,8 @@ export function TeamWorkspace({
                   }
                 />
                 {!l.zugewiesen_hub && l.vorschlag_hub && l.vorschlag_pdl && (
-                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg bg-primary/[0.05] px-2.5 py-1.5 text-xs">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl bg-primary/[0.06] px-3 py-2 text-xs">
+                    <Headset className="size-3.5 shrink-0 text-primary" />
                     <span className="font-semibold text-primary">
                       Ansprechpartner {l.vorschlag_hub}:
                     </span>
@@ -846,10 +883,10 @@ export function TeamWorkspace({
                     )}
                   </p>
                 )}
-                <div className="border-t pt-2">
+                <div className="border-t pt-2.5">
                   <ProcessSteps lead={l} />
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5 border-t pt-2.5">
                   {canAct && !l.bearbeiter && (
                     <Button type="button" size="sm" onClick={() => claim(l)}>
                       <Hand className="size-3.5" />
@@ -1131,6 +1168,7 @@ function InboundCallLog({
         email: null,
         adresse: adresse.trim() || null,
         bereich: bereich || null,
+        erstbearbeitet_at: new Date().toISOString(),
         quelle,
         quelle_detail: null,
         datum: String(res.created_at ?? new Date().toISOString()),
@@ -1671,14 +1709,30 @@ function LeadStammdaten({
     }
   }
 
-  const feld = (label: string, value: ReactNode) => (
-    <div className="min-w-0">
-      <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-        {label}
-      </p>
-      <p className="truncate text-sm" title={typeof value === "string" ? value : undefined}>
-        {value ?? <span className="text-muted-foreground">—</span>}
-      </p>
+  // Stammdaten-Feld im Referenz-Look: farbige Icon-Disc + Label + Wert.
+  const feld = (
+    label: string,
+    icon: ReactNode,
+    disc: string,
+    value: ReactNode,
+  ) => (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-full",
+          disc,
+        )}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+          {label}
+        </p>
+        <p className="truncate text-sm font-medium" title={typeof value === "string" ? value : undefined}>
+          {value ?? <span className="font-normal text-muted-foreground">—</span>}
+        </p>
+      </div>
     </div>
   );
 
@@ -1725,41 +1779,45 @@ function LeadStammdaten({
   }
 
   return (
-    <div className="relative grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-lg border bg-muted/40 px-3 py-2 pr-9 sm:grid-cols-4">
+    <div className="relative grid grid-cols-1 gap-x-4 gap-y-2.5 rounded-xl border bg-card px-3.5 py-3 pr-10 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
       {feld(
         "Telefon",
+        <Phone className="size-3.5" />,
+        "bg-blue-100 text-blue-600",
         lead.telefon ? (
-          <a href={`tel:${lead.telefon}`} className="flex items-center gap-1 text-primary hover:underline">
-            <Phone className="size-3 shrink-0" />
+          <a href={`tel:${lead.telefon}`} className="text-primary hover:underline">
             {lead.telefon}
           </a>
         ) : null,
       )}
       {feld(
         "E-Mail",
+        <Mail className="size-3.5" />,
+        "bg-indigo-100 text-indigo-600",
         lead.email ? (
-          <a href={`mailto:${lead.email}`} className="flex items-center gap-1 text-primary hover:underline">
-            <Mail className="size-3 shrink-0" />
+          <a href={`mailto:${lead.email}`} className="text-primary hover:underline">
             {lead.email}
           </a>
         ) : null,
       )}
       {feld(
         "Adresse / Ort",
-        lead.adresse ? (
-          <span className="flex items-center gap-1">
-            <MapPin className="size-3 shrink-0 text-muted-foreground" />
-            {lead.adresse}
-          </span>
-        ) : null,
+        <MapPin className="size-3.5" />,
+        "bg-purple-100 text-purple-600",
+        lead.adresse || null,
       )}
-      {feld("Eingang", exactStamp(lead.datum) || null)}
+      {feld(
+        "Eingang",
+        <CalendarClock className="size-3.5" />,
+        "bg-emerald-100 text-emerald-600",
+        exactStamp(lead.datum) || null,
+      )}
       {canAct && (
         <button
           type="button"
           title="Stammdaten bearbeiten"
           onClick={() => setEditing(true)}
-          className="absolute top-1.5 right-1.5 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="absolute top-2 right-2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Pencil className="size-3.5" />
         </button>
@@ -1808,7 +1866,9 @@ function LeadNote({
     return (
       <div className="flex flex-wrap items-center gap-2">
         {lead.notiz ? (
-          <p className="text-xs text-muted-foreground">„{lead.notiz}“</p>
+          <p className="w-full text-sm whitespace-pre-line text-foreground/85">
+            {lead.notiz}
+          </p>
         ) : null}
         {canAct && (
           <Button
