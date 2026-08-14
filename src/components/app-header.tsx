@@ -8,7 +8,16 @@ import { isNavActive, navItems } from "@/lib/nav";
 import { OnlineIndicator } from "@/components/online-indicator";
 import { SyncBadge } from "@/components/sync-badge";
 
-export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string | null }) {
+export function AppHeader({
+  isAdmin,
+  email,
+  crmBadge = 0,
+}: {
+  isAdmin: boolean;
+  email: string | null;
+  /** Anzahl offener Leads — rote Pille am CRM-Eintrag. */
+  crmBadge?: number;
+}) {
   const pathname = usePathname();
   const links = navItems(isAdmin);
 
@@ -30,13 +39,23 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
                 href={l.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
+                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm whitespace-nowrap transition-colors",
                   active
-                    ? "bg-accent font-medium text-foreground"
-                    : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground",
+                    ? "bg-primary font-medium text-primary-foreground"
+                    : "font-normal text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                 )}
               >
                 {l.label}
+                {l.href === "/crm" && crmBadge > 0 && (
+                  <span
+                    className={cn(
+                      "flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-bold tabular-nums",
+                      active ? "bg-white/25 text-primary-foreground" : "bg-red-500 text-white",
+                    )}
+                  >
+                    {crmBadge}
+                  </span>
+                )}
               </Link>
             );
           })}

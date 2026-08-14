@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CallUpload } from "@/components/call-upload";
 import { PageHeader } from "@/components/page-header";
+import { StatTile } from "@/components/ui/stat-tile";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -141,8 +142,8 @@ export default async function StatistikPage({
                 className={cn(
                   "rounded-full border px-3 py-1 text-sm font-medium transition-colors",
                   weeks === w
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground",
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "bg-card text-muted-foreground hover:text-foreground",
                 )}
               >
                 {w} Wochen
@@ -150,37 +151,35 @@ export default async function StatistikPage({
             ))}
           </div>
 
-          {/* Kennzahlen */}
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {(
-              [
-                [PhoneIncoming, dieseWoche, "Eingehend diese Woche"],
-                [PhoneIncoming, totalIn, `Eingehend gesamt (${weeks} Wo.)`],
-                [
-                  PhoneMissed,
-                  totalMissed,
-                  `Verpasst (${totalIn > 0 ? Math.round((totalMissed / totalIn) * 100) : 0} %)`,
-                ],
-                [PhoneOutgoing, totalOut, "Ausgehend gesamt"],
-              ] as const
-            ).map(([Icon, value, label]) => (
-              <div
-                key={label}
-                className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5"
-              >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <Icon className="size-4" />
-                </span>
-                <div className="min-w-0">
-                  <div className="text-lg leading-none font-semibold tabular-nums">
-                    {value}
-                  </div>
-                  <div className="mt-1 truncate text-xs text-muted-foreground">
-                    {label}
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Kennzahlen (Referenz-Look: Icon-Disc + großer Wert) */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatTile
+              icon={PhoneIncoming}
+              tone="blue"
+              coloredValue
+              value={dieseWoche}
+              label="Eingehend diese Woche"
+            />
+            <StatTile
+              icon={PhoneIncoming}
+              tone="purple"
+              value={totalIn}
+              label={`Eingehend gesamt (${weeks} Wo.)`}
+            />
+            <StatTile
+              icon={PhoneMissed}
+              tone="red"
+              coloredValue={totalMissed > 0}
+              value={totalMissed}
+              label="Verpasst"
+              sub={`${totalIn > 0 ? Math.round((totalMissed / totalIn) * 100) : 0} % der eingehenden`}
+            />
+            <StatTile
+              icon={PhoneOutgoing}
+              tone="orange"
+              value={totalOut}
+              label="Ausgehend gesamt"
+            />
           </div>
 
           {/* Säulen-Chart: eingehende Anrufe pro Woche (eine Serie) */}

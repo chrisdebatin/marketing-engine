@@ -45,9 +45,10 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
               {t.label}
               {(t.leadsBadge ?? 0) > 0 && (
                 <span
+                  title="offene Leads dieses Teams"
                   className={cn(
                     "rounded-full px-1 py-0.5 text-[0.6rem] leading-none font-semibold tabular-nums",
-                    teamId === t.id ? "bg-white/20" : "bg-primary/15 text-primary",
+                    teamId === t.id ? "bg-white/25" : "bg-red-500 text-white",
                   )}
                 >
                   {t.leadsBadge}
@@ -83,8 +84,8 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
             {(t.badge ?? 0) > 0 && (
               <span
                 className={cn(
-                  "rounded-full px-1.5 text-xs font-semibold tabular-nums",
-                  tab === t.key ? "bg-white/20" : "bg-primary/10 text-primary",
+                  "rounded-full px-1.5 py-0.5 text-xs leading-none font-semibold tabular-nums",
+                  tab === t.key ? "bg-white/25" : "bg-red-500 text-white",
                 )}
               >
                 {t.badge}

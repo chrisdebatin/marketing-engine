@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { leadStatusChip } from "@/components/ui/chip";
 import { LEAD_QUELLEN, leadBereichLabel, leadQuelleLabel, leadShortId } from "@/lib/leads";
 import { OutboundMap } from "@/components/outbound-map";
 import { placeKindLabel } from "@/lib/places";
@@ -90,14 +91,6 @@ const STATUS_LABEL: Record<string, string> = {
   erstgespraech: "Erstgespräch",
   aufgenommen: "Aufgenommen",
   verloren: "Verloren",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  offen: "bg-amber-100 text-amber-800",
-  kontaktiert: "bg-sky-100 text-sky-800",
-  erstgespraech: "bg-emerald-100 text-emerald-800",
-  aufgenommen: "bg-emerald-100 text-emerald-800",
-  verloren: "bg-muted text-muted-foreground",
 };
 
 /** Farbige Quellen-Chips: jede Quelle sofort erkennbar. */
@@ -665,9 +658,13 @@ export function TeamWorkspace({
                     : "text-muted-foreground",
                 )}
               >
-                {g.key === "__wiedervorlage__"
-                  ? "📌 Wiedervorlage fällig"
-                  : dayLabel(g.key)}
+                {g.key === "__wiedervorlage__" ? (
+                  <span title="Leads mit fälligem To-do — egal wie alt, sie poppen hier oben auf, bis das To-do erledigt ist.">
+                    📌 Wiedervorlage fällig
+                  </span>
+                ) : (
+                  dayLabel(g.key)
+                )}
                 <span className="h-px flex-1 bg-border" />
                 <span className="font-normal normal-case">
                   {g.leads.length} Anfrage{g.leads.length === 1 ? "" : "n"}
@@ -693,14 +690,17 @@ export function TeamWorkspace({
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                        leadStatusChip(l.status),
                       )}
                     >
                       {STATUS_LABEL[l.status] ?? l.status}
                     </span>
                     {l.bearbeiter && (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
-                        {l.bearbeiter}
+                      <span
+                        title={`Übernommen von ${l.bearbeiter}`}
+                        className="rounded-full border bg-card px-2 py-0.5 text-[11px] font-semibold text-foreground"
+                      >
+                        👤 {l.bearbeiter}
                       </span>
                     )}
                     {l.status === "offen" && <UnansweredTimer since={l.datum} />}
@@ -792,7 +792,7 @@ export function TeamWorkspace({
                 )}
                 {l.zugewiesen_hub && (
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium">
-                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800">
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-800">
                       → übergeben an {l.zugewiesen_hub}
                       {l.zugewiesen_pdl ? ` (PDL ${l.zugewiesen_pdl})` : ""}
                       {l.zugewiesen_at
@@ -897,7 +897,7 @@ export function TeamWorkspace({
                               type="button"
                               size="sm"
                               variant="outline"
-                              className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+                              className="border-purple-300 text-purple-800 hover:bg-purple-50"
                               onClick={() => setStatus(l, "erstgespraech")}
                             >
                               <Check className="size-3.5" /> Erstgespräch vereinbart
@@ -962,7 +962,7 @@ export function TeamWorkspace({
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                        leadStatusChip(l.status),
                       )}
                     >
                       {STATUS_LABEL[l.status] ?? l.status}
@@ -1003,6 +1003,11 @@ export function TeamWorkspace({
 
       {(view === "outbound" || (view === "tabs" && !monitor && tab === "outbound")) && (
         <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            Deine Anrufliste als Tagesplan: heute einfach von oben nach unten
+            abtelefonieren. Nicht erreicht? Der Kontakt rutscht automatisch auf
+            morgen — erreichte bekommen ihre Wiedervorlage aus der Notiz.
+          </p>
           <OutboundMap
             targets={sortedOutbound.map((t) => ({
               id: t.id,
@@ -1474,7 +1479,7 @@ function KontakteView({
                     <span
                       className={cn(
                         "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                        leadStatusChip(l.status),
                       )}
                     >
                       {STATUS_LABEL[l.status] ?? l.status}
@@ -1954,7 +1959,7 @@ function ErstgespraechChecklist({
         type="button"
         size="sm"
         variant="outline"
-        className="border-emerald-300 text-emerald-800 hover:bg-emerald-50"
+        className="border-purple-300 text-purple-800 hover:bg-purple-50"
         onClick={() => setOpen(true)}
       >
         <Check className="size-3.5" /> Erstgespräch vereinbart
@@ -1962,7 +1967,7 @@ function ErstgespraechChecklist({
     );
   }
   return (
-    <div className="flex w-full flex-col gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5">
+    <div className="flex w-full flex-col gap-1.5 rounded-lg border border-purple-200 bg-purple-50/50 p-2.5">
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

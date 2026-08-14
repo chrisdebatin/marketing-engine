@@ -128,14 +128,19 @@ export function CrmIntro() {
               </span>
               <StatusChip label="offen" tone="bg-amber-100 text-amber-800" />
               <Arrow />
-              <StatusChip label="kontaktiert" tone="bg-sky-100 text-sky-800" />
+              <StatusChip label="kontaktiert" tone="bg-blue-100 text-blue-800" />
               <Arrow />
               <StatusChip
-                label="Erstgespräch vereinbart ✓"
+                label="Erstgespräch vereinbart"
+                tone="bg-purple-100 text-purple-800"
+              />
+              <Arrow />
+              <StatusChip
+                label="aufgenommen ✓"
                 tone="bg-emerald-100 text-emerald-800"
               />
               <span className="text-xs text-muted-foreground">oder</span>
-              <StatusChip label="verloren" />
+              <StatusChip label="verloren" tone="bg-slate-200/70 text-slate-600" />
               <span className="text-xs text-muted-foreground">
                 (Recare-Leads: direkt „aufgenommen&ldquo;)
               </span>

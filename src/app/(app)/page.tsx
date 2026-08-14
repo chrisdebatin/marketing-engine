@@ -3,6 +3,9 @@ import {
   Truck,
   ClipboardList,
   ListChecks,
+  MapPin,
+  Megaphone,
+  Package,
   Sparkles,
   Map as MapIcon,
   Settings,
@@ -18,6 +21,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatTile } from "@/components/ui/stat-tile";
 import { PageHeader } from "@/components/page-header";
 import { HubTags } from "@/components/md-tag";
 import { mdColor } from "@/lib/hub-coords";
@@ -128,31 +132,6 @@ function BoxProgress({ delivered, distributed }: BoxStat) {
   );
 }
 
-/** Große Kennzahl-Kachel für das Dashboard oben auf der Startseite. */
-function StatCard({
-  value,
-  label,
-  sub,
-}: {
-  value: number;
-  label: string;
-  sub?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="flex h-full flex-col gap-0.5 p-5">
-        <span className="text-sm text-muted-foreground">{label}</span>
-        <span className="text-3xl font-semibold tracking-tight">
-          {value.toLocaleString("de-DE")}
-        </span>
-        {sub && (
-          <span className="mt-1 text-xs text-muted-foreground">{sub}</span>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export default async function HomePage() {
   const session = await requireSession();
 
@@ -257,24 +236,33 @@ export default async function HomePage() {
       />
 
       {/* Kennzahlen-Dashboard */}
-      <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          value={totals.boxesDelivered}
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatTile
+          icon={Package}
+          tone="blue"
+          coloredValue
+          value={totals.boxesDelivered.toLocaleString("de-DE")}
           label="Boxen geliefert"
           sub={`${totals.boxSpots} Box-Lieferorte eingetragen`}
         />
-        <StatCard
-          value={totals.flyerSpots}
+        <StatTile
+          icon={MapPin}
+          tone="green"
+          value={totals.flyerSpots.toLocaleString("de-DE")}
           label="Flyer-Auslagen (Orte)"
           sub="von den PDLs eingetragen"
         />
-        <StatCard
-          value={totals.flyersDelivered}
+        <StatTile
+          icon={Megaphone}
+          tone="purple"
+          value={totals.flyersDelivered.toLocaleString("de-DE")}
           label="Flyer geliefert"
           sub={`+ ${totals.aufstellerDelivered.toLocaleString("de-DE")} Aufsteller`}
         />
-        <StatCard
-          value={totals.boxSpots + totals.flyerSpots}
+        <StatTile
+          icon={MapIcon}
+          tone="orange"
+          value={(totals.boxSpots + totals.flyerSpots).toLocaleString("de-DE")}
           label="Orte gesamt"
           sub="alle Auslagen & Box-Lieferorte"
         />
@@ -288,7 +276,7 @@ export default async function HomePage() {
       />
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-muted-foreground">
+        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
           Schnellzugriff
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,7 +298,7 @@ export default async function HomePage() {
 
       {session.hubs.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="text-sm font-medium text-muted-foreground">
+          <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
             Hub-Übersicht nach MD
           </h2>
           {mdGroups.map((g) => (

@@ -1,6 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  Inbox,
+  Send,
+  Stethoscope,
+  Timer,
+  UserCheck,
+  XCircle,
+} from "lucide-react";
+import { StatTile } from "@/components/ui/stat-tile";
 import { cn } from "@/lib/utils";
 
 /**
@@ -274,34 +283,56 @@ export function CrmStatsDashboard({
         </div>
       </div>
 
-      {/* Kennzahlen-Kacheln */}
+      {/* Kennzahlen-Kacheln (Referenz-Look: Icon-Disc + großer Wert) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        <Tile label="Leads gesamt" value={String(data.inRange.length)} sub={`${data.unbearbeitet.length} noch unberührt`} />
-        <Tile
+        <StatTile
+          icon={Inbox}
+          tone="blue"
+          coloredValue
+          label="Leads gesamt"
+          value={data.inRange.length}
+          sub={`${data.unbearbeitet.length} noch unberührt`}
+        />
+        <StatTile
+          icon={Timer}
+          tone="orange"
           label="Ø bis Erstbearbeitung"
           value={avg(data.reaktionen) != null ? fmtMin(avg(data.reaktionen)!) : "—"}
           sub={median(data.reaktionen) != null ? `Median ${fmtMin(median(data.reaktionen)!)}` : "noch keine Stempel"}
         />
-        <Tile
+        <StatTile
+          icon={Stethoscope}
+          tone="purple"
           label="Recare-Leads"
-          value={String(data.recare.length)}
+          value={data.recare.length}
           sub={`davon ${data.recare.filter((l) => funnelRank(l) === 4).length} aufgenommen`}
         />
-        <Tile
+        <StatTile
+          icon={UserCheck}
+          tone="green"
+          coloredValue
           label="Aufgenommen"
-          value={String(data.aufgenommen.length)}
+          value={data.aufgenommen.length}
           sub={`${pct(data.aufgenommen.length, data.inRange.length)} aller Leads`}
         />
-        <Tile
+        <StatTile
+          icon={Send}
+          tone="amber"
           label="An PDLs übergeben"
-          value={String(data.uebergeben.length)}
+          value={data.uebergeben.length}
           sub={
             avg(data.alleLiegezeiten) != null
               ? `Ø Liegezeit ${fmtMin(avg(data.alleLiegezeiten)!)}`
               : "keine Rückmeldungen"
           }
         />
-        <Tile label="Verloren" value={String(data.verloren)} sub={pct(data.verloren, data.inRange.length) + " aller Leads"} />
+        <StatTile
+          icon={XCircle}
+          tone="gray"
+          label="Verloren"
+          value={data.verloren}
+          sub={pct(data.verloren, data.inRange.length) + " aller Leads"}
+        />
       </div>
 
       {/* Leads pro Tag je Kanal */}
@@ -556,16 +587,6 @@ export function CrmStatsDashboard({
           )}
         </div>
       </section>
-    </div>
-  );
-}
-
-function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border bg-card p-3.5 shadow-sm">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-2xl font-semibold">{value}</p>
-      {sub && <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
 }

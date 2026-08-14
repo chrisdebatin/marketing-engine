@@ -9,15 +9,20 @@ import { OnlineIndicator } from "@/components/online-indicator";
 import { SyncBadge } from "@/components/sync-badge";
 
 /**
- * Desktop-Navigation als linke Sidebar (moderner Software-Look);
- * auf Mobilgeräten übernimmt weiterhin die Top-Bar (AppHeader).
+ * Desktop-Navigation als linke weiße Sidebar (Referenz-Look): Icon + Label,
+ * aktive Seite als kräftig blaues abgerundetes Rechteck mit weißem Text,
+ * Badge-Zähler (offene Leads) als kleine rote Pille.
+ * Auf Mobilgeräten übernimmt weiterhin die Top-Bar (AppHeader).
  */
 export function AppSidebar({
   isAdmin,
   email,
+  crmBadge = 0,
 }: {
   isAdmin: boolean;
   email: string | null;
+  /** Anzahl offener (unbeantworteter) Leads — rote Pille am CRM-Eintrag. */
+  crmBadge?: number;
 }) {
   const pathname = usePathname();
 
@@ -46,9 +51,10 @@ export function AppSidebar({
             <p className="mb-1.5 px-2.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
               {group.title}
             </p>
-            <ul className="flex flex-col gap-px">
+            <ul className="flex flex-col gap-0.5">
               {group.items.map(({ href, label, Icon }) => {
                 const active = isNavActive(href, pathname);
+                const badge = href === "/crm" ? crmBadge : 0;
                 return (
                   <li key={href}>
                     <Link
@@ -57,17 +63,32 @@ export function AppSidebar({
                       className={cn(
                         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                         active
-                          ? "bg-accent font-medium text-accent-foreground"
-                          : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground",
+                          ? "bg-primary font-medium text-primary-foreground shadow-sm"
+                          : "font-normal text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                       )}
                     >
                       <Icon
                         className={cn(
                           "size-4 shrink-0",
-                          active ? "text-primary" : "text-muted-foreground/70",
+                          active
+                            ? "text-primary-foreground"
+                            : "text-muted-foreground/70",
                         )}
                       />
-                      {label}
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      {badge > 0 && (
+                        <span
+                          title={`${badge} offene Leads warten auf Rückruf`}
+                          className={cn(
+                            "flex h-4.5 min-w-4.5 items-center justify-center rounded-full px-1 text-[10px] leading-none font-bold tabular-nums",
+                            active
+                              ? "bg-white/25 text-primary-foreground"
+                              : "bg-red-500 text-white",
+                          )}
+                        >
+                          {badge}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );
