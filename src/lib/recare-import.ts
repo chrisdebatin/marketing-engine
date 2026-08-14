@@ -344,8 +344,10 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
           ? null
           : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
       });
-      if (insErr) skipped++;
-      else imported++;
+      if (insErr) {
+        processed.delete(m.id);
+        skipped++;
+      } else imported++;
       continue;
     }
 
@@ -412,24 +414,36 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
                   .slice(0, 1000),
               }),
         });
-        if (insErr) skipped++;
-        else imported++;
+        if (insErr) {
+          processed.delete(m.id);
+          skipped++;
+        } else imported++;
         continue;
       }
       // kundenanfrage → offener Lead fürs Kundenservice-Team
-      const { error: insErr } = await admin.from("lead_calls").insert({
+      const websiteValues = {
         call_date: m.receivedAt.slice(0, 10),
         quelle: "website",
         bereich: "pflege",
         lead_name: w.name.slice(0, 200) || "(ohne Name)",
         telefon: w.telefon.slice(0, 60) || null,
         email: w.email.slice(0, 200) || null,
-        adresse: w.ort.slice(0, 200) || null,
         notiz: [w.anliegen, w.ort ? `Ort: ${w.ort}` : ""].filter(Boolean).join(" · ").slice(0, 1000) || null,
         status: "offen",
-      });
-      if (insErr) skipped++;
-      else imported++;
+      };
+      let { error: insErr } = await admin
+        .from("lead_calls")
+        .insert({ ...websiteValues, adresse: w.ort.slice(0, 200) || null });
+      if (insErr && (insErr.code === "PGRST204" || insErr.code === "42703")) {
+        // Migration 0058 fehlt noch → ohne Adress-Spalte importieren.
+        ({ error: insErr } = await admin.from("lead_calls").insert(websiteValues));
+      }
+      if (insErr) {
+        // NICHT als verarbeitet merken — sonst ist die Mail beim nächsten
+        // Sync unwiederbringlich verloren.
+        processed.delete(m.id);
+        skipped++;
+      } else imported++;
       continue;
     }
 
@@ -444,18 +458,26 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       data.versorgung ? `Versorgung: ${data.versorgung}` : "",
       data.ort ? `Ort: ${data.ort}` : "",
     ].filter(Boolean);
-    const { error: insErr } = await admin.from("lead_calls").insert({
+    const recareValues = {
       call_date: m.receivedAt.slice(0, 10),
       quelle: "recare",
       bereich: "pflege",
       quelle_detail: data.klinik.slice(0, 200) || null,
       lead_name: data.patient.slice(0, 200) || "(ohne Name)",
       telefon: data.telefon.slice(0, 60) || null,
-      adresse: data.ort.slice(0, 200) || null,
       notiz: notizTeile.join(" · ").slice(0, 1000) || null,
       status: "offen",
-    });
+    };
+    let { error: insErr } = await admin
+      .from("lead_calls")
+      .insert({ ...recareValues, adresse: data.ort.slice(0, 200) || null });
+    if (insErr && (insErr.code === "PGRST204" || insErr.code === "42703")) {
+      // Migration 0058 fehlt noch → ohne Adress-Spalte importieren.
+      ({ error: insErr } = await admin.from("lead_calls").insert(recareValues));
+    }
     if (insErr) {
+      // Mail beim nächsten Sync erneut versuchen statt sie zu verlieren.
+      processed.delete(m.id);
       skipped++;
       continue;
     }
