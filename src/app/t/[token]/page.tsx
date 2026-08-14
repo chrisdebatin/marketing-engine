@@ -3,6 +3,7 @@ import { Headset, PhoneCall } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { syncRecareMails } from "@/lib/recare-import";
+import { PageHeader } from "@/components/page-header";
 import { TeamWorkspace } from "@/components/team-workspace";
 
 export const dynamic = "force-dynamic";
@@ -66,27 +67,12 @@ export default async function TeamMemberPage({
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">
-      <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {isCallcenter ? (
-            <PhoneCall className="size-5" />
-          ) : (
-            <Headset className="size-5" />
-          )}
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-wide text-primary uppercase">
-            {isCallcenter ? "Call-Center" : "Kundenservice"}
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Hallo {member.name}!
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Ihre persönliche Arbeitsliste — Leads übernehmen, Status setzen,
-            Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={isCallcenter ? PhoneCall : Headset}
+        eyebrow={isCallcenter ? "Call-Center" : "Kundenservice"}
+        title={`Hallo ${member.name}!`}
+        description="Ihre persönliche Arbeitsliste — Leads übernehmen, Status setzen, Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert."
+      />
 
       {recareHint && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Chip } from "@/components/ui/chip";
 import { HubTags } from "@/components/md-tag";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -92,11 +93,14 @@ export default async function PatientenPage() {
 
         return (
           <section key={period} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h2 className="text-lg font-semibold">{formatPeriod(period)}</h2>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                {monthZu} Neuaufnahmen · {monthAb} Abgänge
-              </span>
+              <Chip tone="green" title="Neuaufnahmen in diesem Monat">
+                +{monthZu} Neuaufnahmen
+              </Chip>
+              <Chip tone="gray" title="Abgänge in diesem Monat">
+                −{monthAb} Abgänge
+              </Chip>
             </div>
 
             <div className="flex flex-wrap gap-1.5">

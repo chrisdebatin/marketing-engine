@@ -11,6 +11,8 @@ import { formatIsoDate } from "@/lib/crm";
 import { Badge } from "@/components/ui/badge";
 import { CapacityFreetext } from "@/components/capacity-freetext";
 import { PageHeader } from "@/components/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -42,32 +44,6 @@ function ScoreBadge({ value }: { value: number | null | undefined }) {
     >
       {value}
     </span>
-  );
-}
-
-function Stat({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  value: number | string;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0">
-        <div className="text-lg leading-none font-semibold tabular-nums">
-          {value}
-        </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">
-          {label}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -151,32 +127,55 @@ export default async function KapazitaetPage() {
           <CapacityFreetext />
 
           {/* Kennzahlen (Basis: jeweils letzte Meldung je Standort) */}
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Stat
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatTile
               icon={BedDouble}
+              tone="blue"
               value={avgScore("pflege_score")}
-              label="Ø Pflege (1–5)"
+              label="Ø Pflege"
+              sub="Skala 1–5"
             />
-            <Stat
+            <StatTile
               icon={Baby}
+              tone="purple"
               value={avgScore("alltagshilfe_score")}
-              label="Ø Alltagshilfe (1–5)"
+              label="Ø Alltagshilfe"
+              sub="Skala 1–5"
             />
-            <Stat
+            <StatTile
               icon={Wind}
+              tone="orange"
               value={avgScore("wundversorgung_score")}
-              label="Ø Wundversorgung (1–5)"
+              label="Ø Wundversorgung"
+              sub="Skala 1–5"
             />
-            <Stat icon={BedDouble} value={freiGesamt} label="Freie Plätze gesamt" />
-            <Stat
+            <StatTile
+              icon={BedDouble}
+              tone="green"
+              coloredValue
+              value={freiGesamt}
+              label="Freie Plätze gesamt"
+              sub="Summe der letzten Meldungen"
+            />
+            <StatTile
               icon={CalendarCheck}
+              tone={gemeldet < hubs.length ? "amber" : "green"}
               value={`${gemeldet}/${hubs.length}`}
               label="Diese Woche gemeldet"
+              sub={
+                gemeldet < hubs.length
+                  ? "Erinnerung: Kommunikation → Kapazitäts-Erinnerung"
+                  : "alle Standorte gemeldet"
+              }
             />
           </div>
 
           {/* Tabelle je Standort */}
-          <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
+          <SectionCard
+            title="Kapazität je Standort"
+            description="Jeweils die letzte Meldung der PDL — amber markiert veraltete Meldungen (nicht aus dieser Woche)."
+            contentClassName="flex flex-col gap-2"
+          >
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
                 <thead>
@@ -245,7 +244,7 @@ export default async function KapazitaetPage() {
               Skala je Leistungsbereich: {SCORE_HINT}. Die gemeldeten
               Platz-Zahlen (Frei/Beatmung/WG/Kinder) stehen im Verlauf unten.
             </p>
-          </section>
+          </SectionCard>
 
           {/* Verlauf je Standort */}
           <details className="group rounded-xl border bg-card shadow-sm">

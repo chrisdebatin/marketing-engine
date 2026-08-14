@@ -19,35 +19,11 @@ import {
 import { MdDraftList } from "@/components/md-draft-list";
 import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatTile } from "@/components/ui/stat-tile";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-function Stat({
-  icon: Icon,
-  value,
-  label,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  value: number;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg border bg-card px-3 py-2.5">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0">
-        <div className="text-lg leading-none font-semibold tabular-nums">
-          {value}
-        </div>
-        <div className="mt-1 truncate text-xs text-muted-foreground">
-          {label}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Kommunikation: der Wochen-Report der Gruppe (letzte 7 Tage) als Vorschau —
@@ -111,13 +87,13 @@ export default async function KommunikationPage() {
       />
 
       {/* Kennzahlen der Woche */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Stat icon={Users} value={g.totals.kontakte} label="Klinik-Kontakte" />
-        <Stat icon={Package} value={g.totals.box} label="Boxen vorbeigebracht" />
-        <Stat icon={Users} value={g.totals.besuch} label="Persönliche Besuche" />
-        <Stat icon={Phone} value={g.totals.anruf} label="Anrufe" />
-        <Stat icon={Megaphone} value={g.totals.auslagen} label="Auslagen (Flyer/Box)" />
-        <Stat icon={ShoppingCart} value={g.totals.bestellungen} label="Bestellungen" />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatTile icon={Users} tone="blue" coloredValue value={g.totals.kontakte} label="Klinik-Kontakte" />
+        <StatTile icon={Package} tone="green" value={g.totals.box} label="Boxen vorbeigebracht" />
+        <StatTile icon={Users} tone="purple" value={g.totals.besuch} label="Persönliche Besuche" />
+        <StatTile icon={Phone} tone="orange" value={g.totals.anruf} label="Anrufe" />
+        <StatTile icon={Megaphone} tone="amber" value={g.totals.auslagen} label="Auslagen (Flyer/Box)" />
+        <StatTile icon={ShoppingCart} tone="gray" value={g.totals.bestellungen} label="Bestellungen" />
       </div>
 
       {/* MD-Wochen-Updates als Entwürfe (Versand nach Freigabe) */}
@@ -146,11 +122,12 @@ export default async function KommunikationPage() {
       </section>
 
       {/* Aktivste Standorte */}
-      <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
-        <p className="flex items-center gap-1.5 font-semibold">
-          <Trophy className="size-4 text-primary" />
-          Aktivste Standorte der Woche
-        </p>
+      <SectionCard
+        icon={Trophy}
+        title="Aktivste Standorte der Woche"
+        description="Zählt alle von den PDLs geloggten Aktionen der letzten 7 Tage — dieselben Zahlen stehen im Wochen-Report."
+        contentClassName="flex flex-col gap-2"
+      >
         {active.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Diese Woche wurden noch keine Aktivitäten geloggt.
@@ -212,14 +189,15 @@ export default async function KommunikationPage() {
             )}
           </>
         )}
-      </section>
+      </SectionCard>
 
       {/* Wo ausgelegt/beliefert wurde */}
-      <section className="flex flex-col gap-2 rounded-xl border bg-card p-5 shadow-sm">
-        <p className="flex items-center gap-1.5 font-semibold">
-          <Megaphone className="size-4 text-primary" />
-          Wo diese Woche ausgelegt/beliefert wurde ({g.placements.length})
-        </p>
+      <SectionCard
+        icon={Megaphone}
+        title={`Wo diese Woche ausgelegt/beliefert wurde (${g.placements.length})`}
+        description="Alle Orte, die die PDLs in den letzten 7 Tagen über ihre Standort-Links eingetragen haben."
+        contentClassName="flex flex-col gap-2"
+      >
         {g.placements.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Keine Auslagen in den letzten 7 Tagen.
@@ -242,7 +220,7 @@ export default async function KommunikationPage() {
             ))}
           </ul>
         )}
-      </section>
+      </SectionCard>
     </div>
   );
 }

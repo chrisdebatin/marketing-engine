@@ -133,7 +133,8 @@ export function PdlPatientList({
                 type="button"
                 size="sm"
                 disabled={busy}
-                className="bg-emerald-600 hover:bg-emerald-600/90"
+                title="Bestätigt dem Marketing-Team: Der Patient wird bei Ihnen versorgt. Der Fall wird damit abgeschlossen und verschwindet aus dieser Liste."
+                className="bg-emerald-600 hover:bg-emerald-700"
                 onClick={() => confirm(r, "aufgenommen")}
               >
                 <Check className="size-3.5" /> In Versorgung aufgenommen
@@ -143,6 +144,7 @@ export function PdlPatientList({
                 size="sm"
                 variant="ghost"
                 disabled={busy}
+                title="Versorgung kam nicht zustande? Kurz den Grund angeben — das Team sieht die Rückmeldung und der Fall wird geschlossen."
                 className="text-muted-foreground"
                 onClick={() => setNoteFor(noteFor === r.id ? null : r.id)}
               >

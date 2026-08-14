@@ -1,4 +1,5 @@
 import { Rocket } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MetaAdsAgent } from "@/components/meta-ads-agent";
@@ -35,19 +36,11 @@ export default async function MetaAdsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Rocket className="size-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Meta Ads KI</h1>
-          <p className="text-sm text-muted-foreground">
-            Sag in Freitext, wo du Kunden oder Mitarbeiter brauchst — der Agent
-            baut die Kampagne im Meta-Werbekonto. Alles startet pausiert; live
-            geht nichts ohne deine Freigabe im Chat.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Rocket}
+        title="Meta Ads KI"
+        description="Sag in Freitext, wo du Kunden oder Mitarbeiter brauchst — der Agent baut die Kampagne im Meta-Werbekonto. Alles startet pausiert; live geht nichts ohne deine Freigabe im Chat."
+      />
 
       <MetaCampaignOverview />
 

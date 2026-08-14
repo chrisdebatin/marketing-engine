@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sparkles, Send } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
@@ -51,17 +52,11 @@ export default function AssistantPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Sparkles className="size-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Assistant</h1>
-          <p className="text-sm text-muted-foreground">
-            Stell Fragen zu deinen Marketing-Zahlen. (Benötigt Internet.)
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Sparkles}
+        title="Assistant"
+        description="Stell Fragen zu deinen Marketing-Zahlen — die Antwort kommt aus deinen eigenen Daten. (Benötigt Internet.)"
+      />
 
       {turns.length === 0 && (
         <div className="flex flex-wrap gap-2">

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isFrontofficeToken } from "@/lib/frontoffice-token";
 import { capacityWeekStart } from "@/lib/capacity";
 import { LeadBoard, type LeadRow } from "@/components/lead-board";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -54,23 +55,15 @@ export default async function FrontofficeTokenPage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-8">
-      <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Headset className="size-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Frontoffice · Lead-Erfassung
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Jeden Interessenten-Anruf hier loggen — Bereich und Quelle wählen,
-            Name eintragen, Standort der Weiterleitung, fertig.{" "}
-            {dieseWoche > 0
-              ? `Diese Woche bereits ${dieseWoche} Lead${dieseWoche === 1 ? "" : "s"}.`
-              : ""}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Headset}
+        title="Frontoffice · Lead-Erfassung"
+        description={`Jeden Interessenten-Anruf hier loggen — Bereich und Quelle wählen, Name eintragen, Standort der Weiterleitung, fertig.${
+          dieseWoche > 0
+            ? ` Diese Woche bereits ${dieseWoche} Lead${dieseWoche === 1 ? "" : "s"}.`
+            : ""
+        }`}
+      />
 
       <LeadBoard hubs={hubRows ?? []} recent={leads} klinikNamen={klinikNamen} />
     </main>

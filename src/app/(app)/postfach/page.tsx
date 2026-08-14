@@ -11,6 +11,7 @@ import {
 import { splitPdlEmails } from "@/lib/pdl";
 import type { Hub } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -143,19 +144,15 @@ function Shell({
 }) {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-5 px-4 py-8">
-      <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Inbox className="size-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Postfach</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {account
-              ? `Posteingang von ${account} — Anfragen der Standorte zuerst.`
-              : "Anfragen der Standorte per Outlook auslesen."}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Inbox}
+        title="Postfach"
+        description={
+          account
+            ? `Posteingang von ${account} — Anfragen der Standorte zuerst.`
+            : "Anfragen der Standorte per Outlook auslesen."
+        }
+      />
       {children}
     </main>
   );

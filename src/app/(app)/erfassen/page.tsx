@@ -3,6 +3,7 @@ import { getMaterialTypes, getStandortSuggestions } from "@/lib/data";
 import { ActivityForm } from "@/components/activity-form";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionCard } from "@/components/ui/section-card";
 
 export default async function ErfassenPage() {
   const session = await requireSession();
@@ -33,18 +34,20 @@ export default async function ErfassenPage() {
         title="Aktivität erfassen"
         description="Flyer/Aufsteller ausgelegt oder Box beliefert – auch offline."
       />
-      <Card>
-        <CardContent className="p-5 sm:p-6">
-          <ActivityForm
-            hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
-            materialTypes={materialTypes.map((m) => ({
-              id: m.id,
-              name: m.name,
-            }))}
-            standorte={standorte}
-          />
-        </CardContent>
-      </Card>
+      <SectionCard
+        title="Neue Aktivität"
+        description="Hub und Aktivitätstyp wählen, Details eintragen, speichern — ohne Internet wird der Eintrag lokal gesichert und später automatisch synchronisiert."
+        contentClassName="p-5 sm:p-6"
+      >
+        <ActivityForm
+          hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
+          materialTypes={materialTypes.map((m) => ({
+            id: m.id,
+            name: m.name,
+          }))}
+          standorte={standorte}
+        />
+      </SectionCard>
     </div>
   );
 }

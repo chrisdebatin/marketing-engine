@@ -9,6 +9,7 @@ import {
   type CrmLogEntry,
   type VisitTarget,
 } from "@/components/crm-visit-list";
+import { PageHeader } from "@/components/page-header";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
 import {
@@ -329,44 +330,36 @@ export default async function HubShareLinkPage({
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8">
       {/* Kopf mit Standort und Liefer-Kennzahlen */}
-      <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Building2 className="size-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-wide text-primary uppercase">
-            Marketing Dashboard
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">{hub.name}</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Ihre persönliche Standort-Seite — kein Login nötig, Link einfach
-            speichern.
-          </p>
-          {(flyers > 0 || aufsteller > 0 || boxes > 0) && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {(
-                [
-                  [flyers, "Flyer"],
-                  [aufsteller, "Aufsteller"],
-                  [boxes, "Boxen"],
-                ] as const
-              )
-                .filter(([v]) => v > 0)
-                .map(([value, label]) => (
-                  <span
-                    key={label}
-                    className="rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm"
-                  >
-                    <span className="font-semibold text-foreground tabular-nums">
-                      {value.toLocaleString("de-DE")}
-                    </span>{" "}
-                    {label} geliefert
-                  </span>
-                ))}
-            </div>
-          )}
+      <PageHeader
+        icon={Building2}
+        eyebrow="Marketing Dashboard"
+        title={hub.name}
+        description="Ihre persönliche Standort-Seite — kein Login nötig, Link einfach speichern."
+      />
+      {(flyers > 0 || aufsteller > 0 || boxes > 0) && (
+        <div className="-mt-2 flex flex-wrap gap-1.5">
+          {(
+            [
+              [flyers, "Flyer"],
+              [aufsteller, "Aufsteller"],
+              [boxes, "Boxen"],
+            ] as const
+          )
+            .filter(([v]) => v > 0)
+            .map(([value, label]) => (
+              <span
+                key={label}
+                title={`Bisher an Ihren Standort geliefert: ${value.toLocaleString("de-DE")} ${label}`}
+                className="rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm"
+              >
+                <span className="font-semibold text-foreground tabular-nums">
+                  {value.toLocaleString("de-DE")}
+                </span>{" "}
+                {label} geliefert
+              </span>
+            ))}
         </div>
-      </div>
+      )}
 
       {/* Kurz-Überblick: eingeklappt, damit die Seite ruhig bleibt */}
       <details className="group rounded-xl border border-primary/20 bg-primary/[0.04]">

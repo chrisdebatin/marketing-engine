@@ -101,10 +101,16 @@ export default async function OnlineAnzeigenPage() {
 
       {/* Meta-Kampagnen */}
       <section className="flex flex-col gap-3">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Rocket className="size-4 text-primary" />
-          Meta-Kampagnen
-        </h2>
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <Rocket className="size-4 text-primary" />
+            Meta-Kampagnen
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Manuell gepflegte Übersicht der Facebook/Instagram-Kampagnen je
+            Standort — laufende erscheinen auf den Hub-Karten.
+          </p>
+        </div>
         {metaMissing ? (
           missingHint("meta_ads")
         ) : (
@@ -114,10 +120,16 @@ export default async function OnlineAnzeigenPage() {
 
       {/* Personal-Anzeigen */}
       <section className="flex flex-col gap-3 border-t pt-5">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <BriefcaseBusiness className="size-4 text-primary" />
-          Personal-Anzeigen
-        </h2>
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <BriefcaseBusiness className="size-4 text-primary" />
+            Personal-Anzeigen
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Stellenanzeigen (Indeed, Join & Co.) je Standort — Status und
+            Laufzeit hier pflegen.
+          </p>
+        </div>
         {persMissing ? (
           missingHint("personal_ads")
         ) : (

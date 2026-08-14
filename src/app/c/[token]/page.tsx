@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { PhoneOutgoing } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCallcenterToken } from "@/lib/frontoffice-token";
+import { PageHeader } from "@/components/page-header";
 import {
   CallcenterCrm,
   type CallcenterContactRow,
@@ -48,21 +49,11 @@ export default async function CallcenterTokenPage({
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">
-      <div className="flex items-start gap-3">
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <PhoneOutgoing className="size-5" />
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Call-Center · Klinik-Kontakte
-          </h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Die Anruf-Liste der Kliniken abarbeiten: fällige zuerst, jeden
-            Anruf loggen. Jeder Kontakt landet im zentralen CRM — in
-            derselben Institutions-Historie, mit der auch die PDLs arbeiten.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={PhoneOutgoing}
+        title="Call-Center · Klinik-Kontakte"
+        description="Die Anruf-Liste der Kliniken abarbeiten: fällige zuerst, jeden Anruf loggen. Jeder Kontakt landet im zentralen CRM — in derselben Institutions-Historie, mit der auch die PDLs arbeiten."
+      />
 
       <CallcenterCrm
         targets={(targetRows ?? []) as CrmTargetRow[]}

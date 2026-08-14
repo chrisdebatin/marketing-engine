@@ -231,8 +231,8 @@ export function CallcenterCrm({
     cn(
       "cursor-pointer rounded-full border px-2.5 py-1 text-xs font-medium transition-colors select-none",
       active
-        ? "border-primary bg-primary/10 text-primary"
-        : "text-muted-foreground hover:text-foreground",
+        ? "border-primary bg-primary text-primary-foreground"
+        : "bg-card text-muted-foreground hover:text-foreground",
     );
 
   return (
