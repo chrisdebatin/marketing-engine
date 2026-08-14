@@ -504,10 +504,52 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       continue;
     }
 
+    // Recare schickt pro Patient mehrere Mails (Anfrage-Varianten, Daten-
+    // Updates, Zuweisung). Über den Patienten-Code (z. B. "1VM-JQG-Z1V")
+    // wird der BESTEHENDE Lead fortgeschrieben statt ein Duplikat anzulegen;
+    // "zugewiesen"-Mails heben den Status auf kontaktiert (Klinik hat den
+    // Patienten fest an uns vergeben).
+    const code =
+      /\b([A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3})\b/.exec(m.subject)?.[1] ??
+      /\b([A-Z0-9]{3}-[A-Z0-9]{3}-[A-Z0-9]{3})\b/.exec(data.patient)?.[1] ??
+      null;
+    const zugewiesen = /zugewiesen/i.test(m.subject);
+    if (code) {
+      const { data: vorhandene } = await admin
+        .from("lead_calls")
+        .select("id, status, notiz")
+        .eq("quelle", "recare")
+        .ilike("lead_name", `%${code}%`)
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const existing = vorhandene?.[0];
+      if (existing) {
+        const heute = new Date().toLocaleDateString("de-DE");
+        const zusatz = zugewiesen
+          ? `✔ Klinik hat den Patienten über Recare fest zugewiesen (${heute})`
+          : `Update der Klinik (${heute}): ${data.zusammenfassung || "Patientendaten aktualisiert"}`;
+        const notiz = (existing.notiz ?? "").includes(zusatz)
+          ? existing.notiz
+          : [existing.notiz, zusatz].filter(Boolean).join(" · ").slice(0, 1000);
+        await admin
+          .from("lead_calls")
+          .update({
+            notiz,
+            ...(zugewiesen && existing.status === "offen"
+              ? { status: "kontaktiert" }
+              : {}),
+          })
+          .eq("id", existing.id);
+        imported++;
+        continue;
+      }
+    }
+
     const notizTeile = [
       data.zusammenfassung,
       data.versorgung ? `Versorgung: ${data.versorgung}` : "",
       data.ort ? `Ort: ${data.ort}` : "",
+      zugewiesen ? "✔ Klinik hat den Patienten über Recare fest zugewiesen" : "",
     ].filter(Boolean);
     const recareValues = {
       call_date: m.receivedAt.slice(0, 10),
@@ -517,7 +559,7 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       lead_name: data.patient.slice(0, 200) || "(ohne Name)",
       telefon: data.telefon.slice(0, 60) || null,
       notiz: notizTeile.join(" · ").slice(0, 1000) || null,
-      status: "offen",
+      status: zugewiesen ? "kontaktiert" : "offen",
     };
     let { error: insErr } = await admin
       .from("lead_calls")
