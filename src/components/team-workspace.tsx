@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   CalendarClock,
   Check,
+  FileText,
   Hand,
   Headset,
   Inbox,
@@ -15,6 +16,7 @@ import {
   PhoneCall,
   Search,
   Undo2,
+  User,
   Users,
   X,
 } from "lucide-react";
@@ -2379,11 +2381,12 @@ function RecareOutcome({
 }
 
 /**
- * Ein Eintrag der Outbound-Tagesliste: Nummer in der Reihenfolge, Institution
- * mit Kontext, offene To-dos und das Anruf-Formular mit klaren Abfragen —
- * Erreicht?/Nicht erreicht (nicht erreicht → automatisch morgen wieder),
- * Ansprechpartner, Notiz (liest die KI: "in 1 Woche zurückrufen" → Wieder-
- * vorlage-Tag, konkrete Aufgabe → To-do) und optional festes Datum.
+ * Ein Eintrag der Outbound-Tagesliste im Referenz-Look: Nummern-Disc,
+ * großer Name, Kontext-Zeilen mit Icons — und beim Loggen ein zweispaltiges
+ * Formular: links die Pflicht-Auswahl Erreicht?/Nicht erreicht als Kacheln
+ * plus Mini-Timeline (Kontakt heute → Wiedervorlage → Erledigt), rechts
+ * Ansprechpartner, Notiz (liest die KI: "in 1 Woche zurückrufen" →
+ * Wiedervorlage-Tag, "Flyer schicken" → To-do) und optional festes Datum.
  */
 function OutboundRow({
   target: t,
@@ -2403,6 +2406,7 @@ function OutboundRow({
   onLogged: (patch: Partial<OutboundTarget>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
   const [erreicht, setErreicht] = useState<boolean | null>(null);
   const [ansprechpartner, setAnsprechpartner] = useState("");
   const [notiz, setNotiz] = useState("");
@@ -2474,26 +2478,52 @@ function OutboundRow({
     }
   }
 
+  const feldLabel = (icon: ReactNode, text: string) => (
+    <span className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+      {icon}
+      {text}
+    </span>
+  );
+
+  const timelineItem = (
+    icon: ReactNode,
+    active: boolean,
+    label: string,
+    sub: string,
+  ) => (
+    <div className="flex items-center gap-2.5">
+      <span
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-full border",
+          active
+            ? "border-primary bg-primary text-primary-foreground"
+            : "bg-card text-muted-foreground",
+        )}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <p className="text-xs leading-tight font-medium">{label}</p>
+        <p className="truncate text-[11px] text-muted-foreground">{sub}</p>
+      </span>
+    </div>
+  );
+
   return (
     <li
       className={cn(
-        "flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm",
-        isDue && "border-amber-500/50 bg-amber-500/[0.04]",
+        "flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm",
+        isDue && "border-amber-500/40",
       )}
     >
       <div className="flex items-start gap-3">
         {/* Reihenfolge im Tag */}
-        <span
-          className={cn(
-            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-            isDue ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground",
-          )}
-        >
+        <span className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
           {index}
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[15px] leading-snug font-semibold">{t.name}</span>
+            <span className="text-lg leading-snug font-bold tracking-tight">{t.name}</span>
             <LeadIdChip id={t.id} />
             {t.relevanz != null && (
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
@@ -2511,8 +2541,8 @@ function OutboundRow({
               </span>
             )}
           </div>
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="size-3 shrink-0" />
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MapPin className="size-3.5 shrink-0" />
             {[
               t.ort,
               placeKindLabel(t.kategorie) + (t.exklusiv ? "" : " · gemeinsamer Pool"),
@@ -2523,11 +2553,28 @@ function OutboundRow({
           {t.kurzinfo && (
             <p className="text-xs text-muted-foreground italic">{t.kurzinfo}</p>
           )}
+          {t.hub && (
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span className="font-semibold text-primary">Standort {t.hub}:</span>
+              <span className="font-medium">
+                {t.hub_pdl ? `PDL ${t.hub_pdl}` : "keine PDL hinterlegt"}
+              </span>
+              {t.hub_pdl_phone && (
+                <a
+                  href={`tel:${t.hub_pdl_phone}`}
+                  className="flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  <Phone className="size-3.5" />
+                  {t.hub_pdl_phone}
+                </a>
+              )}
+            </p>
+          )}
           {t.besuche.map((b) => (
             <p
               key={b.art}
               className={cn(
-                "flex flex-wrap items-center gap-x-1.5 rounded-lg px-2 py-1 text-xs font-medium",
+                "flex w-fit flex-wrap items-center gap-x-1.5 rounded-lg px-2 py-1 text-xs font-medium",
                 b.art === "box"
                   ? "bg-sky-100 text-sky-900"
                   : "bg-muted text-muted-foreground",
@@ -2540,25 +2587,8 @@ function OutboundRow({
               {b.hub ? ` (${b.hub})` : ""}
             </p>
           ))}
-          {t.hub && (
-            <p className="flex flex-wrap items-center gap-x-1.5 rounded-lg bg-primary/[0.05] px-2 py-1 text-xs">
-              <span className="font-semibold text-primary">Standort {t.hub}:</span>
-              <span className="font-medium">
-                {t.hub_pdl ? `PDL ${t.hub_pdl}` : "keine PDL hinterlegt"}
-              </span>
-              {t.hub_pdl_phone && (
-                <a
-                  href={`tel:${t.hub_pdl_phone}`}
-                  className="flex items-center gap-1 font-medium text-primary hover:underline"
-                >
-                  <Phone className="size-3" />
-                  {t.hub_pdl_phone}
-                </a>
-              )}
-            </p>
-          )}
-          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <CalendarClock className="size-3 shrink-0" />
+          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CalendarClock className="size-3.5 shrink-0" />
             {t.letzter_besuch
               ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder dran ab ${formatIsoDate(t.naechster_besuch)}`
               : "Noch kein Kontakt"}
@@ -2595,10 +2625,16 @@ function OutboundRow({
           <Button
             type="button"
             size="sm"
-            variant={isDue ? "default" : "outline"}
-            className="shrink-0"
+            variant="outline"
+            className="shrink-0 border-primary/40 text-primary hover:bg-primary/5 hover:text-primary"
             onClick={() => {
               setHinweis(null);
+              setOpenedAt(
+                new Date().toLocaleTimeString("de-DE", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              );
               setOpen(true);
             }}
           >
@@ -2608,112 +2644,176 @@ function OutboundRow({
       </div>
 
       {open && (
-        <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3">
-          {/* 1. Erreicht? */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold">Erreicht?</span>
+        <div className="grid gap-3 border-t pt-3 md:grid-cols-[230px_minmax(0,1fr)]">
+          {/* Linke Schiene: Pflicht-Auswahl + Mini-Timeline */}
+          <div className="flex flex-col gap-2">
             <button
               type="button"
               onClick={() => setErreicht(true)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors",
                 erreicht === true
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "bg-background text-muted-foreground hover:text-foreground",
+                  ? "border-emerald-300 bg-emerald-50"
+                  : "bg-card hover:bg-muted/50",
               )}
             >
-              ✓ Ja, gesprochen
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full",
+                  erreicht === true
+                    ? "bg-emerald-500 text-white"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <Check className="size-4" />
+              </span>
+              <span>
+                <p className="text-xs text-muted-foreground">Erreicht?</p>
+                <p
+                  className={cn(
+                    "text-sm font-semibold",
+                    erreicht === true && "text-emerald-700",
+                  )}
+                >
+                  Ja, gesprochen
+                </p>
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setErreicht(false)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "flex items-center gap-2.5 rounded-xl border p-2.5 text-left transition-colors",
                 erreicht === false
-                  ? "border-red-600 bg-red-600 text-white"
-                  : "bg-background text-muted-foreground hover:text-foreground",
+                  ? "border-red-300 bg-red-50"
+                  : "bg-card hover:bg-muted/50",
               )}
             >
-              ✗ Nicht erreicht
+              <span
+                className={cn(
+                  "flex size-7 shrink-0 items-center justify-center rounded-full",
+                  erreicht === false
+                    ? "bg-red-500 text-white"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                <X className="size-4" />
+              </span>
+              <span>
+                <p className="text-xs text-muted-foreground">Nicht erreicht?</p>
+                <p
+                  className={cn(
+                    "text-sm font-semibold",
+                    erreicht === false && "text-red-700",
+                  )}
+                >
+                  Nicht erreicht
+                </p>
+              </span>
             </button>
+            <div className="mt-1 flex flex-col gap-3 pl-1">
+              {timelineItem(
+                <Phone className="size-3" />,
+                true,
+                "Kontakt heute",
+                openedAt ? `${openedAt} Uhr` : formatIsoDate(today),
+              )}
+              {timelineItem(
+                <CalendarClock className="size-3" />,
+                false,
+                "Wiedervorlage",
+                wiedervorlage
+                  ? formatIsoDate(wiedervorlage)
+                  : erreicht === false
+                    ? "morgen (automatisch)"
+                    : "aus Notiz / Rhythmus",
+              )}
+              {timelineItem(<Check className="size-3" />, false, "Erledigt", "Offen")}
+            </div>
           </div>
-          {erreicht === false && (
-            <p className="text-xs text-muted-foreground">
-              Wird automatisch <span className="font-semibold">morgen</span> wieder
-              auf die Liste gesetzt.
-            </p>
-          )}
-          {erreicht === true && (
-            <>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Ansprechpartner
-                </span>
+
+          {/* Rechte Seite: Felder */}
+          <div className="flex flex-col gap-2.5">
+            {erreicht === null && (
+              <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                Links auswählen: erreicht oder nicht erreicht — dann geht es hier
+                weiter.
+              </p>
+            )}
+            {erreicht === true && (
+              <label className="flex flex-col gap-1">
+                {feldLabel(<User className="size-3" />, "Ansprechpartner")}
                 <Input
                   type="text"
                   value={ansprechpartner}
                   onChange={(e) => setAnsprechpartner(e.target.value)}
                   placeholder="Mit wem gesprochen? (z. B. Frau Meier, Sozialdienst)"
-                  className="bg-background"
                 />
               </label>
-            </>
-          )}
-          {erreicht !== null && (
-            <>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  Notiz
-                </span>
-                <Textarea
-                  value={notiz}
-                  onChange={(e) => setNotiz(e.target.value)}
-                  rows={2}
-                  placeholder={
-                    erreicht
-                      ? "Was wurde besprochen? Die KI liest mit: „ruf in 1 Woche zurück“ wird zum Termin, „Flyer schicken“ zum To-do."
-                      : "Optional: Mailbox, besetzt, …"
-                  }
-                />
-              </label>
-              {erreicht && (
-                <label className="flex flex-col gap-0.5">
-                  <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
-                    Wiedervorlage am (optional — sonst entscheidet die Notiz/der Rhythmus)
-                  </span>
-                  <Input
-                    type="date"
-                    min={today}
-                    value={wiedervorlage}
-                    onChange={(e) => setWiedervorlage(e.target.value)}
-                    className="w-fit bg-background"
+            )}
+            {erreicht !== null && (
+              <>
+                <label className="flex flex-col gap-1">
+                  {feldLabel(<FileText className="size-3" />, "Notiz")}
+                  <Textarea
+                    value={notiz}
+                    onChange={(e) => setNotiz(e.target.value)}
+                    rows={3}
+                    placeholder={
+                      erreicht
+                        ? "Was wurde besprochen? Die KI liest mit: „ruf in 1 Woche zurück“ wird zum Termin, „Flyer schicken“ zum To-do."
+                        : "Optional: Mailbox, besetzt, …"
+                    }
                   />
                 </label>
-              )}
-            </>
-          )}
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy || erreicht === null}
-              onClick={log}
-            >
-              {busy
-                ? "Speichere…"
-                : erreicht === null
-                  ? "Erst „Erreicht?“ beantworten"
-                  : `Speichern (als ${memberName})`}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setOpen(false)}
-            >
-              Abbrechen
-            </Button>
+                {erreicht && (
+                  <label className="flex flex-col gap-1">
+                    {feldLabel(
+                      <CalendarClock className="size-3" />,
+                      "Wiedervorlage am (optional — sonst entscheidet die Notiz/der Rhythmus)",
+                    )}
+                    <Input
+                      type="date"
+                      min={today}
+                      value={wiedervorlage}
+                      onChange={(e) => setWiedervorlage(e.target.value)}
+                      className="w-fit"
+                    />
+                  </label>
+                )}
+              </>
+            )}
+            {erreicht === false && (
+              <p className="text-xs text-muted-foreground">
+                Wird automatisch <span className="font-semibold">morgen</span> wieder
+                auf die Liste gesetzt.
+              </p>
+            )}
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || erreicht === null}
+                onClick={log}
+              >
+                <Check className="size-3.5" />
+                {busy
+                  ? "Speichert…"
+                  : erreicht === null
+                    ? "Erst „Erreicht?“ beantworten"
+                    : `Speichern (als ${memberName})`}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+              >
+                Abbrechen
+              </Button>
+            </div>
           </div>
         </div>
       )}
