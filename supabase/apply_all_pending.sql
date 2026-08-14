@@ -2,7 +2,7 @@
 -- einfügen und ausführen:
 -- https://supabase.com/dashboard/project/xbzcplpaalccjiyjhypr/sql/new
 --
--- Stand: Blöcke bis 0061. Die Datei ist idempotent — komplett von oben
+-- Stand: Blöcke bis 0062. Die Datei ist idempotent — komplett von oben
 -- markieren und ausführen; bereits eingespielte Blöcke werden dank
 -- "if not exists" bzw. "drop constraint if exists" übersprungen.
 --
@@ -428,6 +428,34 @@ alter table public.pdl_auftraege disable row level security;
 
 notify pgrst, 'reload schema';
 
+-- ── 0062: Bewerbungen an die Standorte (PDL-Ansicht "Meine Bewerber") ──
+create table if not exists public.bewerber (
+  id uuid primary key default gen_random_uuid(),
+  quelle text not null,
+  quelle_id text not null,
+  name text not null,
+  telefon text,
+  email text,
+  rolle text,
+  kampagne text,
+  hub_id uuid references public.hubs (id) on delete set null,
+  score smallint check (score between 1 and 3),
+  score_grund text,
+  status text not null default 'neu',
+  notiz text,
+  weitergeleitet_von text,
+  zugewiesen_at timestamptz not null default now(),
+  erstkontakt_at timestamptz,
+  abgeschlossen_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (quelle, quelle_id)
+);
+create index if not exists bewerber_hub_idx on public.bewerber (hub_id, status);
+create index if not exists bewerber_zugewiesen_idx on public.bewerber (zugewiesen_at desc);
+alter table public.bewerber disable row level security;
+
+notify pgrst, 'reload schema';
+
 -- ── Selbst-Check: muss alles_da = true liefern ──────────────────────
 -- Steht hier false oder erscheint diese Zeile gar nicht, ist die Datei
 -- vorher mit einem Fehler abgebrochen.
@@ -435,6 +463,7 @@ select
   to_regclass('public.lead_todos')    is not null as lead_todos,
   to_regclass('public.pdl_versuche')  is not null as pdl_versuche,
   to_regclass('public.pdl_auftraege') is not null as pdl_auftraege,
+  to_regclass('public.bewerber')      is not null as bewerber,
   exists (select 1 from information_schema.columns
           where table_name='lead_calls' and column_name='erstbearbeitet_at') as lead_erstbearbeitet,
   exists (select 1 from information_schema.columns
@@ -444,6 +473,7 @@ select
   (to_regclass('public.lead_todos')    is not null
    and to_regclass('public.pdl_versuche')  is not null
    and to_regclass('public.pdl_auftraege') is not null
+   and to_regclass('public.bewerber')      is not null
    and exists (select 1 from information_schema.columns
                where table_name='lead_calls' and column_name='erstbearbeitet_at')
    and exists (select 1 from information_schema.columns

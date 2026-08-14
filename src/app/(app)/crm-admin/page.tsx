@@ -13,6 +13,10 @@ import {
 } from "@/components/callcenter-analyse";
 import { kategorieAusErgebnis, stundeAusNotiz } from "@/lib/callcenter";
 import { PdlRanking } from "@/components/pdl-ranking";
+import {
+  BewerberLiegezeit,
+  type BewerberStat,
+} from "@/components/bewerber-liegezeit";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
 import { PageHeader } from "@/components/page-header";
 import { ZieleSection } from "@/app/(app)/crm/ziele-section";
@@ -88,6 +92,12 @@ export default async function CrmAdminPage() {
     ? { von: analyseTageSet[0], bis: analyseTageSet[analyseTage - 1] }
     : null;
 
+  // Bewerbungen bei den PDLs — Liegezeit bis zur ersten Rückmeldung.
+  const { data: bewerberRows } = await admin
+    .from("bewerber")
+    .select("hub_id, status, zugewiesen_at, erstkontakt_at")
+    .limit(2000);
+
   const targetName = new Map((targetsRes.data ?? []).map((t) => [t.id, t.name]));
   const anrufe = (anrufeRes.data ?? []).map((a) => ({
     datum: a.contact_date,
@@ -98,6 +108,12 @@ export default async function CrmAdminPage() {
   }));
 
   const hubName = new Map((hubsRes.data ?? []).map((h) => [h.id, h.name]));
+  const bewerberStats: BewerberStat[] = (bewerberRows ?? []).map((b) => ({
+    hub: hubName.get(b.hub_id ?? "") ?? null,
+    status: b.status,
+    zugewiesenAt: b.zugewiesen_at,
+    erstkontaktAt: b.erstkontakt_at,
+  }));
   const hubPdl: Record<string, string> = {};
   for (const h of hubsRes.data ?? []) {
     if (h.pdl_name) hubPdl[h.name] = h.pdl_name;
@@ -222,7 +238,7 @@ export default async function CrmAdminPage() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="CRM-Admin"
-        description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Callcenter & Erreichbarkeit, Kontakte des Tages, PDL-Ranking.`}
+        description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Callcenter, Kontakte des Tages, Bewerbungen, PDL-Ranking.`}
       />
 
       {sektion("1", "Leads", "Eingänge, Kanäle, Funnel und Bearbeitung — Zeitraum oben rechts wählbar")}
@@ -307,10 +323,20 @@ export default async function CrmAdminPage() {
         </p>
       )}
 
-      {sektion("4", "PDL-Ranking", "Erreichbarkeit & Marketing-Aktivität je Standort — Handlungsbedarf zuerst")}
+      {sektion(
+        "4",
+        "Bewerbungen bei den PDLs",
+        "wie lange Bewerbungen liegen, bevor sich der Standort meldet",
+      )}
+      <BewerberLiegezeit
+        rows={bewerberStats}
+        now={new Date().toISOString()}
+      />
+
+      {sektion("5", "PDL-Ranking", "Erreichbarkeit & Marketing-Aktivität je Standort — Handlungsbedarf zuerst")}
       <PdlRanking />
 
-      {sektion("5", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
+      {sektion("6", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
       <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
 
       {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —

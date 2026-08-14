@@ -21,13 +21,34 @@ export interface RecruitingRow {
   detail: string | null;
   rolle: string | null;
   weitergeleitet: boolean;
+  /** Roh-ID + Typ für die Weiterleitung an einen Standort. */
+  quelleId: string;
+  quelleTyp: "meta" | "website";
+  /** Standort-Vorschlag aus dem Kampagnennamen. */
+  vorschlagHubId: string | null;
+  /** Bereits an diesen Standort weitergeleitet (Name), sonst null. */
+  pdlHub: string | null;
+}
+
+export interface RecruitingHub {
+  id: string;
+  name: string;
+  pdl: string | null;
 }
 
 const QUELLE_META = { label: "Meta-Anzeigen", farbe: "#2a78d6" };
 const QUELLE_WEBSITE = { label: "Website", farbe: "#eb6834" };
 
-export function RecruitingOverview({ rows }: { rows: RecruitingRow[] }) {
+export function RecruitingOverview({
+  rows,
+  hubs,
+}: {
+  rows: RecruitingRow[];
+  hubs: RecruitingHub[];
+}) {
   const [hover, setHover] = useState<number | null>(null);
+  // Weiterleitungen, die in dieser Sitzung passiert sind (Hub-Name je Zeile).
+  const [gesendet, setGesendet] = useState<Record<string, string>>({});
 
   // ── Tages-Buckets der letzten 30 Tage ──
   const heute = new Date();
@@ -180,9 +201,18 @@ export function RecruitingOverview({ rows }: { rows: RecruitingRow[] }) {
                     {r.detail}
                   </span>
                 )}
+                <PdlWeiterleiten
+                  className="ml-auto"
+                  row={r}
+                  hubs={hubs}
+                  bereits={gesendet[r.id] ?? r.pdlHub}
+                  onDone={(hubName) =>
+                    setGesendet((g) => ({ ...g, [r.id]: hubName }))
+                  }
+                />
                 <span
                   className={cn(
-                    "ml-auto text-[11px] font-medium",
+                    "text-[11px] font-medium",
                     r.weitergeleitet ? "text-emerald-700" : "text-amber-700",
                   )}
                   title={
@@ -204,5 +234,128 @@ export function RecruitingOverview({ rows }: { rows: RecruitingRow[] }) {
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * "Zur PDL weiterleiten": Standort-Auswahl (mit Vorschlag aus dem
+ * Kampagnennamen) und Bestätigung. Danach sieht die PDL die Bewerbung unter
+ * "Meine Bewerber" — inklusive KI-Einstufung.
+ */
+function PdlWeiterleiten({
+  row,
+  hubs,
+  bereits,
+  onDone,
+  className,
+}: {
+  row: RecruitingRow;
+  hubs: RecruitingHub[];
+  bereits: string | null;
+  onDone: (hubName: string) => void;
+  className?: string;
+}) {
+  const [offen, setOffen] = useState(false);
+  const [hubId, setHubId] = useState(row.vorschlagHubId ?? "");
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  if (bereits) {
+    return (
+      <span
+        className={cn(
+          "rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800",
+          className,
+        )}
+        title={`Diese Bewerbung liegt bei ${bereits}`}
+      >
+        → {bereits}
+      </span>
+    );
+  }
+
+  async function senden() {
+    if (!hubId) return;
+    setBusy(true);
+    setFehler(null);
+    try {
+      const res = await fetch("/api/recruiting/forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quelle: row.quelleTyp,
+          quelle_id: row.quelleId,
+          name: row.name,
+          telefon: row.telefon,
+          email: row.email,
+          rolle: row.rolle,
+          kampagne: row.detail,
+          hub_id: hubId,
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        hub?: string;
+      };
+      if (!res.ok) throw new Error(j.error ?? "Fehler beim Weiterleiten.");
+      onDone(j.hub ?? hubs.find((h) => h.id === hubId)?.name ?? "Standort");
+      setOffen(false);
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!offen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOffen(true)}
+        className={cn(
+          "rounded-md border px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground",
+          className,
+        )}
+      >
+        zur PDL weiterleiten
+      </button>
+    );
+  }
+
+  return (
+    <span className={cn("flex flex-wrap items-center gap-1.5", className)}>
+      <select
+        value={hubId}
+        onChange={(e) => setHubId(e.target.value)}
+        className="h-7 rounded-md border bg-background px-1.5 text-xs"
+      >
+        <option value="">Standort wählen…</option>
+        {hubs.map((h) => (
+          <option key={h.id} value={h.id}>
+            {h.name}
+            {h.id === row.vorschlagHubId ? " (Vorschlag)" : ""}
+            {h.pdl ? ` — ${h.pdl}` : ""}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        disabled={busy || !hubId}
+        onClick={senden}
+        className="rounded-md bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground disabled:opacity-50"
+      >
+        {busy ? "Sende…" : "Weiterleiten"}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOffen(false)}
+        className="text-[11px] text-muted-foreground hover:text-foreground"
+      >
+        Abbrechen
+      </button>
+      {fehler && (
+        <span className="basis-full text-[11px] text-destructive">{fehler}</span>
+      )}
+    </span>
   );
 }

@@ -805,6 +805,50 @@ export interface Database {
         >;
         Relationships: [];
       };
+      bewerber: {
+        Row: {
+          id: string;
+          quelle: string;
+          quelle_id: string;
+          name: string;
+          telefon: string | null;
+          email: string | null;
+          rolle: string | null;
+          kampagne: string | null;
+          hub_id: string | null;
+          score: number | null;
+          score_grund: string | null;
+          status: string;
+          notiz: string | null;
+          weitergeleitet_von: string | null;
+          zugewiesen_at: string;
+          erstkontakt_at: string | null;
+          abgeschlossen_at: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          quelle: string;
+          quelle_id: string;
+          name: string;
+          telefon?: string | null;
+          email?: string | null;
+          rolle?: string | null;
+          kampagne?: string | null;
+          hub_id?: string | null;
+          score?: number | null;
+          score_grund?: string | null;
+          status?: string;
+          notiz?: string | null;
+          weitergeleitet_von?: string | null;
+          zugewiesen_at?: string;
+          erstkontakt_at?: string | null;
+          abgeschlossen_at?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["bewerber"]["Insert"]>;
+        Relationships: [];
+      };
       pdl_auftraege: {
         Row: {
           id: string;

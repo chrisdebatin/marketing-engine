@@ -12,6 +12,7 @@ import {
 import { PdlTabs } from "@/components/pdl-tabs";
 import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
 import { PdlAuftragList } from "@/components/pdl-auftrag-list";
+import { PdlBewerberList, type PdlBewerberRow } from "@/components/pdl-bewerber-list";
 import {
   PdlPatientList,
   type PdlPatientRow,
@@ -191,6 +192,32 @@ export default async function HubShareLinkPage({
     ansprechpartner: a.ansprechpartner,
     anruf_notiz: a.anruf_notiz,
   }));
+
+  // Bewerbungen aus Meta-Anzeigen/Website, die diesem Standort zugewiesen
+  // wurden. Fehlt Migration 0062, bleibt die Liste leer.
+  const { data: bewerberRows } = await admin
+    .from("bewerber")
+    .select("*")
+    .eq("hub_id", hub.id)
+    .order("zugewiesen_at", { ascending: false })
+    .limit(200);
+  const bewerber: PdlBewerberRow[] = (bewerberRows ?? []).map((b) => ({
+    id: b.id,
+    name: b.name,
+    telefon: b.telefon,
+    email: b.email,
+    rolle: b.rolle,
+    quelle: b.quelle,
+    score: b.score,
+    score_grund: b.score_grund,
+    status: b.status,
+    notiz: b.notiz,
+    zugewiesen_at: b.zugewiesen_at,
+    erstkontakt_at: b.erstkontakt_at,
+  }));
+  const bewerberOffen = bewerber.filter(
+    (b) => !["eingestellt", "abgesagt"].includes(b.status),
+  ).length;
 
   // Doppelte Orte über Hub-Grenzen erkennen (gleicher normalisierter Name +
   // gleicher Ort): am eigenen Eintrag erscheint dann ein Hinweis, welcher
@@ -548,6 +575,18 @@ export default async function HubShareLinkPage({
                 <PdlAuftragList token={token} initial={pdlAuftraege} />
                 <PdlTodoList token={token} initial={pdlTodos} />
               </div>
+            ),
+          },
+          {
+            id: "bewerber",
+            label: "Meine Bewerber",
+            badge: bewerberOffen > 0 ? bewerberOffen : undefined,
+            content: (
+              <PdlBewerberList
+                token={token}
+                initial={bewerber}
+                now={new Date().toISOString()}
+              />
             ),
           },
           {

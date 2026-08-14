@@ -6,6 +6,7 @@ import { leadEmail, leadFullName, leadPhone } from "@/lib/meta-lead-fields";
 import { PageHeader } from "@/components/page-header";
 import { StatTile } from "@/components/ui/stat-tile";
 import { RecruitingOverview, type RecruitingRow } from "@/components/recruiting-overview";
+import { hubAusKampagne, rolleAusKampagne } from "@/lib/bewerber";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +20,6 @@ function zeitraume() {
   };
 }
 
-/** Rolle aus dem Meta-Kampagnennamen ("Mitarbeiter-Hameln-Fachkraft-…"). */
-function rolleAus(campaign: string | null): string | null {
-  if (!campaign) return null;
-  if (/fachkraft|examiniert/i.test(campaign)) return "Pflegefachkraft";
-  if (/helfer|lg1|lg2/i.test(campaign)) return "Pflegehelfer";
-  if (/hauswirtschaft|alltagshilfe/i.test(campaign)) return "Hauswirtschaft";
-  return null;
-}
-
 /**
  * Recruiting-Leads: alle Bewerber-Anfragen aus Meta-Anzeigen und dem
  * Website-Formular (KI-erkannt) an einem Ort — Tagesübersicht + Liste.
@@ -36,7 +28,7 @@ export default async function RecruitingPage() {
   await requireSession();
   const admin = createAdminClient();
 
-  const [metaRes, websiteRes] = await Promise.all([
+  const [metaRes, websiteRes, hubsRes, bewerberRes] = await Promise.all([
     admin
       .from("meta_leads")
       .select("id, created_time, created_at, campaign_name, field_data, forwarded_at")
@@ -50,7 +42,20 @@ export default async function RecruitingPage() {
       .ilike("ergebnis", "Bewerbung%")
       .order("created_at", { ascending: false })
       .limit(500),
+    admin.from("hubs").select("id, name, pdl_name").order("name"),
+    // Bereits an einen Standort weitergeleitet? Fehlt Migration 0062, bleibt
+    // die Liste leer und der Button legt beim Klick sichtbar einen Fehler.
+    admin.from("bewerber").select("quelle, quelle_id, hub_id"),
   ]);
+  const hubs = (hubsRes.data ?? []).map((h) => ({
+    id: h.id,
+    name: h.name,
+    pdl: h.pdl_name,
+  }));
+  const zugewiesen = new Map(
+    (bewerberRes.data ?? []).map((b) => [`${b.quelle}-${b.quelle_id}`, b.hub_id]),
+  );
+  const hubName = new Map(hubs.map((h) => [h.id, h.name]));
 
   const rows: RecruitingRow[] = [
     ...(metaRes.data ?? [])
@@ -63,8 +68,12 @@ export default async function RecruitingPage() {
         email: leadEmail(l.field_data),
         quelle: "meta" as const,
         detail: l.campaign_name,
-        rolle: rolleAus(l.campaign_name),
+        rolle: rolleAusKampagne(l.campaign_name),
         weitergeleitet: Boolean(l.forwarded_at),
+        quelleId: l.id,
+        quelleTyp: "meta" as const,
+        vorschlagHubId: hubAusKampagne(l.campaign_name, hubs),
+        pdlHub: hubName.get(zugewiesen.get(`meta-${l.id}`) ?? "") ?? null,
       })),
     ...(websiteRes.data ?? []).map((l) => ({
       id: `w-${l.id}`,
@@ -77,6 +86,10 @@ export default async function RecruitingPage() {
       rolle: null,
       // "Bewerbung — automatisch an Recruiting weitergeleitet" vs. Fehlschlag-Vermerk
       weitergeleitet: /weitergeleitet/i.test(l.ergebnis ?? ""),
+      quelleId: l.id,
+      quelleTyp: "website" as const,
+      vorschlagHubId: null,
+      pdlHub: hubName.get(zugewiesen.get(`website-${l.id}`) ?? "") ?? null,
     })),
   ]
     .filter((r) => r.datum)
@@ -120,7 +133,7 @@ export default async function RecruitingPage() {
         />
       </div>
 
-      <RecruitingOverview rows={rows30} />
+      <RecruitingOverview rows={rows30} hubs={hubs} />
     </div>
   );
 }
