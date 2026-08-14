@@ -1145,6 +1145,7 @@ export function TeamWorkspace({
         <KontakteView
           inbound={kontakteInbound ?? inbound}
           outbound={kontakteOutbound ?? outbound}
+          token={token}
         />
       )}
 
@@ -1732,14 +1733,19 @@ interface KontaktKarte {
   todo?: string | null;
   sort: string;
   search: string;
+  /** Für den aufklappbaren Verlauf: Lead-Daten bzw. Institutions-ID. */
+  lead?: InboundLead;
+  targetId?: string;
 }
 
 function KontakteView({
   inbound,
   outbound,
+  token,
 }: {
   inbound: InboundLead[];
   outbound: OutboundTarget[];
+  token: string;
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<string>("alle");
@@ -1816,6 +1822,7 @@ function KontakteView({
           : (l.erstbearbeitet_at ?? l.datum ?? ""),
       search:
         `${l.name} ${l.telefon ?? ""} ${l.email ?? ""} ${l.adresse ?? ""} ${l.quelle_detail ?? ""} ${leadQuelleLabel(l.quelle)}`.toLowerCase(),
+      lead: l,
     });
   }
   for (const t of outbound) {
@@ -1872,6 +1879,7 @@ function KontakteView({
             : (t.letzter_besuch ?? ""),
       search:
         `${t.name} ${t.ort ?? ""} ${t.hub ?? ""} ${placeKindLabel(t.kategorie)}`.toLowerCase(),
+      targetId: t.id,
     });
   }
 
@@ -1996,59 +2004,7 @@ function KontakteView({
                   </li>
                 )}
                 {cards.slice(0, cap).map((k) => (
-                  <li
-                    key={k.key}
-                    className="rounded-lg border bg-card p-2.5 text-sm shadow-sm"
-                  >
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="leading-snug font-semibold">{k.name}</span>
-                      <span
-                        className={cn(
-                          "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                          KAT_TONE[k.kategorieKey] ?? KAT_TONE.sonstiges,
-                        )}
-                      >
-                        {k.kategorieLabel}
-                      </span>
-                      {k.statusLabel && (
-                        <span
-                          className={cn(
-                            "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                            k.statusTone,
-                          )}
-                        >
-                          {k.statusLabel}
-                        </span>
-                      )}
-                    </div>
-                    {k.info && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{k.info}</p>
-                    )}
-                    {k.telefon && (
-                      <a
-                        href={`tel:${k.telefon}`}
-                        className="mt-0.5 flex w-fit items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        <Phone className="size-3" />
-                        {k.telefon}
-                      </a>
-                    )}
-                    {k.meta && (
-                      <p
-                        className={cn(
-                          "mt-1 text-[11px] font-medium",
-                          k.metaTone ?? "text-muted-foreground",
-                        )}
-                      >
-                        {k.meta}
-                      </p>
-                    )}
-                    {k.todo && (
-                      <p className="mt-0.5 text-[11px] text-amber-700">
-                        To-do: {k.todo}
-                      </p>
-                    )}
-                  </li>
+                  <KanbanKarte key={k.key} k={k} token={token} />
                 ))}
                 {cards.length > cap && (
                   <li className="p-1.5 text-center text-[11px] text-muted-foreground">
@@ -3373,5 +3329,190 @@ function OutboundSidebar({ anrufe, today }: { anrufe: AnrufLog[]; today: string 
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Kanban-Kontaktkarte mit aufklappbarem Verlauf: wann war der letzte
+ * Kontakt, was wurde gesagt, von wem — bei Institutionen aus dem
+ * Kontakt-Log (on demand geladen), bei Klienten aus dem Lead selbst.
+ */
+function KanbanKarte({ k, token }: { k: KontaktKarte; token: string }) {
+  const [offen, setOffen] = useState(false);
+  return (
+    <li className="rounded-lg border bg-card p-2.5 text-sm shadow-sm">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="leading-snug font-semibold">{k.name}</span>
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+            KAT_TONE[k.kategorieKey] ?? KAT_TONE.sonstiges,
+          )}
+        >
+          {k.kategorieLabel}
+        </span>
+        {k.statusLabel && (
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+              k.statusTone,
+            )}
+          >
+            {k.statusLabel}
+          </span>
+        )}
+      </div>
+      {k.info && <p className="mt-0.5 text-xs text-muted-foreground">{k.info}</p>}
+      {k.telefon && (
+        <a
+          href={`tel:${k.telefon}`}
+          className="mt-0.5 flex w-fit items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <Phone className="size-3" />
+          {k.telefon}
+        </a>
+      )}
+      {k.meta && (
+        <p
+          className={cn(
+            "mt-1 text-[11px] font-medium",
+            k.metaTone ?? "text-muted-foreground",
+          )}
+        >
+          {k.meta}
+        </p>
+      )}
+      {k.todo && (
+        <p className="mt-0.5 text-[11px] text-amber-700">To-do: {k.todo}</p>
+      )}
+      <button
+        type="button"
+        onClick={() => setOffen((o) => !o)}
+        className="mt-1.5 flex w-full items-center justify-between border-t pt-1.5 text-[11px] font-medium text-primary hover:underline"
+      >
+        {offen ? "Verlauf ausblenden" : "Verlauf anzeigen"}
+        <span aria-hidden>{offen ? "▴" : "▾"}</span>
+      </button>
+      {offen && <KontaktVerlauf k={k} token={token} />}
+    </li>
+  );
+}
+
+interface HistorieZeile {
+  contact_date: string;
+  kontakt_art: string;
+  ansprechpartner: string | null;
+  note: string | null;
+  bearbeiter: string | null;
+}
+
+function KontaktVerlauf({ k, token }: { k: KontaktKarte; token: string }) {
+  const [rows, setRows] = useState<HistorieZeile[] | null>(null);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const targetId = k.targetId;
+  useEffect(() => {
+    if (!targetId) return;
+    let aktiv = true;
+    teamAction(token, { action: "historie", target_id: targetId })
+      .then((r) => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- async geladen, kein Sync-Setter
+        if (aktiv) setRows((r.historie as HistorieZeile[]) ?? []);
+      })
+      .catch((e) => {
+        if (aktiv) setFehler(e instanceof Error ? e.message : "Fehler");
+      });
+    return () => {
+      aktiv = false;
+    };
+  }, [targetId, token]);
+
+  // Klienten-Lead: Verlauf aus den Lead-Daten selbst.
+  if (k.lead) {
+    const l = k.lead;
+    const eintraege: { zeit: string | null; text: string }[] = [
+      {
+        zeit: l.datum,
+        text: `Eingegangen über ${leadQuelleLabel(l.quelle) || l.quelle}${l.quelle_detail ? ` (${l.quelle_detail})` : ""}`,
+      },
+      ...(l.erstbearbeitet_at
+        ? [
+            {
+              zeit: l.erstbearbeitet_at,
+              text: `Erstbearbeitung${l.bearbeiter ? ` von ${l.bearbeiter}` : ""}`,
+            },
+          ]
+        : []),
+      ...(l.zugewiesen_at
+        ? [
+            {
+              zeit: l.zugewiesen_at,
+              text: `An ${l.zugewiesen_hub ?? "Standort"} übergeben${l.zugewiesen_pdl ? ` (PDL ${l.zugewiesen_pdl})` : ""}`,
+            },
+          ]
+        : []),
+      ...(l.pdl_bestaetigt_at
+        ? [
+            {
+              zeit: l.pdl_bestaetigt_at,
+              text: `PDL-Antwort: ${l.pdl_ergebnis ?? "in Versorgung aufgenommen"}`,
+            },
+          ]
+        : []),
+    ];
+    return (
+      <div className="mt-1.5 flex flex-col gap-1.5 text-[11px]">
+        {eintraege.map((e, i) => (
+          <p key={i} className="flex gap-2">
+            <span className="w-20 shrink-0 text-muted-foreground tabular-nums">
+              {e.zeit ? exactStamp(e.zeit) : "—"}
+            </span>
+            <span>{e.text}</span>
+          </p>
+        ))}
+        {l.notiz && (
+          <p className="rounded-md bg-muted/50 p-1.5 whitespace-pre-line">{l.notiz}</p>
+        )}
+        {l.ergebnis && (
+          <p className="text-muted-foreground">Ergebnis: {l.ergebnis}</p>
+        )}
+        {l.todos.length > 0 && (
+          <p className="text-amber-700">
+            Offene To-dos: {l.todos.map((t) => t.text).join(" · ")}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Institution: Kontakt-Log vom Server.
+  if (fehler) return <p className="mt-1.5 text-[11px] text-destructive">{fehler}</p>;
+  if (rows === null)
+    return <p className="mt-1.5 text-[11px] text-muted-foreground">Lade Verlauf…</p>;
+  if (rows.length === 0)
+    return (
+      <p className="mt-1.5 text-[11px] text-muted-foreground">
+        Noch kein Kontakt geloggt.
+      </p>
+    );
+  return (
+    <ul className="mt-1.5 flex flex-col gap-1.5 text-[11px]">
+      {rows.map((r, i) => (
+        <li key={i} className="flex gap-2">
+          <span className="w-14 shrink-0 text-muted-foreground tabular-nums">
+            {formatIsoDate(r.contact_date)}
+          </span>
+          <span className="min-w-0">
+            <span className="font-medium">
+              {kontaktArtLabel(r.kontakt_art) || r.kontakt_art}
+            </span>
+            {r.bearbeiter ? ` von ${r.bearbeiter}` : ""}
+            {r.ansprechpartner ? ` · mit ${r.ansprechpartner}` : ""}
+            {r.note ? (
+              <span className="block text-muted-foreground">„{r.note}“</span>
+            ) : null}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

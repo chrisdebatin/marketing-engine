@@ -202,6 +202,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // Kontakt-Historie einer Institution (fürs Kontakte-Verzeichnis): wann,
+  // was, von wem — nur lesend.
+  if (action === "historie") {
+    const targetId = (body.target_id ?? "").trim();
+    if (!targetId) return NextResponse.json({ error: "Kontakt fehlt." }, { status: 400 });
+    const { data, error } = await admin
+      .from("crm_contacts")
+      .select("contact_date, kontakt_art, ansprechpartner, note, bearbeiter")
+      .eq("target_id", targetId)
+      .order("contact_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) return NextResponse.json({ error: "Laden fehlgeschlagen." }, { status: 500 });
+    return NextResponse.json({ ok: true, historie: data ?? [] });
+  }
+
   // Erreichbarkeits-Log: Anruf-Versuch bei einer PDL vermerken (erreicht /
   // nicht erreicht) — ändert NICHTS am Lead, speist nur das PDL-Ranking.
   if (action === "pdl-versuch") {
