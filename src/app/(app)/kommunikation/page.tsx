@@ -10,6 +10,7 @@ import { mailConfigured } from "@/lib/mailer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { capacityWeekStart } from "@/lib/capacity";
 import { splitPdlNames } from "@/lib/pdl";
+import { PageHeader } from "@/components/page-header";
 import { KommunikationSend } from "@/components/kommunikation-send";
 import {
   CapacityRequestList,
@@ -80,16 +81,18 @@ export default async function KommunikationPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold">Kommunikation</h1>
-        <p className="text-sm text-muted-foreground">
-          Wochen-Report der Gruppe ({formatIsoDate(g.from)} –{" "}
-          {formatIsoDate(g.to)}). Es wird nichts automatisch versendet — alle
-          Mails (MD-Updates, PDL-Wochen-Plan, Gruppen-Report) prüfen Sie hier
-          und geben sie per Klick frei. Demnächst zusätzlich: neue Patienten
-          je Standort.
-        </p>
-      </div>
+      <PageHeader
+        title="Kommunikation"
+        description={
+          <>
+            Wochen-Report der Gruppe ({formatIsoDate(g.from)} –{" "}
+            {formatIsoDate(g.to)}). Es wird nichts automatisch versendet — alle
+            Mails (MD-Updates, PDL-Wochen-Plan, Gruppen-Report) prüfen Sie hier
+            und geben sie per Klick frei. Demnächst zusätzlich: neue Patienten
+            je Standort.
+          </>
+        }
+      />
 
       {mailConfigured() ? (
         <KommunikationSend gfAddress={gfRecipients().join(", ")} />

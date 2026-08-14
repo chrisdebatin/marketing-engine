@@ -301,7 +301,7 @@ export function ActivityForm({
         />
       </div>
 
-      <Button type="submit" disabled={submitting || !hubId}>
+      <Button type="submit" className="h-10" disabled={submitting || !hubId}>
         {submitting
           ? "Speichern…"
           : mode === "edit"

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CopyLink } from "@/components/copy-link";
+import { PageHeader } from "@/components/page-header";
 import { DeliveryEdit } from "@/components/delivery-edit";
 import { HubTags } from "@/components/md-tag";
 import { OrderPlanner, type PlannerOrder } from "@/components/order-planner";
@@ -181,16 +182,18 @@ export default async function LieferungenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Lieferungen</h1>
-        <Button
-          size="sm"
-          nativeButton={false}
-          render={<Link href="/lieferungen/neu" />}
-        >
-          Neue Lieferung
-        </Button>
-      </div>
+      <PageHeader
+        title="Lieferungen"
+        actions={
+          <Button
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/lieferungen/neu" />}
+          >
+            Neue Lieferung
+          </Button>
+        }
+      />
 
       <section className="flex flex-col gap-3">
         <div>

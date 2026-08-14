@@ -43,7 +43,7 @@ export function AppSidebar({
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {navGroups(isAdmin).map((group) => (
           <div key={group.title} className="mb-6">
-            <p className="mb-1.5 px-2.5 text-[0.6875rem] font-medium tracking-wide text-muted-foreground/80">
+            <p className="mb-1.5 px-2.5 text-[0.6875rem] font-semibold tracking-wider text-muted-foreground/70 uppercase">
               {group.title}
             </p>
             <ul className="flex flex-col gap-px">
@@ -55,9 +55,9 @@ export function AppSidebar({
                       href={href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                         active
-                          ? "bg-accent font-medium text-foreground"
+                          ? "bg-accent font-medium text-accent-foreground"
                           : "font-normal text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >

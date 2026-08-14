@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { getMaterialTypes, getStandortSuggestions } from "@/lib/data";
 import { ActivityForm } from "@/components/activity-form";
+import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function ErfassenPage() {
@@ -28,14 +29,10 @@ export default async function ErfassenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Aktivität erfassen
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Flyer/Aufsteller ausgelegt oder Box beliefert – auch offline.
-        </p>
-      </div>
+      <PageHeader
+        title="Aktivität erfassen"
+        description="Flyer/Aufsteller ausgelegt oder Box beliefert – auch offline."
+      />
       <Card>
         <CardContent className="p-5 sm:p-6">
           <ActivityForm

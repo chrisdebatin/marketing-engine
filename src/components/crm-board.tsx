@@ -27,7 +27,8 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
   return (
     <div className="flex flex-col gap-3">
       {/* kleiner Team-Switch */}
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs font-medium text-muted-foreground">Team</span>
         <div className="flex gap-0.5 rounded-full border bg-card p-0.5 shadow-sm">
           {teams.map((t) => (
             <button
@@ -35,7 +36,7 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
               type="button"
               onClick={() => setTeamId(t.id)}
               className={cn(
-                "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-all",
+                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all",
                 teamId === t.id
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",
@@ -71,14 +72,14 @@ export function CrmBoard({ teams }: { teams: CrmBoardTeam[] }) {
             type="button"
             onClick={() => setTab(t.key)}
             className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+              "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               tab === t.key
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
             <t.Icon className="size-4" />
-            {t.label}
+            <span className="truncate">{t.label}</span>
             {(t.badge ?? 0) > 0 && (
               <span
                 className={cn(

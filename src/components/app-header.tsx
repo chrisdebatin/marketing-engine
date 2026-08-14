@@ -21,7 +21,7 @@ export function AppHeader({ isAdmin, email }: { isAdmin: boolean; email: string 
           </span>
           <span className="hidden sm:inline">Marketing-Engine</span>
         </Link>
-        <nav className="ml-1 flex flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="ml-1 flex flex-1 items-center gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {links.map((l) => {
             const active = isNavActive(l.href, pathname);
             return (

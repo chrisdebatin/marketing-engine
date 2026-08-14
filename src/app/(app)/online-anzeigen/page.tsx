@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadOnlineAdsFreitext } from "./actions";
 import { OnlineAdsFreitext } from "@/components/online-ads-freitext";
+import { PageHeader } from "@/components/page-header";
 import {
   KampagnenAnfragen,
   type AnfrageRow,
@@ -67,15 +68,10 @@ export default async function OnlineAnzeigenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Online Anzeigen</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Alles an einem Ort: was gerade läuft (Freitext), offene
-          Kampagnen-Anfragen sowie Meta-Kampagnen und Personal-Anzeigen im
-          Detail. Laufende Anzeigen erscheinen auf den Hub-Karten bzw.
-          Hub-Seiten.
-        </p>
-      </div>
+      <PageHeader
+        title="Online Anzeigen"
+        description="Alles an einem Ort: was gerade läuft (Freitext), offene Kampagnen-Anfragen sowie Meta-Kampagnen und Personal-Anzeigen im Detail. Laufende Anzeigen erscheinen auf den Hub-Karten bzw. Hub-Seiten."
+      />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <OnlineAdsFreitext

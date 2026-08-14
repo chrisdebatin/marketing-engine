@@ -10,6 +10,7 @@ import {
 import { formatIsoDate } from "@/lib/crm";
 import { Badge } from "@/components/ui/badge";
 import { CapacityFreetext } from "@/components/capacity-freetext";
+import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -125,16 +126,18 @@ export default async function KapazitaetPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Kapazitäts-Report</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Wöchentliche Meldungen der PDLs (Woche ab {formatIsoDate(week)}) —
-          freie Plätze, Beatmung, WG, Kinder und frühester Aufnahmetermin je
-          Standort. Diese Daten sind die Grundlage, um Recare-/Klinik-Anfragen
-          schnell und perspektivisch automatisch anzunehmen. Erinnerung an
-          säumige PDLs: Kommunikation → „Kapazitäts-Erinnerung senden&rdquo;.
-        </p>
-      </div>
+      <PageHeader
+        title="Kapazitäts-Report"
+        description={
+          <>
+            Wöchentliche Meldungen der PDLs (Woche ab {formatIsoDate(week)}) —
+            freie Plätze, Beatmung, WG, Kinder und frühester Aufnahmetermin je
+            Standort. Diese Daten sind die Grundlage, um Recare-/Klinik-Anfragen
+            schnell und perspektivisch automatisch anzunehmen. Erinnerung an
+            säumige PDLs: Kommunikation → „Kapazitäts-Erinnerung senden&rdquo;.
+          </>
+        }
+      />
 
       {tableMissing ? (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">

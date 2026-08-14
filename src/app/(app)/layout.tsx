@@ -19,7 +19,7 @@ export default async function AppLayout({
         <div className="lg:hidden">
           <AppHeader isAdmin={session.isAdmin} email={session.email} />
         </div>
-        <main className="w-full flex-1 px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+        <main className="mx-auto w-full max-w-[1480px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>

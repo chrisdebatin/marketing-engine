@@ -100,9 +100,16 @@ export function ActivityList({
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Noch keine Einträge erfasst.
-      </p>
+      <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed bg-card p-8 text-center shadow-sm">
+        <FileText className="size-5 text-muted-foreground/50" />
+        <p className="text-sm font-medium">Noch keine Einträge erfasst</p>
+        <Link
+          href="/erfassen"
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          Erste Aktivität erfassen
+        </Link>
+      </div>
     );
   }
 

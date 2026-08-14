@@ -7,6 +7,7 @@ import {
   type MapHub,
   type MapPlace,
 } from "@/components/placement-map-board";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -90,15 +91,10 @@ export default async function KartePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold">Karte der Standorte</h1>
-        <p className="text-sm text-muted-foreground">
-          Jeder Pin ist ein Standort (Hub) — mit MD und PDL im Popup, auch
-          ohne eingetragene Auslagen. Pin-Größe = Anzahl der Orte, die die
-          PDLs über ihre Links eingetragen haben (Krankenhäuser, Praxen,
-          Apotheken &amp; Co.). Farbe = verantwortlicher MD.
-        </p>
-      </div>
+      <PageHeader
+        title="Karte der Standorte"
+        description="Jeder Pin ist ein Standort (Hub) — mit MD und PDL im Popup, auch ohne eingetragene Auslagen. Pin-Größe = Anzahl der Orte, die die PDLs über ihre Links eingetragen haben (Krankenhäuser, Praxen, Apotheken & Co.). Farbe = verantwortlicher MD."
+      />
 
       <PlacementMapBoard hubs={mapHubs} />
     </div>

@@ -18,6 +18,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
 import { HubTags } from "@/components/md-tag";
 import { mdColor } from "@/lib/hub-coords";
 import { cn } from "@/lib/utils";
@@ -246,16 +247,14 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Hallo{session.profile.name ? `, ${session.profile.name}` : ""}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          {session.hubs.length === 0
+      <PageHeader
+        title={`Hallo${session.profile.name ? `, ${session.profile.name}` : ""}`}
+        description={
+          session.hubs.length === 0
             ? "Dir ist noch kein Hub zugeordnet. Bitte wende dich an einen Admin."
-            : `${session.hubs.length} Hub${session.hubs.length === 1 ? "" : "s"} · Boxen-Fortschritt im Überblick`}
-        </p>
-      </div>
+            : `${session.hubs.length} Hub${session.hubs.length === 1 ? "" : "s"} · Boxen-Fortschritt im Überblick`
+        }
+      />
 
       {/* Kennzahlen-Dashboard */}
       <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">

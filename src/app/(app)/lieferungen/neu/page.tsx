@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { DeliveryComposer } from "@/components/delivery-composer";
+import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default async function NeueLieferungPage() {
@@ -20,13 +21,10 @@ export default async function NeueLieferungPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Lieferung erfassen</h1>
-        <p className="text-sm text-muted-foreground">
-          Tippe frei ein, was du an welche Hubs geliefert hast. Danach bekommst du
-          pro Hub einen Link für die Pflege-Dienstleitung.
-        </p>
-      </div>
+      <PageHeader
+        title="Lieferung erfassen"
+        description="Tippe frei ein, was du an welche Hubs geliefert hast. Danach bekommst du pro Hub einen Link für die Pflege-Dienstleitung."
+      />
       <DeliveryComposer
         hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}
       />

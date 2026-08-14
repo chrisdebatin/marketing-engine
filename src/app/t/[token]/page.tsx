@@ -66,22 +66,26 @@ export default async function TeamMemberPage({
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-4 py-8">
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary to-chart-5 p-6 text-primary-foreground shadow-lg">
-        <p className="flex items-center gap-2 text-sm font-medium tracking-wide text-primary-foreground/80 uppercase">
+      <div className="flex items-start gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           {isCallcenter ? (
-            <PhoneCall className="size-4" />
+            <PhoneCall className="size-5" />
           ) : (
-            <Headset className="size-4" />
+            <Headset className="size-5" />
           )}
-          {isCallcenter ? "Call-Center" : "Kundenservice"}
-        </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-          Hallo {member.name}!
-        </h1>
-        <p className="mt-2 text-sm text-primary-foreground/85">
-          Ihre persönliche Arbeitsliste — Leads übernehmen, Status setzen,
-          Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert.
-        </p>
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold tracking-wide text-primary uppercase">
+            {isCallcenter ? "Call-Center" : "Kundenservice"}
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Hallo {member.name}!
+          </h1>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Ihre persönliche Arbeitsliste — Leads übernehmen, Status setzen,
+            Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert.
+          </p>
+        </div>
       </div>
 
       {recareHint && (

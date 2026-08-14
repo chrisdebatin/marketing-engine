@@ -242,11 +242,14 @@ export function CrmStatsDashboard({
       `}</style>
 
       {/* Zeitraum-Filter */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          {data.inRange.length} Leads im Zeitraum · beide Teams
+          <span className="font-semibold text-foreground tabular-nums">
+            {data.inRange.length}
+          </span>{" "}
+          Leads im Zeitraum · beide Teams
         </p>
-        <div className="flex gap-0.5 rounded-full border bg-card p-0.5 shadow-sm">
+        <div className="flex gap-0.5 overflow-x-auto rounded-full border bg-card p-0.5 shadow-sm">
           {[
             { v: 1, label: "Heute" },
             { v: 7, label: "7 Tage" },
@@ -259,7 +262,7 @@ export function CrmStatsDashboard({
               type="button"
               onClick={() => setRange(r.v)}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap",
+                "rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors",
                 range === r.v
                   ? "bg-primary text-primary-foreground"
                   : "text-muted-foreground hover:text-foreground",

@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth";
 import { buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { CrmBoard } from "@/components/crm-board";
 import { CrmIntro } from "@/components/crm-intro";
+import { PageHeader } from "@/components/page-header";
 import { TeamWorkspace } from "@/components/team-workspace";
 import { FrontofficeSection } from "./frontoffice-section";
 
@@ -71,13 +72,10 @@ export default async function CrmPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold">CRM &amp; Leads</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Leads und Anruflisten beider Teams — hier direkt bearbeitbar, jede
-          Aktion wird unter deinem Namen gespeichert.
-        </p>
-      </div>
+      <PageHeader
+        title="CRM & Leads"
+        description="Leads und Anruflisten beider Teams — hier direkt bearbeitbar, jede Aktion wird unter deinem Namen gespeichert."
+      />
 
       <CrmIntro />
 

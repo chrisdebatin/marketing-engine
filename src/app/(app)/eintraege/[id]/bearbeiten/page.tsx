@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { getMaterialTypes, getStandortSuggestions } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { ActivityForm } from "@/components/activity-form";
+import { PageHeader } from "@/components/page-header";
 import type { Activity, ActivityType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export default async function BearbeitenPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Eintrag bearbeiten</h1>
+      <PageHeader title="Eintrag bearbeiten" />
       <ActivityForm
         mode="edit"
         hubs={session.hubs.map((h) => ({ id: h.id, name: h.name }))}

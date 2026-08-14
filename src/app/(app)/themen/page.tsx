@@ -4,6 +4,7 @@ import {
   ThemenBoard,
   type NoteRow,
 } from "@/components/themen-board";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +30,10 @@ export default async function ThemenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Themen</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Ein Thema betrifft alle Standorte — hier siehst und pflegst du den
-          Stand jedes Standorts direkt: Thema anlegen, Notizen und To-dos
-          eintragen, abhaken. Alles erscheint auch auf den Hub-Detailseiten.
-        </p>
-      </div>
+      <PageHeader
+        title="Themen"
+        description="Ein Thema betrifft alle Standorte — hier siehst und pflegst du den Stand jedes Standorts direkt: Thema anlegen, Notizen und To-dos eintragen, abhaken. Alles erscheint auch auf den Hub-Detailseiten."
+      />
 
       <ThemenBoard
         topics={(topicRows ?? []).map((t) => ({ id: t.id, title: t.title }))}

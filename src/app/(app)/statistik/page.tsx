@@ -3,6 +3,7 @@ import { Phone, PhoneIncoming, PhoneMissed, PhoneOutgoing, TrendingUp } from "lu
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { CallUpload } from "@/components/call-upload";
+import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -112,14 +113,10 @@ export default async function StatistikPage({
         }
       `}</style>
 
-      <div>
-        <h1 className="text-2xl font-semibold">Statistik · Anrufe</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Alle Anrufe der Standorte — Datenbasis ist der CSV-Export der
-          Telefonanlage, den du unten hochlädst. Zuordnung zum Standort über
-          den Telefon-Trunk; interne Gespräche zählen nicht.
-        </p>
-      </div>
+      <PageHeader
+        title="Statistik · Anrufe"
+        description="Alle Anrufe der Standorte — Datenbasis ist der CSV-Export der Telefonanlage, den du unten hochlädst. Zuordnung zum Standort über den Telefon-Trunk; interne Gespräche zählen nicht."
+      />
 
       <CallUpload />
 

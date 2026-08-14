@@ -9,6 +9,7 @@ import {
 } from "@/components/catalog-manager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { CopyLink } from "@/components/copy-link";
 import { CreateHubForm } from "@/components/create-hub-form";
@@ -221,13 +222,10 @@ export default async function AdminPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Admin · Hubs</h1>
-        <p className="text-sm text-muted-foreground">
-          Übersicht aller Hubs mit verantwortlichem MD und lokaler PDL. Jeder Hub
-          hat einen dauerhaften Link für die PDL zum Eintragen der Auslage-Orte.
-        </p>
-      </div>
+      <PageHeader
+        title="Admin · Hubs"
+        description="Übersicht aller Hubs mit verantwortlichem MD und lokaler PDL. Jeder Hub hat einen dauerhaften Link für die PDL zum Eintragen der Auslage-Orte."
+      />
 
       <CreateHubForm />
 

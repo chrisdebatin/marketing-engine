@@ -3,6 +3,7 @@ import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
 import { CrmStatsDashboard, type StatLead } from "@/components/crm-stats-dashboard";
+import { PageHeader } from "@/components/page-header";
 import { ZieleSection } from "@/app/(app)/crm/ziele-section";
 
 export const dynamic = "force-dynamic";
@@ -66,13 +67,10 @@ export default async function CrmAdminPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold">CRM-Admin</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Zahlen über beide Teams: Kanäle, Prozess-Funnel, Reaktionszeiten und
-          PDL-Übergaben.
-        </p>
-      </div>
+      <PageHeader
+        title="CRM-Admin"
+        description="Zahlen über beide Teams: Kanäle, Prozess-Funnel, Reaktionszeiten und PDL-Übergaben."
+      />
 
       <CrmStatsDashboard
         leads={leads}

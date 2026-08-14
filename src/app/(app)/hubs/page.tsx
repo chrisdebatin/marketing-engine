@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { plattformLabel } from "@/lib/personal";
 import { Card, CardContent } from "@/components/ui/card";
 import { CopyLink } from "@/components/copy-link";
+import { PageHeader } from "@/components/page-header";
 import { HubTags } from "@/components/md-tag";
 import { HubTaskChips } from "@/components/hub-task-chips";
 
@@ -143,13 +144,10 @@ export default async function HubsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Hubs</h1>
-        <p className="text-sm text-muted-foreground">
-          Übersicht aller {hubs.length} Hubs mit verantwortlichem MD, PDL-Kontakt
-          und gelieferten Materialien.
-        </p>
-      </div>
+      <PageHeader
+        title="Hubs"
+        description={`Übersicht aller ${hubs.length} Hubs mit verantwortlichem MD, PDL-Kontakt und gelieferten Materialien.`}
+      />
 
       {/* Filter: alle Hubs vs. nur die mit offenen Aufgaben/To-dos */}
       <div className="flex flex-wrap items-center gap-1.5">

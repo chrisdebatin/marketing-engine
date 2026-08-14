@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { LEAD_QUELLEN, leadBereichLabel, leadQuelleLabel, leadShortId } from "@/lib/leads";
@@ -78,6 +79,10 @@ export interface OutboundTarget {
   /** PDL-Aktivitäten vor Ort (CM-Box beliefert / Flyer ausgelegt), jüngste je Art. */
   besuche: { art: "box" | "flyer"; datum: string; von: string | null; hub: string | null }[];
 }
+
+/** Einheitlicher Stil für native Selects — passend zu ui/Input. */
+const SELECT_CLASS =
+  "rounded-lg border border-input bg-transparent px-2 text-sm text-foreground transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
 
 const STATUS_LABEL: Record<string, string> = {
   offen: "Offen",
@@ -545,7 +550,7 @@ export function TeamWorkspace({
           type="button"
           onClick={() => setTab("inbound")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             tab === "inbound"
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -568,7 +573,7 @@ export function TeamWorkspace({
           type="button"
           onClick={() => setTab("outbound")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             tab === "outbound"
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -591,7 +596,7 @@ export function TeamWorkspace({
           type="button"
           onClick={() => setTab("kontakte")}
           className={cn(
-            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium",
+            "flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             tab === "kontakte"
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
@@ -642,10 +647,13 @@ export function TeamWorkspace({
             </span>
           </div>
           {shownInbound.length === 0 && (
-            <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-              Keine offenen Anfragen. 🎉 Neue Anfragen erscheinen hier
-              automatisch oben.
-            </p>
+            <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed bg-card p-8 text-center shadow-sm">
+              <Inbox className="size-5 text-muted-foreground/50" />
+              <p className="text-sm font-medium">Keine offenen Anfragen 🎉</p>
+              <p className="text-xs text-muted-foreground">
+                Neue Anfragen erscheinen hier automatisch oben.
+              </p>
+            </div>
           )}
           {dayGroups.map((g) => (
             <div key={g.key} className="flex flex-col gap-2">
@@ -671,52 +679,60 @@ export function TeamWorkspace({
                 key={`${l.kind}-${l.id}`}
                 className="flex flex-col gap-2 rounded-xl border bg-card p-3.5 shadow-sm"
               >
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <span
-                    title={`eingegangen ${exactStamp(l.datum)}`}
-                    className={cn(
-                      "flex items-center gap-1.5 text-xs font-semibold tabular-nums",
-                      isFresh(l) ? "text-primary" : "text-muted-foreground",
-                    )}
-                  >
+                {/* Kopf: Wer (Name) zuerst, Status daneben, Timer oben rechts —
+                    Herkunft & Zeit als ruhigere zweite Zeile darunter. */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {isFresh(l) && (
-                      <span className="size-1.5 animate-pulse rounded-full bg-primary" title="neu" />
+                      <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-primary" title="neu" />
                     )}
-                    {timeOf(l.datum) || exactStamp(l.datum) || "—"}
-                    {relTime(l.datum) && (
-                      <span className="font-normal">({relTime(l.datum)})</span>
-                    )}
-                  </span>
-                  <span className="font-medium">{l.name}</span>
-                  <LeadIdChip id={l.id} />
-                  <span
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                      QUELLE_TONE[l.quelle] ?? "text-muted-foreground",
-                    )}
-                  >
-                    {leadQuelleLabel(l.quelle) || l.quelle}
-                    {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
-                  </span>
-                  {l.bereich && l.bereich !== "pflege" && (
-                    <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800">
-                      {leadBereichLabel(l.bereich)}
+                    <span className="text-[15px] leading-snug font-semibold">
+                      {l.name}
                     </span>
-                  )}
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {STATUS_LABEL[l.status] ?? l.status}
-                  </span>
-                  {l.bearbeiter && (
-                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
-                      {l.bearbeiter}
+                    <LeadIdChip id={l.id} />
+                    <span
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        STATUS_TONE[l.status] ?? "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {STATUS_LABEL[l.status] ?? l.status}
                     </span>
-                  )}
-                  {l.status === "offen" && <UnansweredTimer since={l.datum} />}
+                    {l.bearbeiter && (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-semibold text-violet-800">
+                        {l.bearbeiter}
+                      </span>
+                    )}
+                    {l.status === "offen" && <UnansweredTimer since={l.datum} />}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span
+                      title={`eingegangen ${exactStamp(l.datum)}`}
+                      className={cn(
+                        "text-xs font-semibold tabular-nums",
+                        isFresh(l) ? "text-primary" : "text-muted-foreground",
+                      )}
+                    >
+                      {timeOf(l.datum) || exactStamp(l.datum) || "—"}
+                      {relTime(l.datum) && (
+                        <span className="font-normal"> ({relTime(l.datum)})</span>
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                        QUELLE_TONE[l.quelle] ?? "text-muted-foreground",
+                      )}
+                    >
+                      {leadQuelleLabel(l.quelle) || l.quelle}
+                      {l.quelle_detail ? ` · ${l.quelle_detail}` : ""}
+                    </span>
+                    {l.bereich && l.bereich !== "pflege" && (
+                      <span className="rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800">
+                        {leadBereichLabel(l.bereich)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <LeadStammdaten
                   lead={l}
@@ -1151,30 +1167,31 @@ function InboundCallLog({
       <p className="-mt-1 text-xs text-muted-foreground">
         Anruf angenommen? Hier eintragen — erscheint sofort als offener Lead.
       </p>
-      <input
+      <Input
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Name des Anrufers"
-        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-9 bg-background"
       />
-      <input
+      <Input
+        type="tel"
         value={telefon}
         onChange={(e) => setTelefon(e.target.value)}
         placeholder="Telefonnummer"
-        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-9 bg-background"
       />
-      <input
+      <Input
         value={adresse}
         onChange={(e) => setAdresse(e.target.value)}
         placeholder="Adresse / Ort (optional)"
-        className="h-9 rounded-lg border bg-background px-2.5 text-sm"
+        className="h-9 bg-background"
       />
       <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
         Wofür interessiert sich der Anrufer?
         <select
           value={bereich}
           onChange={(e) => setBereich(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm font-normal text-foreground"
+          className={cn(SELECT_CLASS, "h-9 bg-background font-normal")}
         >
           <option value="">Bitte wählen…</option>
           <option value="intensiv">Intensivpflege</option>
@@ -1187,7 +1204,7 @@ function InboundCallLog({
         <select
           value={quelle}
           onChange={(e) => setQuelle(e.target.value)}
-          className="h-9 rounded-lg border bg-background px-2 text-sm font-normal text-foreground"
+          className={cn(SELECT_CLASS, "h-9 bg-background font-normal")}
         >
           <option value="">Bitte wählen…</option>
           {LEAD_QUELLEN.filter(
@@ -1309,17 +1326,17 @@ function LeadTodos({
       {canAct &&
         (adding ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            <input
+            <Input
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Was ist zu tun? (z. B. Rückruf)"
-              className="h-8 min-w-40 flex-1 rounded-lg border bg-background px-2 text-xs"
+              className="min-w-40 flex-1 bg-background"
             />
-            <input
+            <Input
               type="date"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
-              className="h-8 rounded-lg border bg-background px-2 text-xs"
+              className="w-fit bg-background"
               title="Wiedervorlage-Datum — an dem Tag poppt der Lead oben auf"
             />
             <Button type="button" size="sm" disabled={busy || !text.trim()} onClick={add}>
@@ -1414,11 +1431,12 @@ function KontakteView({
           nachschlagen: die Karte zeigt den letzten Status zum Kontakt.
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <input
+          <Input
+            type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Suchen (Name, Telefon, E-Mail, Ort)…"
-            className="h-9 w-full max-w-xs rounded-lg border bg-background px-3 text-sm"
+            className="h-9 max-w-xs bg-background px-3"
           />
           {kategorien.map((k) => (
             <button
@@ -1426,7 +1444,7 @@ function KontakteView({
               type="button"
               onClick={() => setFilter(k.key)}
               className={cn(
-                "rounded-full border px-2.5 py-1 text-xs font-medium",
+                "rounded-full border px-2.5 py-1.5 text-xs font-medium transition-colors",
                 filter === k.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "bg-card text-muted-foreground hover:text-foreground",
@@ -1671,12 +1689,12 @@ function LeadStammdaten({
           {label}
           {opts?.locked ? " (aus Meta-Formular)" : ""}
         </span>
-        <input
+        <Input
           type={opts?.type ?? "text"}
           value={value}
           onChange={(e) => set(e.target.value)}
           disabled={opts?.locked || busy}
-          className="rounded-md border bg-background px-2 py-1 text-sm disabled:opacity-60"
+          className="bg-background"
         />
       </label>
     );
@@ -2043,7 +2061,7 @@ function AssignHub({
           value={hubId}
           onChange={(e) => setHubId(e.target.value)}
           disabled={busy}
-          className="h-8 rounded-lg border bg-background px-2 text-sm"
+          className={cn(SELECT_CLASS, "h-8 bg-background")}
         >
           <option value="">Standort wählen…</option>
           {hubs.map((h) => (
@@ -2280,7 +2298,7 @@ function OutboundRow({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="font-semibold leading-snug">{t.name}</span>
+            <span className="text-[15px] leading-snug font-semibold">{t.name}</span>
             <LeadIdChip id={t.id} />
             {t.relevanz != null && (
               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
@@ -2403,7 +2421,7 @@ function OutboundRow({
               type="button"
               onClick={() => setErreicht(true)}
               className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium",
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                 erreicht === true
                   ? "border-emerald-600 bg-emerald-600 text-white"
                   : "bg-background text-muted-foreground hover:text-foreground",
@@ -2415,7 +2433,7 @@ function OutboundRow({
               type="button"
               onClick={() => setErreicht(false)}
               className={cn(
-                "rounded-full border px-3 py-1 text-xs font-medium",
+                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                 erreicht === false
                   ? "border-red-600 bg-red-600 text-white"
                   : "bg-background text-muted-foreground hover:text-foreground",
@@ -2436,12 +2454,12 @@ function OutboundRow({
                 <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                   Ansprechpartner
                 </span>
-                <input
+                <Input
                   type="text"
                   value={ansprechpartner}
                   onChange={(e) => setAnsprechpartner(e.target.value)}
                   placeholder="Mit wem gesprochen? (z. B. Frau Meier, Sozialdienst)"
-                  className="rounded-md border bg-background px-2 py-1 text-sm"
+                  className="bg-background"
                 />
               </label>
             </>
@@ -2468,12 +2486,12 @@ function OutboundRow({
                   <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                     Wiedervorlage am (optional — sonst entscheidet die Notiz/der Rhythmus)
                   </span>
-                  <input
+                  <Input
                     type="date"
                     min={today}
                     value={wiedervorlage}
                     onChange={(e) => setWiedervorlage(e.target.value)}
-                    className="w-fit rounded-md border bg-background px-2 py-1 text-sm"
+                    className="w-fit bg-background"
                   />
                 </label>
               )}

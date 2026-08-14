@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HubTags } from "@/components/md-tag";
+import { PageHeader } from "@/components/page-header";
 import {
   abgangGrundLabel,
   leistungLabel,
@@ -62,14 +63,10 @@ export default async function PatientenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Patienten — Zu- &amp; Abgänge</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Monatliche Meldungen der PDLs über ihren Hub-Link: Neuaufnahmen und
-          Abgänge je SGB-Leistung. Gespeichert werden nur Anzeigename und
-          optionale Referenz-ID (Datenminimierung).
-        </p>
-      </div>
+      <PageHeader
+        title={<>Patienten — Zu- &amp; Abgänge</>}
+        description="Monatliche Meldungen der PDLs über ihren Hub-Link: Neuaufnahmen und Abgänge je SGB-Leistung. Gespeichert werden nur Anzeigename und optionale Referenz-ID (Datenminimierung)."
+      />
 
       {periods.length === 0 && (
         <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">

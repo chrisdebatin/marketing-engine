@@ -5,6 +5,7 @@ import {
   type FlyerActionRow,
 } from "@/components/flyer-actions-manager";
 import { FlyerMap } from "@/components/flyer-map";
+import { PageHeader } from "@/components/page-header";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,10 @@ export default async function FlyerAktionenPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Flyeraktionen</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Log der durchgeführten Verteil- und Postwurf-Aktionen: Datum, Anzahl,
-          Ziel-PLZ und Inhalt.
-        </p>
-      </div>
+      <PageHeader
+        title="Flyeraktionen"
+        description="Log der durchgeführten Verteil- und Postwurf-Aktionen: Datum, Anzahl, Ziel-PLZ und Inhalt."
+      />
 
       <FlyerMap actions={actions} />
 
