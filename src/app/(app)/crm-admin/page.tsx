@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { Megaphone, Package, PhoneCall, Trophy, UserCheck, Users } from "lucide-react";
+import { StatTile } from "@/components/ui/stat-tile";
 import { requireSession } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isRecruitingLead } from "@/lib/lead-forward";
@@ -34,7 +36,20 @@ export default async function CrmAdminPage() {
       .eq("kontakt_art", "anruf")
       .order("contact_date", { ascending: false })
       .limit(2000),
-    admin.from("crm_targets").select("id, name"),
+    admin.from("crm_targets").select("id, name, kategorie"),
+  ]);
+  // ── "Kontakte heute": alle Berührungen des Tages ──
+  const heute = new Date().toISOString().slice(0, 10);
+  const [kontakteHeuteRes, activitiesHeuteRes, versucheHeuteRes] = await Promise.all([
+    admin
+      .from("crm_contacts")
+      .select("kontakt_art, hub_id, target_id")
+      .eq("contact_date", heute),
+    admin
+      .from("activities")
+      .select("type, hub_id")
+      .eq("occurred_on", heute),
+    admin.from("pdl_versuche").select("erreicht").gte("created_at", `${heute}T00:00:00Z`),
   ]);
   const targetName = new Map((targetsRes.data ?? []).map((t) => [t.id, t.name]));
   const anrufe = (anrufeRes.data ?? []).map((a) => ({
@@ -103,13 +118,69 @@ export default async function CrmAdminPage() {
     .sort((a, b) => (b.eingang ?? "").localeCompare(a.eingang ?? ""));
   const recareAusserhalb = ausserhalb.filter((l) => l.quelle === "recare").length;
 
+  // ── Kennzahlen "Kontakte heute" ──
+  const targetKategorie = new Map(
+    (targetsRes.data ?? []).map((t) => [t.id, t.kategorie ?? "sonstiges"]),
+  );
+  const heuteKontakte = kontakteHeuteRes.data ?? [];
+  const heuteAktivitaeten = activitiesHeuteRes.data ?? [];
+  const klientenKontaktiert = [
+    ...(callsRes.data ?? []),
+    ...(metaRes.data ?? []),
+  ].filter((l) => (l.erstbearbeitet_at ?? "").slice(0, 10) === heute).length;
+  const anrufeHeute = heuteKontakte.filter((k) => k.kontakt_art === "anruf");
+  const krankenhausAnrufe = anrufeHeute.filter(
+    (k) => targetKategorie.get(k.target_id ?? "") === "krankenhaus",
+  ).length;
+  const flyerHeute =
+    heuteKontakte.filter((k) => k.kontakt_art === "flyer").length +
+    heuteAktivitaeten.filter((a) => a.type === "flyer").length;
+  const boxenHeute =
+    heuteKontakte.filter((k) => k.kontakt_art === "box").length +
+    heuteAktivitaeten.filter((a) => a.type === "box").length;
+  const besucheHeute = heuteKontakte.filter((k) => k.kontakt_art === "besuch").length;
+  const neuaufnahmenHeute = [
+    ...(callsRes.data ?? []),
+    ...(metaRes.data ?? []),
+  ].filter(
+    (l) =>
+      (l.pdl_bestaetigt_at ?? "").slice(0, 10) === heute &&
+      !/nicht|kein/i.test(l.pdl_ergebnis ?? ""),
+  ).length;
+  const versucheHeute = versucheHeuteRes.error ? [] : (versucheHeuteRes.data ?? []);
+  const pdlErreichtHeute = versucheHeute.filter((v) => v.erreicht).length;
+  const pdlNichtHeute = versucheHeute.length - pdlErreichtHeute;
+  // Aktivster Standort heute (Kontakte + Feld-Aktivitäten)
+  const aktionenJeHub = new Map<string, number>();
+  for (const k of [...heuteKontakte, ...heuteAktivitaeten]) {
+    if (!k.hub_id) continue;
+    aktionenJeHub.set(k.hub_id, (aktionenJeHub.get(k.hub_id) ?? 0) + 1);
+  }
+  const aktivsterHub = [...aktionenJeHub.entries()].sort((a, b) => b[1] - a[1])[0];
+  const aktivsterHubName = aktivsterHub
+    ? (hubsRes.data ?? []).find((h) => h.id === aktivsterHub[0])?.name
+    : null;
+
+  const sektion = (nr: string, titel: string, sub: string) => (
+    <div className="mt-3 flex items-center gap-3 border-b pb-2">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+        {nr}
+      </span>
+      <div>
+        <h2 className="text-lg leading-tight font-bold tracking-tight">{titel}</h2>
+        <p className="text-xs text-muted-foreground">{sub}</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         title="CRM-Admin"
-        description="Zahlen über beide Teams: Kanäle, Prozess-Funnel, Reaktionszeiten und PDL-Übergaben."
+        description={`Tagesreport für ${new Date().toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" })} — von oben nach unten lesen: Leads, Kontakte des Tages, PDL-Ranking.`}
       />
 
+      {sektion("1", "Leads", "Eingänge, Kanäle, Funnel und Bearbeitung — Zeitraum oben rechts wählbar")}
       <CrmStatsDashboard
         leads={leads}
         hubPdl={hubPdl}
@@ -117,8 +188,67 @@ export default async function CrmAdminPage() {
         now={new Date().toISOString()}
       />
 
+      {sektion("2", "Kontakte heute", "alle Berührungen des Tages — Klienten, Anrufe, Flyer & Boxen, Aufnahmen")}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <StatTile
+          icon={Users}
+          tone="blue"
+          label="Klienten kontaktiert"
+          value={String(klientenKontaktiert)}
+          sub="heute erstmals bearbeitet"
+        />
+        <StatTile
+          icon={PhoneCall}
+          tone="purple"
+          label="Outbound-Anrufe"
+          value={String(anrufeHeute.length)}
+          sub={`davon ${krankenhausAnrufe} Krankenhäuser`}
+        />
+        <StatTile
+          icon={Megaphone}
+          tone="orange"
+          label="Flyer ausgelegt"
+          value={String(flyerHeute)}
+          sub={besucheHeute > 0 ? `+ ${besucheHeute} persönliche Besuche` : "Aktionen vor Ort"}
+        />
+        <StatTile
+          icon={Package}
+          tone="amber"
+          label="Boxen geliefert"
+          value={String(boxenHeute)}
+          sub="CM-Boxen heute"
+        />
+        <StatTile
+          icon={UserCheck}
+          tone="green"
+          coloredValue
+          label="Neuaufnahmen"
+          value={String(neuaufnahmenHeute)}
+          sub="heute von PDLs bestätigt"
+        />
+        <StatTile
+          icon={Trophy}
+          tone="gray"
+          label="Aktivster Standort"
+          value={aktivsterHubName ?? "—"}
+          sub={
+            aktivsterHub
+              ? `${aktivsterHub[1]} Aktionen heute`
+              : "noch keine Aktionen heute"
+          }
+        />
+      </div>
+      {versucheHeute.length > 0 && (
+        <p className="-mt-2 text-xs text-muted-foreground">
+          PDL-Erreichbarkeit heute: {pdlErreichtHeute}× erreicht ·{" "}
+          {pdlNichtHeute}× nicht erreicht.
+        </p>
+      )}
+
+      {sektion("3", "PDL-Ranking", "Erreichbarkeit & Marketing-Aktivität je Standort — Handlungsbedarf zuerst")}
       <PdlRanking />
 
+      {sektion("4", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
       <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
 
       {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —
