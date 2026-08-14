@@ -377,13 +377,27 @@ export async function buildTeamOutbound(
   // zuerst, damit das erste Vorkommen je target_id gewinnt.
   const { data: kontaktRows } = await admin
     .from("crm_contacts")
-    .select("target_id, contact_date, bearbeiter")
+    .select("id, target_id, contact_date, bearbeiter, note, ansprechpartner")
     .order("contact_date", { ascending: false })
     .limit(3000);
   const letzterVon = new Map<string, string>();
+  // Jüngster Log-Eintrag je Institution — Grundlage fürs Nachbearbeiten.
+  const letzterLog = new Map<
+    string,
+    { id: string; note: string | null; ansprechpartner: string | null }
+  >();
   for (const c of kontaktRows ?? []) {
-    if (!c.target_id || !c.bearbeiter) continue;
-    if (!letzterVon.has(c.target_id)) letzterVon.set(c.target_id, c.bearbeiter);
+    if (!c.target_id) continue;
+    if (c.bearbeiter && !letzterVon.has(c.target_id)) {
+      letzterVon.set(c.target_id, c.bearbeiter);
+    }
+    if (!letzterLog.has(c.target_id)) {
+      letzterLog.set(c.target_id, {
+        id: c.id,
+        note: c.note ?? null,
+        ansprechpartner: c.ansprechpartner ?? null,
+      });
+    }
   }
   const acts = (actRows ?? [])
     .map((a) => ({ ...a, norm: normName(a.standort_name) }))
@@ -435,6 +449,8 @@ export async function buildTeamOutbound(
       naechster_besuch: t.naechster_besuch ?? null,
       besuchs_notiz: t.besuchs_notiz ?? null,
       letzter_von: letzterVon.get(t.id) ?? null,
+      letzter_log_id: letzterLog.get(t.id)?.id ?? null,
+      letzter_ansprechpartner: letzterLog.get(t.id)?.ansprechpartner ?? null,
       exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
       todos: (todoRows ?? [])
         .filter((td) => td.lead_id === t.id)

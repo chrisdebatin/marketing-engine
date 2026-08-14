@@ -47,6 +47,10 @@ export async function POST(req: Request) {
     wiedervorlage?: string;
     bereich?: string;
     hub_id?: string;
+    text?: string;
+    anruf_notiz?: string;
+    /** Kontakt-Log-Eintrag (crm_contacts.id) beim Nachbearbeiten. */
+    contact_id?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -478,6 +482,9 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     let naechster: string;
     let hinweis: string;
     let todoText: string | null = null;
+    // Vorschlag für einen Vor-Ort-Auftrag an die PDL — wird NICHT direkt
+    // angelegt, sondern dem MA zur Bestätigung zurückgegeben.
+    let pdlAuftragText: string | null = null;
     if (!erreicht) {
       const morgen = new Date();
       morgen.setDate(morgen.getDate() + 1);
@@ -492,6 +499,7 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
             .then((m) => m.readOutboundNote(note, today))
             .catch(() => null);
       todoText = ki?.todo ?? null;
+      pdlAuftragText = ki?.pdlAuftrag ?? null;
       if (manuellOk) {
         naechster = manuell;
         hinweis = `Wiedervorlage am ${manuell} eingetragen.`;
@@ -558,7 +566,89 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
       bearbeiter: member.name,
       hinweis,
       todo,
+      // Vorschlag zur Bestätigung — der MA entscheidet, ob der Auftrag an
+      // den Standort rausgeht (Aktion "pdl-auftrag").
+      pdl_auftrag_vorschlag: pdlAuftragText,
+      pdl_hub_id: target.hub_id,
+      ansprechpartner: ansprechpartner || null,
+      anruf_notiz: logNote || null,
     });
+  }
+
+  // ── Bereits geloggten Anruf nachbearbeiten ──
+  // Korrigiert Notiz/Ansprechpartner am Kontakt-Log UND spiegelt die Notiz
+  // auf den Kontakt, damit die Karte dasselbe zeigt.
+  if (action === "anruf-edit") {
+    const contactId = (body.contact_id ?? "").trim();
+    const targetId = (body.target_id ?? "").trim();
+    if (!contactId || !targetId) {
+      return NextResponse.json({ error: "Eintrag fehlt." }, { status: 400 });
+    }
+    const notiz = (body.notiz ?? "").trim().slice(0, 1000);
+    const ap = (body.ansprechpartner ?? "").trim().slice(0, 200);
+    const { error: uErr } = await admin
+      .from("crm_contacts")
+      .update({ note: notiz || null, ansprechpartner: ap || null })
+      .eq("id", contactId);
+    if (uErr) {
+      return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });
+    }
+    // Wiedervorlage optional mitkorrigieren
+    const wieder = (body.wiedervorlage ?? "").trim();
+    const wiederOk = /^\d{4}-\d{2}-\d{2}$/.test(wieder);
+    await admin
+      .from("crm_targets")
+      .update({
+        besuchs_notiz: notiz || null,
+        ...(wiederOk ? { naechster_besuch: wieder } : {}),
+      })
+      .eq("id", targetId);
+    return NextResponse.json({
+      ok: true,
+      notiz: notiz || null,
+      ansprechpartner: ap || null,
+      ...(wiederOk ? { naechster_besuch: wieder } : {}),
+    });
+  }
+
+  // ── Bestätigter Vor-Ort-Auftrag an die PDL ──
+  if (action === "pdl-auftrag") {
+    const text = (body.text ?? "").trim();
+    const targetId = body.target_id ?? "";
+    if (!text || !targetId) {
+      return NextResponse.json({ error: "Auftrag fehlt." }, { status: 400 });
+    }
+    const { data: target } = await admin
+      .from("crm_targets")
+      .select("id, hub_id, name")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!target) {
+      return NextResponse.json({ error: "Kontakt nicht gefunden." }, { status: 404 });
+    }
+    const { data: auftrag, error: aErr } = await admin
+      .from("pdl_auftraege")
+      .insert({
+        target_id: target.id,
+        hub_id: body.hub_id ?? target.hub_id,
+        text: text.slice(0, 300),
+        anruf_datum: new Date().toISOString().slice(0, 10),
+        anruf_von: member.name,
+        ansprechpartner: (body.ansprechpartner ?? "").trim() || null,
+        anruf_notiz: (body.anruf_notiz ?? "").trim().slice(0, 1000) || null,
+      })
+      .select("id")
+      .single();
+    if (aErr) {
+      return NextResponse.json(
+        {
+          error:
+            "Auftrag konnte nicht angelegt werden — fehlt die Tabelle pdl_auftraege? (supabase/apply_all_pending.sql ausführen)",
+        },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true, id: auftrag.id });
   }
 
   return NextResponse.json({ error: "Unbekannte Aktion." }, { status: 400 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   CalendarClock,
   Check,
@@ -14,6 +15,7 @@ import {
   MapPin,
   MoreVertical,
   Pencil,
+  Send,
   Phone,
   PhoneCall,
   Search,
@@ -95,6 +97,10 @@ export interface OutboundTarget {
   besuchs_notiz: string | null;
   /** Wer zuletzt bei dieser Institution angerufen/kontaktiert hat. */
   letzter_von: string | null;
+  /** ID des jüngsten Kontakt-Log-Eintrags — zum Nachbearbeiten. */
+  letzter_log_id: string | null;
+  /** Ansprechpartner aus dem jüngsten Log-Eintrag. */
+  letzter_ansprechpartner: string | null;
   exklusiv: boolean;
   /** Offene To-dos am Kontakt (aus KI-gelesenen Anruf-Notizen). */
   todos: { id: string; text: string; faellig_am: string | null }[];
@@ -1692,34 +1698,20 @@ export function TeamWorkspace({
                   ) : (
                     <ul className="divide-y rounded-xl border bg-card shadow-sm">
                       {erledigtHeute.map((t) => (
-                        <li
+                        <ErledigtRow
                           key={t.id}
-                          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm"
-                        >
-                          <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                            <Check className="size-3.5" />
-                          </span>
-                          <span className="font-medium">{t.name}</span>
-                          <LeadIdChip id={t.id} />
-                          {/* Wer hat telefoniert? */}
-                          {t.letzter_von && (
-                            <span
-                              className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-                              title={`Anruf geloggt von ${t.letzter_von}`}
-                            >
-                              <User className="size-3" />
-                              {t.letzter_von}
-                            </span>
-                          )}
-                          {t.besuchs_notiz && (
-                            <span className="max-w-72 truncate text-xs text-muted-foreground" title={t.besuchs_notiz}>
-                              „{t.besuchs_notiz}“
-                            </span>
-                          )}
-                          <span className="ml-auto text-xs text-muted-foreground">
-                            wieder dran ab {formatIsoDate(t.naechster_besuch)}
-                          </span>
-                        </li>
+                          target={t}
+                          token={token}
+                          canAct={canAct}
+                          memberName={memberName}
+                          onSaved={(patch) =>
+                            setOutbound((cur) =>
+                              cur.map((x) =>
+                                x.id === t.id ? { ...x, ...patch } : x,
+                              ),
+                            )
+                          }
+                        />
                       ))}
                     </ul>
                   )}
@@ -2472,6 +2464,302 @@ function LeadKebab({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Bestätigungs-Fenster "Auftrag an PDL rausgeben?" — erscheint, wenn die KI
+ * in der Anruf-Notiz einen Vor-Ort-Auftrag erkannt hat, oder manuell aus der
+ * Erledigt-Liste. Der Text ist editierbar; erst mit Bestätigung geht der
+ * Auftrag samt Anrufprotokoll an den Standort.
+ */
+function PdlAuftragDialog({
+  token,
+  targetId,
+  targetName,
+  hubName,
+  vorschlag,
+  anrufVon,
+  ansprechpartner,
+  anrufNotiz,
+  onClose,
+  onDone,
+}: {
+  token: string;
+  targetId: string;
+  targetName: string;
+  hubName: string | null;
+  vorschlag: string;
+  anrufVon: string;
+  ansprechpartner: string | null;
+  anrufNotiz: string | null;
+  onClose: () => void;
+  onDone?: () => void;
+}) {
+  const [text, setText] = useState(vorschlag);
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  async function senden() {
+    if (!text.trim()) return;
+    setBusy(true);
+    setFehler(null);
+    try {
+      await teamAction(token, {
+        action: "pdl-auftrag",
+        target_id: targetId,
+        text: text.trim(),
+        ansprechpartner: ansprechpartner ?? "",
+        anruf_notiz: anrufNotiz ?? "",
+      });
+      toast.success(
+        hubName ? `Auftrag an ${hubName} rausgegeben` : "Auftrag angelegt",
+      );
+      onDone?.();
+      onClose();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-lg flex-col gap-3 rounded-xl border bg-card p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Send className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold">
+              Auftrag an PDL rausgeben?
+            </h3>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {hubName ? (
+                <>
+                  Geht an <b className="text-foreground">{hubName}</b> — die PDL
+                  sieht den Auftrag samt Anrufprotokoll auf ihrer Standort-Seite.
+                </>
+              ) : (
+                "Diesem Kontakt ist kein Standort zugeordnet — der Auftrag wird ohne Standort angelegt."
+              )}
+            </p>
+          </div>
+        </div>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="text-xs font-medium">Was soll die PDL tun?</span>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={2}
+            placeholder="z. B. Flyer vorbeibringen"
+          />
+        </label>
+
+        {/* Protokoll, das die PDL mitbekommt */}
+        <div className="rounded-lg border bg-muted/30 p-3 text-xs">
+          <p className="font-medium">Die PDL sieht dazu:</p>
+          <p className="mt-1 text-muted-foreground">
+            {anrufVon} hat am {new Date().toLocaleDateString("de-DE")} bei{" "}
+            <b className="text-foreground">{targetName}</b> angerufen
+            {ansprechpartner ? ` (Ansprechpartner: ${ansprechpartner})` : ""}.
+            {anrufNotiz ? ` Notiz: „${anrufNotiz}“` : ""}
+          </p>
+        </div>
+
+        {fehler && <p className="text-sm text-destructive">{fehler}</p>}
+
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose}>
+            Abbrechen
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={busy || !text.trim()}
+            onClick={senden}
+          >
+            <Send className="size-3.5" />
+            {busy ? "Sende…" : "Auftrag rausgeben"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Zeile in "Erledigt": zeigt Name, Anrufer-Tag und Notiz — und lässt den
+ * bereits geloggten Anruf nachbearbeiten (Notiz, Ansprechpartner,
+ * Wiedervorlage). Aus der Notiz kann direkt ein Vor-Ort-Auftrag an die PDL
+ * rausgehen.
+ */
+function ErledigtRow({
+  target: t,
+  token,
+  canAct,
+  memberName,
+  onSaved,
+}: {
+  target: OutboundTarget;
+  token: string;
+  canAct: boolean;
+  memberName: string;
+  onSaved: (patch: Partial<OutboundTarget>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [notiz, setNotiz] = useState(t.besuchs_notiz ?? "");
+  const [ap, setAp] = useState(t.letzter_ansprechpartner ?? "");
+  const [wieder, setWieder] = useState(t.naechster_besuch ?? "");
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [auftragOffen, setAuftragOffen] = useState(false);
+
+  async function speichern() {
+    if (!t.letzter_log_id) {
+      setFehler("Zu diesem Kontakt gibt es keinen Log-Eintrag zum Bearbeiten.");
+      return;
+    }
+    setBusy(true);
+    setFehler(null);
+    try {
+      const res = await teamAction(token, {
+        action: "anruf-edit",
+        contact_id: t.letzter_log_id,
+        target_id: t.id,
+        notiz,
+        ansprechpartner: ap,
+        wiedervorlage: wieder,
+      });
+      onSaved({
+        besuchs_notiz: (res.notiz as string | null) ?? null,
+        letzter_ansprechpartner: (res.ansprechpartner as string | null) ?? null,
+        ...(res.naechster_besuch
+          ? { naechster_besuch: String(res.naechster_besuch) }
+          : {}),
+      });
+      setOpen(false);
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-2 px-4 py-2.5 text-sm">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <Check className="size-3.5" />
+        </span>
+        <span className="font-medium">{t.name}</span>
+        <LeadIdChip id={t.id} />
+        {/* Wer hat telefoniert? */}
+        {t.letzter_von && (
+          <span
+            className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+            title={`Anruf geloggt von ${t.letzter_von}`}
+          >
+            <User className="size-3" />
+            {t.letzter_von}
+          </span>
+        )}
+        {t.besuchs_notiz && !open && (
+          <span
+            className="max-w-72 truncate text-xs text-muted-foreground"
+            title={t.besuchs_notiz}
+          >
+            „{t.besuchs_notiz}“
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">
+            wieder dran ab {formatIsoDate(t.naechster_besuch)}
+          </span>
+          {canAct && (
+            <button
+              type="button"
+              onClick={() => setOpen((s) => !s)}
+              className="flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="size-3" />
+              {open ? "Schließen" : "Bearbeiten"}
+            </button>
+          )}
+        </span>
+      </div>
+
+      {open && (
+        <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-medium">Ansprechpartner</span>
+              <Input
+                value={ap}
+                onChange={(e) => setAp(e.target.value)}
+                placeholder="Wer war am Telefon?"
+                className="bg-background"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs">
+              <span className="font-medium">Wieder dran ab</span>
+              <Input
+                type="date"
+                value={wieder}
+                onChange={(e) => setWieder(e.target.value)}
+                className="bg-background"
+              />
+            </label>
+          </div>
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="font-medium">Notiz zum Anruf</span>
+            <Textarea
+              value={notiz}
+              onChange={(e) => setNotiz(e.target.value)}
+              rows={2}
+              placeholder="Was wurde besprochen?"
+              className="bg-background"
+            />
+          </label>
+          {fehler && <p className="text-xs text-destructive">{fehler}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" disabled={busy} onClick={speichern}>
+              {busy ? "Speichert…" : "Speichern"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setAuftragOffen(true)}
+            >
+              <Send className="size-3.5" /> Auftrag an PDL
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {auftragOffen && (
+        <PdlAuftragDialog
+          token={token}
+          targetId={t.id}
+          targetName={t.name}
+          hubName={t.hub}
+          vorschlag={t.besuchs_notiz ?? ""}
+          anrufVon={t.letzter_von ?? memberName}
+          ansprechpartner={t.letzter_ansprechpartner}
+          anrufNotiz={t.besuchs_notiz}
+          onClose={() => setAuftragOffen(false)}
+        />
+      )}
+    </li>
+  );
+}
+
 function PdlVersuchButtons({ lead, token }: { lead: InboundLead; token: string }) {
   const hubId = lead.zugewiesen_hub_id ?? lead.vorschlag_hub_id;
   const pdl = lead.zugewiesen_pdl ?? lead.vorschlag_pdl;
@@ -3167,6 +3455,8 @@ function OutboundRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hinweis, setHinweis] = useState<string | null>(null);
+  /** KI-Vorschlag für einen Vor-Ort-Auftrag — öffnet den Bestätigungs-Dialog. */
+  const [auftragVorschlag, setAuftragVorschlag] = useState<string | null>(null);
 
   const ueberfaelligTage =
     t.letzter_besuch && t.naechster_besuch && t.naechster_besuch < today
@@ -3211,6 +3501,12 @@ function OutboundRow({
           .filter(Boolean)
           .join(" · ") || null,
       );
+      // Hat die KI einen Vor-Ort-Auftrag erkannt? Dann zur Bestätigung
+      // vorlegen — angelegt wird er erst nach Klick des MA.
+      const vorschlag = res.pdl_auftrag_vorschlag;
+      if (typeof vorschlag === "string" && vorschlag.trim()) {
+        setAuftragVorschlag(vorschlag.trim());
+      }
       setOpen(false);
       setErreicht(null);
       setAnsprechpartner("");
@@ -3571,6 +3867,21 @@ function OutboundRow({
             </div>
           </div>
         </div>
+      )}
+
+      {/* KI hat einen Vor-Ort-Auftrag erkannt — MA bestätigt ihn */}
+      {auftragVorschlag && (
+        <PdlAuftragDialog
+          token={token}
+          targetId={t.id}
+          targetName={t.name}
+          hubName={t.hub}
+          vorschlag={auftragVorschlag}
+          anrufVon={memberName}
+          ansprechpartner={ansprechpartner || null}
+          anrufNotiz={notiz || null}
+          onClose={() => setAuftragVorschlag(null)}
+        />
       )}
     </li>
   );

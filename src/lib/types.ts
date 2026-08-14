@@ -805,6 +805,40 @@ export interface Database {
         >;
         Relationships: [];
       };
+      pdl_auftraege: {
+        Row: {
+          id: string;
+          target_id: string;
+          hub_id: string | null;
+          text: string;
+          anruf_datum: string;
+          anruf_von: string | null;
+          ansprechpartner: string | null;
+          anruf_notiz: string | null;
+          status: string;
+          erledigt_at: string | null;
+          erledigt_von: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          target_id: string;
+          hub_id?: string | null;
+          text: string;
+          anruf_datum: string;
+          anruf_von?: string | null;
+          ansprechpartner?: string | null;
+          anruf_notiz?: string | null;
+          status?: string;
+          erledigt_at?: string | null;
+          erledigt_von?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["pdl_auftraege"]["Insert"]
+        >;
+        Relationships: [];
+      };
       crm_contacts: {
         Row: {
           id: string;

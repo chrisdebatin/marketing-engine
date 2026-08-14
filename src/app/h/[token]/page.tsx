@@ -11,6 +11,7 @@ import {
 } from "@/components/crm-visit-list";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
+import { PdlAuftragList } from "@/components/pdl-auftrag-list";
 import {
   PdlPatientList,
   type PdlPatientRow,
@@ -167,6 +168,29 @@ export default async function HubShareLinkPage({
     .eq("status", "offen")
     .order("created_at", { ascending: false })
     .limit(100);
+
+  // Vor-Ort-Aufträge aus Outbound-Anrufen des Call-Centers: die PDL sieht
+  // den Auftrag samt Anrufprotokoll (wer hat wann mit wem telefoniert).
+  // Fehlt Migration 0061, bleibt die Liste leer.
+  const { data: auftragRows } = await admin
+    .from("pdl_auftraege")
+    .select("*")
+    .eq("hub_id", hub.id)
+    .eq("status", "offen")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const targetNameById = new Map(
+    ((allTargets ?? []) as { id: string; name: string }[]).map((t) => [t.id, t.name]),
+  );
+  const pdlAuftraege = (auftragRows ?? []).map((a) => ({
+    id: a.id,
+    text: a.text,
+    institution: targetNameById.get(a.target_id) ?? "(Institution)",
+    anruf_datum: a.anruf_datum,
+    anruf_von: a.anruf_von,
+    ansprechpartner: a.ansprechpartner,
+    anruf_notiz: a.anruf_notiz,
+  }));
 
   // Doppelte Orte über Hub-Grenzen erkennen (gleicher normalisierter Name +
   // gleicher Ort): am eigenen Eintrag erscheint dann ein Hinweis, welcher
@@ -515,8 +539,16 @@ export default async function HubShareLinkPage({
           {
             id: "auftraege",
             label: "Aufträge",
-            badge: pdlTodos.length > 0 ? pdlTodos.length : undefined,
-            content: <PdlTodoList token={token} initial={pdlTodos} />,
+            badge:
+              pdlTodos.length + pdlAuftraege.length > 0
+                ? pdlTodos.length + pdlAuftraege.length
+                : undefined,
+            content: (
+              <div className="flex flex-col gap-5">
+                <PdlAuftragList token={token} initial={pdlAuftraege} />
+                <PdlTodoList token={token} initial={pdlTodos} />
+              </div>
+            ),
           },
           {
             id: "kapazitaet",

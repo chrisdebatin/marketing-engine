@@ -397,3 +397,24 @@ create index if not exists pdl_versuche_hub_idx on public.pdl_versuche (hub_id, 
 alter table public.pdl_versuche disable row level security;
 
 notify pgrst, 'reload schema';
+
+-- ── 0061: PDL-Aufträge aus Outbound-Anrufen (KI-erkannt, MA-bestätigt) ──
+create table if not exists public.pdl_auftraege (
+  id uuid primary key default gen_random_uuid(),
+  target_id uuid not null references public.crm_targets (id) on delete cascade,
+  hub_id uuid references public.hubs (id) on delete set null,
+  text text not null,
+  anruf_datum date not null,
+  anruf_von text,
+  ansprechpartner text,
+  anruf_notiz text,
+  status text not null default 'offen',
+  erledigt_at timestamptz,
+  erledigt_von text,
+  created_at timestamptz not null default now()
+);
+create index if not exists pdl_auftraege_hub_idx on public.pdl_auftraege (hub_id, status);
+create index if not exists pdl_auftraege_target_idx on public.pdl_auftraege (target_id);
+alter table public.pdl_auftraege disable row level security;
+
+notify pgrst, 'reload schema';
