@@ -2,11 +2,21 @@
 
 import { useMemo, useState } from "react";
 import {
+  CheckCircle2,
+  FileText,
+  Filter,
   Inbox,
+  Info,
+  MessageSquare,
+  Phone,
   Send,
+  Sparkles,
   Stethoscope,
   Timer,
+  TrendingDown,
+  User,
   UserCheck,
+  Users,
   XCircle,
 } from "lucide-react";
 import { StatTile } from "@/components/ui/stat-tile";
@@ -422,13 +432,87 @@ export function CrmStatsDashboard({
       </section>
 
       {/* Prozess-Funnel */}
-      <section className="rounded-xl border bg-card p-4 shadow-sm">
-        <h2 className="text-sm font-semibold">Der Prozess — jeder Schritt mit Conversion</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Jede Stufe zählt Leads, die diesen Schritt mindestens erreicht haben
-          (Recare-Leads springen oft direkt zur Übergabe). {data.verloren} Lead
-          {data.verloren === 1 ? "" : "s"} im Zeitraum verloren.
-        </p>
+      <section className="rounded-xl border bg-card p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+            <Filter className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg leading-tight font-bold tracking-tight">
+              Der Prozess — jeder Schritt mit Conversion
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Jede Stufe zählt Leads, die diesen Schritt mindestens erreicht
+              haben (Recare-Leads springen oft direkt zur Übergabe).{" "}
+              {data.verloren} Lead{data.verloren === 1 ? "" : "s"} im Zeitraum
+              verloren.
+            </p>
+          </div>
+        </div>
+
+        {/* Kopf-Kennzahlen: Grundgesamtheit, Verluste, Gesamt-Conversion */}
+        <div className="mt-4 grid gap-3 lg:grid-cols-[repeat(2,minmax(0,1fr))_1.4fr]">
+          <div className="flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+              <Users className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-muted-foreground">
+                Gesamt Leads
+              </p>
+              <p className="flex items-baseline gap-2">
+                <span className="text-[1.75rem] leading-none font-bold text-violet-600 tabular-nums">
+                  {data.steps[0]?.count ?? 0}
+                </span>
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-700">
+                  100 %
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-xl border bg-card p-4 shadow-sm">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+              <TrendingDown className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-muted-foreground">
+                Leads verloren
+              </p>
+              <p className="flex items-baseline gap-2">
+                <span className="text-[1.75rem] leading-none font-bold text-red-600 tabular-nums">
+                  {data.verloren}
+                </span>
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                  {pct(data.verloren, data.steps[0]?.count ?? 0)}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 rounded-xl border border-primary/25 bg-primary/[0.04] p-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Sparkles className="size-5" />
+            </span>
+            <div className="shrink-0">
+              <p className="text-sm font-medium text-muted-foreground">
+                Conversion-Rate gesamt
+              </p>
+              <p className="text-[1.75rem] leading-none font-bold text-primary tabular-nums">
+                {pct(
+                  data.steps[data.steps.length - 1]?.count ?? 0,
+                  data.steps[0]?.count ?? 0,
+                )}
+              </p>
+            </div>
+            <p className="border-l pl-4 text-xs leading-snug text-muted-foreground">
+              Von {data.steps[0]?.count ?? 0} eingegangenen Leads wurden{" "}
+              {data.steps[data.steps.length - 1]?.count ?? 0} bis zur Aufnahme
+              in Versorgung begleitet.
+            </p>
+          </div>
+        </div>
+
         <FunnelChart steps={data.steps} />
       </section>
 
@@ -721,6 +805,27 @@ export function CrmStatsDashboard({
  * Blau-Rampe), Breite = Anteil an "Eingegangen", Conversion-Rate zwischen
  * den Stufen, Schritt-Erklärung im Tooltip und als Mini-Legende darunter.
  */
+/**
+ * Icon + Farbton je Prozess-Schritt — feste Zuordnung, damit derselbe
+ * Schritt in Karte und Legende gleich aussieht.
+ */
+const FUNNEL_STEP_META = [
+  { Icon: Inbox, disc: "bg-violet-100 text-violet-600", chip: "bg-violet-100 text-violet-700", value: "text-violet-600" },
+  { Icon: Phone, disc: "bg-blue-100 text-blue-600", chip: "bg-blue-100 text-blue-700", value: "text-blue-600" },
+  { Icon: MessageSquare, disc: "bg-sky-100 text-sky-600", chip: "bg-sky-100 text-sky-700", value: "text-sky-600" },
+  { Icon: FileText, disc: "bg-emerald-100 text-emerald-600", chip: "bg-emerald-100 text-emerald-700", value: "text-emerald-600" },
+  { Icon: CheckCircle2, disc: "bg-violet-100 text-violet-600", chip: "bg-violet-100 text-violet-700", value: "text-violet-600" },
+] as const;
+
+/** Wie viele Personen-Piktogramme eine Stufe zeigt (5×4-Raster). */
+const PIKTO_ANZAHL = 20;
+
+/**
+ * Prozess-Funnel als waagerechte Schrittkarten: je Schritt Icon, Anzahl,
+ * Anteil an allen Leads und ein Personen-Raster als schnelle Sicht auf die
+ * Größenordnung. Zwischen den Karten steht die Conversion zum vorherigen
+ * Schritt — dort sieht man sofort, wo Leads liegen bleiben.
+ */
 function FunnelChart({
   steps,
 }: {
@@ -734,66 +839,129 @@ function FunnelChart({
       </p>
     );
   }
-  const widths = steps.map((s) => Math.max(24, (s.count / first) * 100));
+
   return (
-    <div className="mx-auto mt-4 flex w-full max-w-xl flex-col items-center">
-      {steps.map((s, i) => {
-        const wTop = widths[i];
-        const wBottom = widths[i + 1] ?? Math.max(16, wTop * 0.7);
-        const l = (100 - wTop) / 2;
-        const r = 100 - l;
-        const lb = (100 - wBottom) / 2;
-        const rb = 100 - lb;
-        const prev = i > 0 ? steps[i - 1].count : null;
-        const hell = i < 2; // f1/f2 sind hell → dunkle Schrift
-        return (
-          <div key={s.label} className="flex w-full flex-col items-center">
-            {i > 0 && (
-              <p className="py-0.5 text-[11px] font-medium text-muted-foreground">
-                ▾ {prev ? pct(s.count, prev) : "—"} vom vorherigen Schritt
-              </p>
-            )}
-            <div
-              className="flex h-14 w-full flex-col items-center justify-center text-center"
-              style={{
-                clipPath: `polygon(${l}% 0, ${r}% 0, ${rb}% 100%, ${lb}% 100%)`,
-                background: `var(--f${i + 1})`,
-              }}
-              title={`${s.label}: ${s.count} Leads (${pct(s.count, first)} von allen) — ${s.hint}`}
-            >
-              <span
+    <div className="mt-4 flex flex-col gap-4">
+      {/* Schrittkarten mit Conversion-Pfeilen dazwischen */}
+      <div className="flex items-stretch gap-0 overflow-x-auto pb-1">
+        {steps.map((s, i) => {
+          const meta = FUNNEL_STEP_META[i] ?? FUNNEL_STEP_META[0];
+          const prev = i > 0 ? steps[i - 1].count : null;
+          // Anteil an allen Leads bestimmt, wie viele Figuren gefüllt sind.
+          const gefuellt = Math.round((s.count / first) * PIKTO_ANZAHL);
+          return (
+            <div key={s.label} className="flex min-w-0 items-center">
+              {i > 0 && (
+                <div className="flex w-16 shrink-0 flex-col items-center gap-1 px-1 sm:w-24">
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-1 text-xs font-semibold tabular-nums",
+                      prev && s.count > 0
+                        ? meta.chip
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {prev ? pct(s.count, prev) : "—"}
+                  </span>
+                  <span className="text-center text-[0.65rem] leading-tight text-muted-foreground">
+                    vom vorherigen Schritt
+                  </span>
+                </div>
+              )}
+              <div
                 className={cn(
-                  "px-2 text-xs leading-tight font-semibold",
-                  hell ? "text-slate-900" : "text-white",
+                  "flex w-[9.5rem] shrink-0 flex-col items-center gap-2 rounded-xl border bg-card p-4 text-center shadow-sm sm:w-44",
+                  // Erste Stufe hervorheben: das ist die Grundgesamtheit
+                  i === 0 && "border-primary/40 ring-1 ring-primary/20",
                 )}
+                title={`${s.label}: ${s.count} Leads (${pct(s.count, first)} von allen) — ${s.hint}`}
               >
-                {s.label}
-              </span>
-              <span
-                className={cn(
-                  "text-sm leading-tight font-bold tabular-nums",
-                  hell ? "text-slate-900" : "text-white",
-                )}
-              >
-                {s.count}
-                <span className="ml-1 text-[10px] font-normal opacity-80">
-                  ({pct(s.count, first)})
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[0.7rem] font-semibold",
+                    meta.chip,
+                  )}
+                >
+                  Schritt {i + 1}
                 </span>
-              </span>
+                <span
+                  className={cn(
+                    "flex size-11 items-center justify-center rounded-full",
+                    meta.disc,
+                  )}
+                >
+                  <meta.Icon className="size-5" />
+                </span>
+                <span className="text-sm leading-tight font-semibold">
+                  {s.label}
+                </span>
+                <span
+                  className={cn(
+                    "text-[1.75rem] leading-none font-bold tabular-nums",
+                    meta.value,
+                  )}
+                >
+                  {s.count}
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {pct(s.count, first)}
+                </span>
+                {/* Personen-Raster: 20 Figuren = alle Leads dieser Auswertung */}
+                <span
+                  className="grid grid-cols-5 gap-x-1 gap-y-0.5"
+                  aria-hidden="true"
+                >
+                  {Array.from({ length: PIKTO_ANZAHL }, (_, n) => (
+                    <User
+                      key={n}
+                      className={cn(
+                        "size-3.5",
+                        n < gefuellt
+                          ? meta.value
+                          : "text-muted-foreground/25",
+                      )}
+                      strokeWidth={2.5}
+                    />
+                  ))}
+                </span>
+              </div>
             </div>
-          </div>
-        );
-      })}
-      {/* Mini-Legende: was jede Stufe bedeutet */}
-      <p className="mt-3 text-center text-[10px] leading-relaxed text-muted-foreground">
-        {steps.map((s, i) => (
-          <span key={s.label}>
-            {i > 0 && " · "}
-            <span className="font-medium text-foreground/70">{s.label}</span> ={" "}
-            {s.hint}
-          </span>
-        ))}
-      </p>
+          );
+        })}
+      </div>
+
+      {/* Legende: was bedeutet jeder Schritt? */}
+      <div className="rounded-xl border bg-muted/30 p-4">
+        <p className="flex items-center gap-1.5 text-sm font-semibold">
+          <Info className="size-4 text-primary" />
+          Über den Prozess
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {steps.map((s, i) => {
+            const meta = FUNNEL_STEP_META[i] ?? FUNNEL_STEP_META[0];
+            return (
+              <div key={s.label} className="flex items-start gap-2">
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                    meta.disc,
+                  )}
+                >
+                  <meta.Icon className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm leading-tight font-semibold">
+                    {s.label}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {s.hint}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

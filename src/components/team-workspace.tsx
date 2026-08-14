@@ -91,6 +91,8 @@ export interface OutboundTarget {
   letzte_kontakt_art: string | null;
   naechster_besuch: string | null;
   besuchs_notiz: string | null;
+  /** Wer zuletzt bei dieser Institution angerufen/kontaktiert hat. */
+  letzter_von: string | null;
   exklusiv: boolean;
   /** Offene To-dos am Kontakt (aus KI-gelesenen Anruf-Notizen). */
   todos: { id: string; text: string; faellig_am: string | null }[];
@@ -472,7 +474,8 @@ export function TeamWorkspace({
   const [inbound, setInbound] = useState(initialInbound);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
-  const [outTab, setOutTab] = useState<"liste" | "wieder" | "erledigt">("liste");
+  // "wieder" ist die Anrufliste (heute + kommende Tage in einer Ansicht).
+  const [outTab, setOutTab] = useState<"wieder" | "erledigt">("wieder");
   const [inTab, setInTab] = useState<"offen" | "pdl" | "closed">("offen");
   const canAct = !monitor || editable;
 
@@ -1486,11 +1489,10 @@ export function TeamWorkspace({
 
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_290px] lg:items-start">
             <div className="flex min-w-0 flex-col gap-3">
-              {/* Reiter: Anrufliste / Wiedervorlagen / Erledigt */}
+              {/* Reiter: Wiedervorlagen (= die Anrufliste) / Erledigt */}
               <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
                 {(
                   [
-                    { key: "liste", label: "Anrufliste", n: heuteGruppe.length },
                     { key: "wieder", label: "Wiedervorlagen", n: wiederAnzahl },
                     { key: "erledigt", label: "Erledigt", n: erledigtHeute.length },
                   ] as const
@@ -1523,50 +1525,60 @@ export function TeamWorkspace({
                 ))}
               </div>
 
-              {outTab === "liste" && (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    Heute dran — von oben nach unten abtelefonieren (überfällig
-                    zuerst). Nicht erreicht? Steht morgen automatisch wieder
-                    hier.
-                  </p>
-                  {heuteGruppe.length === 0 ? (
-                    <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-                      Alles abtelefoniert. 🎉 Die nächsten Kontakte stehen unter
-                      „Wiedervorlagen&ldquo;.
-                    </p>
-                  ) : (
-                    <ol id="naechster-anruf" className="flex scroll-mt-4 flex-col gap-2">
-                      {heuteGruppe.map((t, i) => (
-                        <OutboundRow
-                          key={t.id}
-                          target={t}
-                          index={i + 1}
-                          today={today}
-                          token={token}
-                          memberName={memberName}
-                          isDue
-                          onLogged={(patch) =>
-                            setOutbound((cur) =>
-                              cur.map((x) => (x.id === t.id ? { ...x, ...patch } : x)),
-                            )
-                          }
-                        />
-                      ))}
-                    </ol>
-                  )}
-                </>
-              )}
-
               {outTab === "wieder" && (
                 <>
                   <p className="text-xs text-muted-foreground">
-                    Geplante Anrufe der nächsten Tage — aus Wiedervorlage-Daten,
-                    KI-gelesenen Notizen und dem Standard-Rhythmus.
+                    Die Anrufliste: heute fällige Kontakte zuerst (überfällig
+                    ganz oben), darunter die kommenden Tage. Nicht erreicht?
+                    Steht morgen automatisch wieder hier.
                   </p>
+
+                  {/* Heute fällig — das ist die eigentliche Anrufliste */}
+                  <div className="flex flex-col gap-2">
+                    <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-primary uppercase">
+                      <CalendarClock className="size-3.5" />
+                      Heute dran
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="font-normal normal-case text-muted-foreground">
+                        {heuteGruppe.length} Anruf
+                        {heuteGruppe.length === 1 ? "" : "e"}
+                      </span>
+                    </p>
+                    {heuteGruppe.length === 0 ? (
+                      <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
+                        Alles abtelefoniert. 🎉 Die nächsten Kontakte stehen
+                        weiter unten.
+                      </p>
+                    ) : (
+                      <ol
+                        id="naechster-anruf"
+                        className="flex scroll-mt-4 flex-col gap-2"
+                      >
+                        {heuteGruppe.map((t, i) => (
+                          <OutboundRow
+                            key={t.id}
+                            target={t}
+                            index={i + 1}
+                            today={today}
+                            token={token}
+                            memberName={memberName}
+                            isDue
+                            onLogged={(patch) =>
+                              setOutbound((cur) =>
+                                cur.map((x) =>
+                                  x.id === t.id ? { ...x, ...patch } : x,
+                                ),
+                              )
+                            }
+                          />
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+
                   {futureDays.length === 0 && outboundLater.length === 0 && (
                     <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground shadow-sm">
-                      Keine Wiedervorlagen geplant.
+                      Keine weiteren Wiedervorlagen geplant.
                     </p>
                   )}
                   {futureDays.map((g) => (
@@ -1652,6 +1664,16 @@ export function TeamWorkspace({
                           </span>
                           <span className="font-medium">{t.name}</span>
                           <LeadIdChip id={t.id} />
+                          {/* Wer hat telefoniert? */}
+                          {t.letzter_von && (
+                            <span
+                              className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+                              title={`Anruf geloggt von ${t.letzter_von}`}
+                            >
+                              <User className="size-3" />
+                              {t.letzter_von}
+                            </span>
+                          )}
                           {t.besuchs_notiz && (
                             <span className="max-w-72 truncate text-xs text-muted-foreground" title={t.besuchs_notiz}>
                               „{t.besuchs_notiz}“
@@ -1694,7 +1716,7 @@ export function TeamWorkspace({
             </div>
             <a
               href="#naechster-anruf"
-              onClick={() => setOutTab("liste")}
+              onClick={() => setOutTab("wieder")}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
             >
               <PhoneCall className="size-4" /> Nächsten Anruf starten
@@ -2177,7 +2199,7 @@ function KontakteView({
       meta = "noch kein Kontakt";
     } else if (t.letzter_besuch === heute) {
       spalte = "heute";
-      meta = `heute: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"}`;
+      meta = `heute: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"}${t.letzter_von ? ` — ${t.letzter_von}` : ""}`;
     } else if (
       offenesTodo &&
       (!offenesTodo.faellig_am || offenesTodo.faellig_am <= heute)
@@ -2194,7 +2216,7 @@ function KontakteView({
       meta = `wieder dran am ${formatIsoDate(t.naechster_besuch)}`;
     } else {
       spalte = "zuletzt";
-      meta = `zuletzt ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}`;
+      meta = `zuletzt ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.letzter_von ? ` — ${t.letzter_von}` : ""}`;
     }
     karten.push({
       key: `t-${t.id}`,
@@ -3095,6 +3117,8 @@ function OutboundRow({
         letzter_besuch: String(res.letzter_besuch),
         letzte_kontakt_art: "anruf",
         naechster_besuch: String(res.naechster_besuch),
+        // Direkt mitgeben, sonst fehlt der Name bis zum nächsten Reload.
+        letzter_von: memberName,
         besuchs_notiz:
           [!erreicht ? "Nicht erreicht" : "", notiz].filter(Boolean).join(" — ") || null,
         ...(neuesTodo ? { todos: [...t.todos, neuesTodo] } : {}),
@@ -3241,7 +3265,7 @@ function OutboundRow({
           <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <CalendarClock className="size-3.5 shrink-0" />
             {t.letzter_besuch
-              ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder dran ab ${formatIsoDate(t.naechster_besuch)}`
+              ? `Zuletzt: ${kontaktArtLabel(t.letzte_kontakt_art) || "Kontakt"} am ${formatIsoDate(t.letzter_besuch)}${t.letzter_von ? ` von ${t.letzter_von}` : ""}${t.besuchs_notiz ? ` — „${t.besuchs_notiz}“` : ""} · wieder dran ab ${formatIsoDate(t.naechster_besuch)}`
               : "Noch kein Kontakt"}
           </p>
           {t.todos.length > 0 && (

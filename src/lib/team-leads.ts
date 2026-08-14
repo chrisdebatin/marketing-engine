@@ -373,6 +373,18 @@ export async function buildTeamOutbound(
       .limit(1000),
     admin.from("profiles").select("id, name"),
   ]);
+  // Wer hat zuletzt bei welcher Institution angerufen? Neueste Kontakte
+  // zuerst, damit das erste Vorkommen je target_id gewinnt.
+  const { data: kontaktRows } = await admin
+    .from("crm_contacts")
+    .select("target_id, contact_date, bearbeiter")
+    .order("contact_date", { ascending: false })
+    .limit(3000);
+  const letzterVon = new Map<string, string>();
+  for (const c of kontaktRows ?? []) {
+    if (!c.target_id || !c.bearbeiter) continue;
+    if (!letzterVon.has(c.target_id)) letzterVon.set(c.target_id, c.bearbeiter);
+  }
   const acts = (actRows ?? [])
     .map((a) => ({ ...a, norm: normName(a.standort_name) }))
     .filter((a) => a.norm.length >= 5);
@@ -422,6 +434,7 @@ export async function buildTeamOutbound(
       letzte_kontakt_art: t.letzte_kontakt_art ?? null,
       naechster_besuch: t.naechster_besuch ?? null,
       besuchs_notiz: t.besuchs_notiz ?? null,
+      letzter_von: letzterVon.get(t.id) ?? null,
       exklusiv: (t.kategorie ?? "sonstiges") === exclusive,
       todos: (todoRows ?? [])
         .filter((td) => td.lead_id === t.id)
