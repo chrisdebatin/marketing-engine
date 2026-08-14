@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   CalendarClock,
@@ -12,6 +12,7 @@ import {
   Inbox,
   Mail,
   MapPin,
+  MoreVertical,
   Pencil,
   Phone,
   PhoneCall,
@@ -1063,6 +1064,29 @@ export function TeamWorkspace({
                       </span>
                     )}
                     {l.status === "offen" && <UnansweredTimer since={l.datum} />}
+                    {/* Seltene Aktionen im Kebab — hält die Aktionszeile
+                        unten einzeilig. */}
+                    {canAct &&
+                      (l.quelle === "recare" || l.zugewiesen_hub_id || l.vorschlag_hub_id) &&
+                      !["aufgenommen", "verloren"].includes(l.status) && (
+                        <LeadKebab>
+                          <PdlVersuchButtons lead={l} token={token} />
+                          {l.quelle === "recare" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              title="Anfrage abgelehnt (z. B. Versorgung passt nicht, außerhalb des Einzugsbereichs). Der Lead verschwindet aus der Liste und steht unten unter „Abgelehnte Recare-Anfragen“."
+                              className="justify-start border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                              onClick={() =>
+                                setStatus(l, "verloren", "Pat. abgelehnt")
+                              }
+                            >
+                              <X className="size-3.5" /> Pat. abgelehnt
+                            </Button>
+                          )}
+                        </LeadKebab>
+                      )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span
@@ -1133,75 +1157,94 @@ export function TeamWorkspace({
                     <p className="font-semibold text-indigo-950">
                       🏥 {l.klinik_info.name} — unsere Beziehung
                     </p>
-                    <ul className="mt-1 flex flex-col gap-0.5 text-indigo-950/80">
-                      <li>
-                        Vor Ort:{" "}
-                        {l.klinik_info.letzter_besuch ? (
-                          <>
-                            {kontaktArtLabel(l.klinik_info.letzter_besuch.art) || "Besuch"}{" "}
-                            am {formatIsoDate(l.klinik_info.letzter_besuch.datum)}
-                          </>
-                        ) : (
-                          "noch nie besucht"
-                        )}
-                      </li>
-                      <li>
-                        Angerufen:{" "}
-                        {l.klinik_info.letzter_anruf ? (
-                          <>
-                            am {formatIsoDate(l.klinik_info.letzter_anruf.datum)}
-                            {l.klinik_info.letzter_anruf.ansprechpartner
-                              ? ` (mit ${l.klinik_info.letzter_anruf.ansprechpartner})`
-                              : ""}
-                          </>
-                        ) : (
-                          "noch nie"
-                        )}
-                      </li>
-                      <li>
-                        Patienten von dort:{" "}
-                        {l.klinik_info.patienten > 1 ? (
-                          <>
-                            {l.klinik_info.patienten} Anfragen ·{" "}
-                            <span className="font-medium">
-                              {l.klinik_info.aufgenommen} aufgenommen
-                            </span>
-                          </>
-                        ) : (
-                          "erste Anfrage dieser Klinik"
-                        )}
-                      </li>
+                    {/* Drei Spalten nebeneinander — auf einen Blick erfassbar,
+                        statt untereinander gestapelt. */}
+                    <dl className="mt-1.5 grid gap-x-4 gap-y-2 sm:grid-cols-3">
+                      <div>
+                        <dt className="text-[0.7rem] text-indigo-950/60">
+                          Vor Ort:
+                        </dt>
+                        <dd className="text-indigo-950/90">
+                          {l.klinik_info.letzter_besuch ? (
+                            <>
+                              {kontaktArtLabel(l.klinik_info.letzter_besuch.art) || "Besuch"}{" "}
+                              am {formatIsoDate(l.klinik_info.letzter_besuch.datum)}
+                            </>
+                          ) : (
+                            "noch nie besucht"
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.7rem] text-indigo-950/60">
+                          Angerufen:
+                        </dt>
+                        <dd className="text-indigo-950/90">
+                          {l.klinik_info.letzter_anruf ? (
+                            <>
+                              am {formatIsoDate(l.klinik_info.letzter_anruf.datum)}
+                              {l.klinik_info.letzter_anruf.ansprechpartner
+                                ? ` (mit ${l.klinik_info.letzter_anruf.ansprechpartner})`
+                                : ""}
+                            </>
+                          ) : (
+                            "noch nie"
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[0.7rem] text-indigo-950/60">
+                          Patienten von dort:
+                        </dt>
+                        <dd className="text-indigo-950/90">
+                          {l.klinik_info.patienten > 1 ? (
+                            <>
+                              {l.klinik_info.patienten} Anfragen ·{" "}
+                              <span className="font-medium">
+                                {l.klinik_info.aufgenommen} aufgenommen
+                              </span>
+                            </>
+                          ) : (
+                            "erste Anfrage dieser Klinik"
+                          )}
+                        </dd>
+                      </div>
                       {l.klinik_info.ansprechpartner && (
-                        <li>
-                          Letzter Ansprechpartner:{" "}
-                          <span className="font-medium">
+                        <div className="sm:col-span-3">
+                          <dt className="text-[0.7rem] text-indigo-950/60">
+                            Letzter Ansprechpartner:
+                          </dt>
+                          <dd className="font-medium text-indigo-950/90">
                             {l.klinik_info.ansprechpartner}
-                          </span>
-                        </li>
+                          </dd>
+                        </div>
                       )}
-                    </ul>
+                    </dl>
                   </div>
                 )}
-                <LeadNote
-                  lead={l}
-                  canAct={canAct}
-                  token={token}
-                  onSaved={(notiz) =>
-                    setInbound((cur) =>
-                      cur.map((x) => (x.id === l.id ? { ...x, notiz } : x)),
-                    )
-                  }
-                />
-                <LeadTodos
-                  lead={l}
-                  canAct={canAct}
-                  token={token}
-                  onChanged={(todos) =>
-                    setInbound((cur) =>
-                      cur.map((x) => (x.id === l.id ? { ...x, todos } : x)),
-                    )
-                  }
-                />
+                {/* Notiz und To-do teilen sich eine Zeile (wrappt bei Bedarf) */}
+                <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
+                  <LeadNote
+                    lead={l}
+                    canAct={canAct}
+                    token={token}
+                    onSaved={(notiz) =>
+                      setInbound((cur) =>
+                        cur.map((x) => (x.id === l.id ? { ...x, notiz } : x)),
+                      )
+                    }
+                  />
+                  <LeadTodos
+                    lead={l}
+                    canAct={canAct}
+                    token={token}
+                    onChanged={(todos) =>
+                      setInbound((cur) =>
+                        cur.map((x) => (x.id === l.id ? { ...x, todos } : x)),
+                      )
+                    }
+                  />
+                </div>
                 {l.ergebnis && (
                   <p className="text-xs font-medium text-emerald-800">
                     Ergebnis: {l.ergebnis}
@@ -1331,14 +1374,7 @@ export function TeamWorkspace({
                         <MapPin className="size-3.5" /> Nicht im Einzugsbereich
                       </Button>
                     )}
-                  {canAct &&
-                    !l.pdl_bestaetigt_at &&
-                    l.status !== "verloren" &&
-                    (l.zugewiesen_hub_id != null ||
-                      (l.quelle === "recare" &&
-                        ["offen", "kontaktiert"].includes(l.status))) && (
-                      <PdlVersuchButtons lead={l} token={token} />
-                    )}
+                  {/* PDL-Erreichbarkeit sitzt jetzt im Kebab oben rechts. */}
                 </div>
                 {canAct && !l.zugewiesen_hub && l.status !== "verloren" &&
                   (l.status === "erstgespraech" || l.quelle === "recare") && (
@@ -1974,12 +2010,17 @@ function LeadTodos({
   }
 
   if (lead.todos.length === 0 && !canAct) return null;
+  // contents: To-dos und Button liegen direkt im Eltern-Flex, damit der
+  // "To-do"-Button neben dem Notiz-Button steht statt darunter.
   return (
-    <div className="flex flex-col gap-1">
+    <div className="contents">
       {lead.todos.map((t) => {
         const faellig = t.faellig_am !== null && t.faellig_am <= heute;
         return (
-          <p key={t.id} className="flex flex-wrap items-center gap-1.5 text-xs">
+          <p
+            key={t.id}
+            className="flex basis-full flex-wrap items-center gap-1.5 text-xs"
+          >
             <span
               className={cn(
                 "rounded-full px-1.5 py-0.5 font-semibold",
@@ -2007,7 +2048,7 @@ function LeadTodos({
       })}
       {canAct &&
         (adding ? (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex basis-full flex-wrap items-center gap-1.5">
             <Input
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -2391,6 +2432,46 @@ function KontakteView({
  * nichts am Lead, speist nur das PDL-Ranking im CRM-Admin (wo müssen wir
  * mit Schulung/Sensibilisierung nachbessern?).
  */
+/**
+ * Kebab-Menü oben rechts an der Lead-Karte: seltener genutzte Aktionen
+ * (PDL-Erreichbarkeit vermerken, Patient abgelehnt), damit die Aktionszeile
+ * unten in EINER Reihe bleibt. Schließt bei Klick nach außen.
+ */
+function LeadKebab({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        aria-label="Weitere Aktionen"
+        aria-expanded={open}
+        onClick={() => setOpen((s) => !s)}
+        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <MoreVertical className="size-4" />
+      </button>
+      {open && (
+        <div
+          className="absolute top-8 right-0 z-20 flex w-64 flex-col gap-2 rounded-xl border bg-card p-3 shadow-lg"
+          onClick={() => setOpen(false)}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PdlVersuchButtons({ lead, token }: { lead: InboundLead; token: string }) {
   const hubId = lead.zugewiesen_hub_id ?? lead.vorschlag_hub_id;
   const pdl = lead.zugewiesen_pdl ?? lead.vorschlag_pdl;
@@ -2422,7 +2503,9 @@ function PdlVersuchButtons({ lead, token }: { lead: InboundLead; token: string }
       className="flex flex-wrap items-center gap-1.5"
       title={`Jeden Anruf-Versuch bei ${pdl ? `PDL ${pdl}` : "der PDL"} hier vermerken — fürs Erreichbarkeits-Ranking im CRM-Admin. Ändert nichts am Lead.`}
     >
-      <span className="text-[11px] text-muted-foreground">PDL angerufen?</span>
+      <span className="basis-full text-[11px] font-medium text-muted-foreground">
+        PDL angerufen?
+      </span>
       <button
         type="button"
         disabled={busy}
@@ -2658,10 +2741,13 @@ function LeadNote({
 
   if (!editing) {
     if (!lead.notiz && !canAct) return null;
+    // contents: der Wrapper verschwindet aus dem Layout, damit Notiz-Text
+    // und Button direkt im Eltern-Flex liegen und der Button sich neben das
+    // To-do-Element setzt.
     return (
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="contents">
         {lead.notiz ? (
-          <p className="w-full text-sm whitespace-pre-line text-foreground/85">
+          <p className="basis-full text-sm whitespace-pre-line text-foreground/85">
             {lead.notiz}
           </p>
         ) : null}
@@ -2684,7 +2770,9 @@ function LeadNote({
     );
   }
   return (
-    <div className="flex flex-col gap-1.5">
+    // basis-full: das Bearbeiten-Formular bekommt im Eltern-Flex eine
+    // eigene volle Zeile.
+    <div className="flex basis-full flex-col gap-1.5">
       <Textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -2987,51 +3075,40 @@ function RecareOutcome({
     }
   }
 
+  // contents: die Buttons liegen direkt in der Aktionszeile der Karte,
+  // damit alles in EINER Reihe steht (wie im Referenz-Layout).
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => set("Keine Kapazität", "verloren")}
-        >
-          <X className="size-3.5" /> Keine Kapazität
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => set("PDL nicht erreicht", "kontaktiert")}
-        >
-          <PhoneCall className="size-3.5" /> PDL nicht erreicht
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          title="Anfrage abgelehnt (z. B. Versorgung passt nicht, außerhalb des Einzugsbereichs). Der Lead verschwindet aus der Liste und steht unten unter „Abgelehnte Recare-Anfragen“."
-          className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
-          onClick={() => set("Pat. abgelehnt", "verloren")}
-        >
-          <X className="size-3.5" /> Pat. abgelehnt
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={busy}
-          className="text-muted-foreground"
-          onClick={() => setFreitextOpen((s) => !s)}
-        >
-          Anderes…
-        </Button>
-      </div>
+    <div className="contents">
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => set("Keine Kapazität", "verloren")}
+      >
+        <X className="size-3.5" /> Keine Kapazität
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={busy}
+        onClick={() => set("PDL nicht erreicht", "kontaktiert")}
+      >
+        <PhoneCall className="size-3.5" /> PDL nicht erreicht
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        disabled={busy}
+        className="text-muted-foreground"
+        onClick={() => setFreitextOpen((s) => !s)}
+      >
+        Anderes…
+      </Button>
       {freitextOpen && (
-        <div className="flex w-full flex-col gap-1.5">
+        <div className="flex basis-full flex-col gap-1.5">
           <Textarea
             value={freitext}
             onChange={(e) => setFreitext(e.target.value)}
@@ -3049,7 +3126,9 @@ function RecareOutcome({
           </Button>
         </div>
       )}
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p className="basis-full text-xs text-destructive">{error}</p>
+      )}
     </div>
   );
 }
