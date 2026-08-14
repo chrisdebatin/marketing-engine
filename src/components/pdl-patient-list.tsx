@@ -31,8 +31,18 @@ export function PdlPatientList({
   const [rows, setRows] = useState(initial);
   const [error, setError] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<string | null>(null);
+  const [grund, setGrund] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Feste Verlust-Gründe — fließen in die Team-Rückmeldung und Auswertung.
+  const GRUENDE = [
+    "Doch kein Interesse",
+    "Anderer Pflegedienst übernimmt",
+    "Keine Kapazität bei uns",
+    "Nicht erreichbar",
+    "Gesundheitlich (Krankenhaus/Reha/verstorben)",
+  ] as const;
 
   async function confirm(row: PdlPatientRow, aktion: "aufgenommen" | "nicht_zustande") {
     setBusy(true);
@@ -46,13 +56,17 @@ export function PdlPatientList({
           kind: row.kind,
           id: row.id,
           aktion,
-          notiz: aktion === "nicht_zustande" ? note : undefined,
+          notiz:
+            aktion === "nicht_zustande"
+              ? [grund, note.trim()].filter(Boolean).join(" — ")
+              : undefined,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Fehler beim Speichern.");
       setRows((cur) => cur.filter((r) => r.id !== row.id));
       setNoteFor(null);
+      setGrund(null);
       setNote("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -146,29 +160,59 @@ export function PdlPatientList({
                 disabled={busy}
                 title="Versorgung kam nicht zustande? Kurz den Grund angeben — das Team sieht die Rückmeldung und der Fall wird geschlossen."
                 className="text-muted-foreground"
-                onClick={() => setNoteFor(noteFor === r.id ? null : r.id)}
+                onClick={() => {
+                  setNoteFor(noteFor === r.id ? null : r.id);
+                  setGrund(null);
+                  setNote("");
+                }}
               >
                 <X className="size-3.5" /> kam nicht zustande
               </Button>
             </div>
             {noteFor === r.id && (
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
+                <p className="text-xs font-medium">
+                  Warum kam die Versorgung nicht zustande?
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {GRUENDE.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGrund(grund === g ? null : g)}
+                      className={
+                        grund === g
+                          ? "rounded-full border border-primary bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                          : "rounded-full border bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                      }
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  placeholder="Kurz warum? (z. B. anderweitig versorgt, nicht erreichbar)"
+                  placeholder="Optional: Details ergänzen (z. B. welcher Pflegedienst, wann wieder relevant …)"
                 />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="self-start"
-                  disabled={busy}
-                  onClick={() => confirm(r, "nicht_zustande")}
-                >
-                  Bestätigen
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="self-start"
+                    disabled={busy || (!grund && !note.trim())}
+                    onClick={() => confirm(r, "nicht_zustande")}
+                  >
+                    {busy ? "Speichert…" : "Bestätigen"}
+                  </Button>
+                  {!grund && !note.trim() && (
+                    <span className="text-[11px] text-muted-foreground">
+                      Bitte einen Grund wählen oder eintragen.
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </li>
