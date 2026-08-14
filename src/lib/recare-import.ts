@@ -169,8 +169,9 @@ async function extractCall(text: string): Promise<ExtractedCall | null> {
         "'mitarbeiter_intern' NUR wenn eindeutig ein eigener Mitarbeiter oder eine interne Abteilung anruft (Krankmeldung, Dienstplan, interne Rückfrage). " +
         "'bestandskunde' nur wenn im Text ausdrücklich steht, dass es um eine BEREITS laufende Versorgung geht (Termine, Rechnung, Beschwerde zu Einsätzen). " +
         "'sonstiges' nur bei eindeutig fachfremden Anrufen (Lieferant, Vertrieb, Werbung, falsch verbunden). " +
-        "'kein_anliegen' = der Anrufer hat NICHTS gesagt und ist NICHT erreichbar: Die KI-Agentin (Nora) hat nur begrüßt/Hilfe angeboten, es liegt kein inhaltlicher Beitrag und kein konkretes Anliegen des Anrufers vor UND es ist keine Rufnummer vorhanden (Rufnummer anonym/unterdrückt, Rückruf nicht möglich). Solche Anrufe sind kein Lead — es gibt niemanden, den man zurückrufen könnte. " +
-        "Achtung Abgrenzung: Liegt eine Rufnummer vor, ist es NIE 'kein_anliegen' — dann im Zweifel 'neuinteressent', denn man kann zurückrufen. " +
+        "'kein_anliegen' — HARTE REGEL, hat Vorrang vor allen anderen Kategorien: Wenn kein Rückruf möglich ist, ist es NIEMALS ein Lead. Das gilt immer, wenn die Rufnummer anonym/unterdrückt/nicht übermittelt ist oder im Text steht, dass ein Rückruf nicht möglich ist bzw. keine Nummer vorliegt. Ohne erreichbare Rufnummer gibt es niemanden, den man zurückrufen könnte — dann IMMER 'kein_anliegen' wählen, auch wenn ein Anliegen erkennbar wäre. " +
+        "Ebenfalls 'kein_anliegen': Die KI-Agentin (Nora) hat nur begrüßt/Hilfe angeboten und vom Anrufer liegt kein inhaltlicher Beitrag / kein konkretes Anliegen vor. " +
+        "Umgekehrt gilt: Liegt eine erreichbare Rufnummer vor, ist es NIE 'kein_anliegen' — dann im Zweifel 'neuinteressent', denn man kann zurückrufen. " +
         "Steht 'Anrufer-Typ: Unbekannt', ist aber eine Rufnummer vorhanden oder ein Anliegen erkennbar, dann 'neuinteressent' wählen — solche Anrufe müssen zurückgerufen werden.",
       tools: [
         {
@@ -355,9 +356,24 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       // geschlossen (bleiben unter "Alte & abgelehnte Leads" auffindbar und
       // sind dort per "wieder öffnen" zurückholbar). Der Prompt ist bewusst
       // interessenten-freundlich: unklare Anrufe zählen als Neuinteressent.
-      const interessent = !call || call.kategorie === "neuinteressent";
-      const kategorieHinweis =
-        call && call.kategorie !== "neuinteressent"
+      // Sicherheitsnetz unabhängig von der KI: Ohne erreichbare Rufnummer
+      // gibt es niemanden zurückzurufen — das ist nie ein Lead. Greift auch,
+      // wenn die Extraktion ausfällt oder die KI danebenliegt.
+      const telefon = call?.telefon?.trim() ?? "";
+      // Mindestens 5 Ziffern = plausible Rufnummer ("anonym", "unbekannt",
+      // "-" und leere Felder fallen damit raus.)
+      const hatNummer = (telefon.match(/\d/g)?.length ?? 0) >= 5;
+      const anonymImText =
+        /rufnummer\s+(anonym|unterdr|nicht überm)|rückruf\s+nicht\s+möglich|keine\s+(rufnummer|nummer)\s+(vorliegt|vorhanden|übermittelt)|nummer\s+unterdrückt/i.test(
+          body,
+        );
+      const keinRueckruf = !hatNummer || anonymImText;
+
+      const interessent =
+        !keinRueckruf && (!call || call.kategorie === "neuinteressent");
+      const kategorieHinweis = keinRueckruf
+        ? "kein Rückruf möglich (keine Rufnummer)"
+        : call && call.kategorie !== "neuinteressent"
           ? `KI-Einschätzung: ${KATEGORIE_LABEL[call.kategorie] ?? call.kategorie}`
           : "";
       const { error: insErr } = await admin.from("lead_calls").insert({
@@ -378,7 +394,9 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
         status: interessent ? "offen" : "verloren",
         ergebnis: interessent
           ? null
-          : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
+          : keinRueckruf
+            ? `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL.kein_anliegen})`
+            : `kein Neuinteressent (KI-vorsortiert: ${KATEGORIE_LABEL[call!.kategorie] ?? call!.kategorie})`,
       });
       if (insErr) {
         processed.delete(m.id);
