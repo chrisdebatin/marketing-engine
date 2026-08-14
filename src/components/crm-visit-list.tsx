@@ -719,15 +719,39 @@ export function CrmVisitList({
                     : ""}
               </span>
             </div>
-            <ul className="flex flex-col gap-1.5">
-              {shown.map((r, i) => bar(r, i))}
-              {ownOutside && (
-                <>
-                  <li className="pl-9 text-xs text-muted-foreground">…</li>
-                  {bar(ownOutside, ownIdx)}
-                </>
-              )}
-            </ul>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
+                {shown.map((r, i) => bar(r, i))}
+                {ownOutside && (
+                  <>
+                    <li className="pl-9 text-xs text-muted-foreground">…</li>
+                    {bar(ownOutside, ownIdx)}
+                  </>
+                )}
+              </ul>
+              {/* Trophy-Karte wie im Referenz-Mock */}
+              <div className="flex shrink-0 flex-col items-center gap-0.5 self-center rounded-xl border bg-muted/40 px-6 py-4 text-center sm:w-44">
+                <Trophy className="size-5 text-primary" />
+                <p className="mt-1 text-sm font-bold text-primary">
+                  Platz {ownIdx + 1}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {place === 1 ? "Spitzenplatz — stark!" : "Sehr gut! Weiter so."}
+                </p>
+                {place !== 1 && nextBetter != null && (
+                  <p className="mt-1.5 text-xs">
+                    <span className="font-semibold text-primary">
+                      Noch {nextBetter - score + 1} Aktion
+                      {nextBetter - score + 1 === 1 ? "" : "en"}
+                    </span>
+                    <br />
+                    <span className="text-[11px] text-muted-foreground">
+                      bis zum nächsten Platz
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
         );
       })()}

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { Building2, CalendarDays, ListChecks } from "lucide-react";
+import { CalendarDays, ListChecks } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFollowupWeeks } from "@/lib/settings";
 import { capacityWeekStart, type CapacityReport } from "@/lib/capacity";
@@ -9,7 +9,6 @@ import {
   type CrmLogEntry,
   type VisitTarget,
 } from "@/components/crm-visit-list";
-import { PageHeader } from "@/components/page-header";
 import { PdlTabs } from "@/components/pdl-tabs";
 import { PdlTodoList, type PdlTodo } from "@/components/pdl-todo-list";
 import {
@@ -329,37 +328,42 @@ export default async function HubShareLinkPage({
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-5 px-4 py-8">
-      {/* Kopf mit Standort und Liefer-Kennzahlen */}
-      <PageHeader
-        icon={Building2}
-        eyebrow="Marketing Dashboard"
-        title={hub.name}
-        description="Ihre persönliche Standort-Seite — kein Login nötig, Link einfach speichern."
-      />
-      {(flyers > 0 || aufsteller > 0 || boxes > 0) && (
-        <div className="-mt-2 flex flex-wrap gap-1.5">
-          {(
-            [
-              [flyers, "Flyer"],
-              [aufsteller, "Aufsteller"],
-              [boxes, "Boxen"],
-            ] as const
-          )
-            .filter(([v]) => v > 0)
-            .map(([value, label]) => (
-              <span
-                key={label}
-                title={`Bisher an Ihren Standort geliefert: ${value.toLocaleString("de-DE")} ${label}`}
-                className="rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground shadow-sm"
-              >
-                <span className="font-semibold text-foreground tabular-nums">
-                  {value.toLocaleString("de-DE")}
-                </span>{" "}
-                {label} geliefert
-              </span>
-            ))}
-        </div>
-      )}
+      {/* Hero: Gradient-Kopf mit Standort und Liefer-Kennzahlen (Referenz-Mock) */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-800 via-indigo-700 to-orange-400 p-6 text-white shadow-lg sm:p-7">
+        <p className="text-xs font-semibold tracking-widest text-white/80 uppercase">
+          Marketing Dashboard
+        </p>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight">{hub.name}</h1>
+        <p className="mt-1.5 text-sm text-white/85">
+          Ihre persönliche Standort-Seite — kein Login nötig. Link einfach
+          speichern.
+        </p>
+        {(flyers > 0 || aufsteller > 0 || boxes > 0) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [
+                [flyers, "Flyer geliefert", "🚀"],
+                [aufsteller, "Aufsteller geliefert", "📖"],
+                [boxes, "Boxen geliefert", "📦"],
+              ] as const
+            )
+              .filter(([v]) => v > 0)
+              .map(([value, label, icon]) => (
+                <span
+                  key={label}
+                  title={`Bisher an Ihren Standort geliefert: ${value.toLocaleString("de-DE")}`}
+                  className="rounded-lg bg-white/15 px-3 py-1.5 text-sm font-medium backdrop-blur-sm"
+                >
+                  {icon}{" "}
+                  <span className="font-semibold tabular-nums">
+                    {value.toLocaleString("de-DE")}
+                  </span>{" "}
+                  {label}
+                </span>
+              ))}
+          </div>
+        )}
+      </div>
 
       {/* Kurz-Überblick: eingeklappt, damit die Seite ruhig bleibt */}
       <details className="group rounded-xl border border-primary/20 bg-primary/[0.04]">
@@ -370,23 +374,32 @@ export default async function HubShareLinkPage({
             aufklappen
           </span>
         </summary>
-        <ol className="mx-4 mb-3 ml-9 flex list-decimal flex-col gap-1 text-sm text-muted-foreground">
-          <li>
-            <strong className="text-foreground">Meine Orte:</strong> Ihre
-            To-do-Liste — Kliniken, Praxen, Apotheken &amp; Co. Nach jeder
-            Aktion (Box, Flyer, Besuch, Anruf) kurz ins Schnell-Log eintragen:
-            Ort tippen, Aktion wählen, fertig. Neue Orte werden automatisch
-            zur Liste hinzugefügt.
-          </li>
-          <li>
-            <strong className="text-foreground">Kapazität:</strong> Einmal pro
-            Woche melden, wie viele Patienten Sie aufnehmen können — Grundlage
-            für schnelle Antworten auf Klinik-Anfragen.
-          </li>
-          <li>
-            <strong className="text-foreground">Material:</strong> Nachschub
-            an Flyern, Boxen &amp; Co. bestellen — bitte nur bei Bedarf.
-          </li>
+        <ol className="mx-4 mb-3 flex flex-col gap-2.5 text-sm text-muted-foreground">
+          {(
+            [
+              [
+                "Meine Orte:",
+                "Ihre To-do-Liste — Kliniken, Praxen, Apotheken & Co. Nach jeder Aktion (Box, Flyer, Besuch, Anruf) kurz ins Schnell-Log eintragen: Ort tippen, Aktion wählen, fertig. Neue Orte werden automatisch zur Liste hinzugefügt.",
+              ],
+              [
+                "Kapazität:",
+                "Einmal pro Woche melden, wie viele Patienten Sie aufnehmen können — Grundlage für schnelle Antworten auf Klinik-Anfragen.",
+              ],
+              [
+                "Material:",
+                "Nachschub an Flyern, Boxen & Co. bestellen — bitte nur bei Bedarf.",
+              ],
+            ] as const
+          ).map(([titel, text], i) => (
+            <li key={titel} className="flex items-start gap-2.5">
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
+                {i + 1}
+              </span>
+              <span>
+                <strong className="text-foreground">{titel}</strong> {text}
+              </span>
+            </li>
+          ))}
         </ol>
       </details>
 
