@@ -611,6 +611,59 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     });
   }
 
+  // ── Freien Kontakt an einer Institution loggen (aus der Kontakte-Ansicht) ──
+  // Anders als "outbound-log" ohne Erreicht-Pflicht und ohne Wiedervorlage-
+  // Automatik: hier wird nur festgehalten, was war.
+  if (action === "kontakt-log") {
+    const targetId = (body.target_id ?? "").trim();
+    const art = (body.quelle ?? "anruf").trim();
+    if (!targetId || !["anruf", "besuch", "flyer", "box"].includes(art)) {
+      return NextResponse.json({ error: "Ungültige Angaben." }, { status: 400 });
+    }
+    const { data: target } = await admin
+      .from("crm_targets")
+      .select("id, hub_id")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!target) {
+      return NextResponse.json({ error: "Kontakt nicht gefunden." }, { status: 404 });
+    }
+    const heute = new Date().toISOString().slice(0, 10);
+    const notiz = (body.notiz ?? "").trim().slice(0, 1000);
+    const ap = (body.ansprechpartner ?? "").trim().slice(0, 200);
+    const { error: cErr } = await admin.from("crm_contacts").insert({
+      target_id: target.id,
+      hub_id: target.hub_id,
+      kontakt_art: art,
+      ansprechpartner: ap || null,
+      note: notiz || null,
+      contact_date: heute,
+      bearbeiter: member.name,
+    });
+    if (cErr) {
+      return NextResponse.json({ error: "Loggen fehlgeschlagen." }, { status: 500 });
+    }
+    // Kontakt-Stand an der Institution mitziehen; optional Wiedervorlage.
+    const wieder = (body.wiedervorlage ?? "").trim();
+    const wiederOk = /^\d{4}-\d{2}-\d{2}$/.test(wieder);
+    await admin
+      .from("crm_targets")
+      .update({
+        letzter_besuch: heute,
+        letzte_kontakt_art: art,
+        besuchs_notiz: notiz || null,
+        ...(wiederOk ? { naechster_besuch: wieder } : {}),
+      })
+      .eq("id", target.id);
+    return NextResponse.json({
+      ok: true,
+      letzter_besuch: heute,
+      kontakt_art: art,
+      bearbeiter: member.name,
+      ...(wiederOk ? { naechster_besuch: wieder } : {}),
+    });
+  }
+
   // ── Kontaktdaten einer Institution korrigieren/ergänzen ──
   // Telefon/E-Mail liegen an crm_persons; ohne Eintrag wird einer angelegt.
   if (action === "kontakt-daten") {

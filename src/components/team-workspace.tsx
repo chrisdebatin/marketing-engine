@@ -4429,19 +4429,313 @@ function OutboundSidebar({ anrufe, today }: { anrufe: AnrufLog[]; today: string 
  * Kontakt, was wurde gesagt, von wem — bei Institutionen aus dem
  * Kontakt-Log (on demand geladen), bei Klienten aus dem Lead selbst.
  */
+/**
+ * Detail-Fenster einer Kontakt-Karte: Kontaktdaten bearbeiten, Kontakt
+ * loggen und den bisherigen Verlauf sehen. Für Institutionen (targetId);
+ * bei Lead-Karten steht nur der Verlauf zur Verfügung.
+ */
+function KontaktDetail({
+  k,
+  token,
+  onClose,
+}: {
+  k: KontaktKarte;
+  token: string;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"log" | "daten">("log");
+  // Kontakt loggen
+  const [art, setArt] = useState("anruf");
+  const [ap, setAp] = useState("");
+  const [notiz, setNotiz] = useState("");
+  const [wieder, setWieder] = useState("");
+  // Stammdaten
+  const [telefon, setTelefon] = useState(k.telefon ?? "");
+  const [email, setEmail] = useState("");
+  const [apName, setApName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+  const [erfolg, setErfolg] = useState<string | null>(null);
+  const tone = KAT_TONE[k.toneKey] ?? KAT_TONE.sonstiges;
+
+  async function loggen() {
+    if (!k.targetId) return;
+    setBusy(true);
+    setFehler(null);
+    try {
+      await teamAction(token, {
+        action: "kontakt-log",
+        target_id: k.targetId,
+        quelle: art,
+        ansprechpartner: ap,
+        notiz,
+        wiedervorlage: wieder,
+      });
+      setErfolg("Kontakt geloggt — erscheint nach dem Neuladen im Verlauf.");
+      setNotiz("");
+      setAp("");
+      setWieder("");
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function datenSpeichern() {
+    if (!k.targetId) return;
+    setBusy(true);
+    setFehler(null);
+    try {
+      await teamAction(token, {
+        action: "kontakt-daten",
+        target_id: k.targetId,
+        telefon,
+        email,
+        ansprechpartner: apName,
+      });
+      setErfolg("Kontaktdaten gespeichert.");
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 py-10"
+      onClick={onClose}
+    >
+      <div
+        className="flex w-full max-w-2xl flex-col gap-4 rounded-xl border bg-card p-5 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Kopf */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="flex flex-wrap items-center gap-2 text-lg font-bold tracking-tight">
+              {k.name}
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                  tone.chip,
+                )}
+              >
+                {k.kategorieLabel}
+              </span>
+            </h3>
+            {k.info && (
+              <p className="mt-0.5 text-sm text-muted-foreground">{k.info}</p>
+            )}
+            {k.meta && (
+              <p className={cn("mt-0.5 text-xs", k.metaTone ?? "text-muted-foreground")}>
+                {k.meta}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {k.telefon && (
+              <a
+                href={`tel:${k.telefon}`}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                <Phone className="size-4" /> Anrufen
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Schließen"
+              className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+
+        {k.targetId ? (
+          <>
+            {/* Reiter */}
+            <div className="flex gap-1 rounded-lg border bg-muted/40 p-1">
+              {(
+                [
+                  { key: "log", label: "Kontakt loggen" },
+                  { key: "daten", label: "Kontaktdaten bearbeiten" },
+                ] as const
+              ).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => {
+                    setTab(t.key);
+                    setErfolg(null);
+                  }}
+                  className={cn(
+                    "flex-1 rounded-md px-3 py-1.5 text-sm font-medium",
+                    tab === t.key
+                      ? "bg-card shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {tab === "log" ? (
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Was war es?</span>
+                    <select
+                      value={art}
+                      onChange={(e) => setArt(e.target.value)}
+                      className={cn(SELECT_CLASS, "h-10 bg-background")}
+                    >
+                      <option value="anruf">Anruf</option>
+                      <option value="besuch">Persönlicher Besuch</option>
+                      <option value="flyer">Flyer ausgelegt</option>
+                      <option value="box">CM-Box geliefert</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Ansprechpartner</span>
+                    <Input
+                      value={ap}
+                      onChange={(e) => setAp(e.target.value)}
+                      placeholder="Mit wem gesprochen?"
+                      className="h-10 bg-background"
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="font-medium">Notiz</span>
+                  <Textarea
+                    value={notiz}
+                    onChange={(e) => setNotiz(e.target.value)}
+                    rows={3}
+                    placeholder="Was wurde besprochen?"
+                    className="bg-background"
+                  />
+                </label>
+                <label className="flex w-fit flex-col gap-1 text-xs">
+                  <span className="font-medium">
+                    Wiedervorlage am (optional)
+                  </span>
+                  <Input
+                    type="date"
+                    value={wieder}
+                    onChange={(e) => setWieder(e.target.value)}
+                    className="h-10 bg-background"
+                  />
+                </label>
+                <Button
+                  type="button"
+                  className="self-start"
+                  disabled={busy}
+                  onClick={loggen}
+                >
+                  <Check className="size-4" />
+                  {busy ? "Speichert…" : "Kontakt loggen"}
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">Telefon</span>
+                    <Input
+                      value={telefon}
+                      onChange={(e) => setTelefon(e.target.value)}
+                      placeholder="z. B. 02374 2400"
+                      className="h-10 bg-background"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium">E-Mail</span>
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="z. B. info@praxis.de"
+                      className="h-10 bg-background"
+                    />
+                  </label>
+                </div>
+                <label className="flex flex-col gap-1 text-xs">
+                  <span className="font-medium">Ansprechpartner</span>
+                  <Input
+                    value={apName}
+                    onChange={(e) => setApName(e.target.value)}
+                    placeholder="z. B. Frau Meier, Sozialdienst"
+                    className="h-10 bg-background"
+                  />
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Leere Felder überschreiben nichts, was schon hinterlegt ist —
+                  außer Telefon und E-Mail, die werden gesetzt wie eingetragen.
+                </p>
+                <Button
+                  type="button"
+                  className="self-start"
+                  disabled={busy}
+                  onClick={datenSpeichern}
+                >
+                  {busy ? "Speichert…" : "Speichern"}
+                </Button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+            Das ist ein Lead, keine Institution — bearbeiten und loggen geht
+            direkt auf der Lead-Karte unter &bdquo;Anstehende Leads&ldquo;.
+          </p>
+        )}
+
+        {fehler && <p className="text-sm text-destructive">{fehler}</p>}
+        {erfolg && (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+            {erfolg}
+          </p>
+        )}
+
+        {/* Verlauf */}
+        <div className="border-t pt-3">
+          <p className="mb-1 text-sm font-semibold">Bisheriger Verlauf</p>
+          <KontaktVerlauf k={k} token={token} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function KanbanKarte({ k, token }: { k: KontaktKarte; token: string }) {
   const [offen, setOffen] = useState(false);
+  const [detail, setDetail] = useState(false);
   const tone = KAT_TONE[k.toneKey] ?? KAT_TONE.sonstiges;
   return (
     <li
       className={cn(
-        "rounded-lg border border-l-4 bg-card p-2.5 text-sm shadow-sm",
+        "rounded-lg border border-l-4 bg-card p-2.5 text-sm shadow-sm transition-shadow hover:shadow-md",
         tone.border,
       )}
     >
+      {detail && (
+        <KontaktDetail k={k} token={token} onClose={() => setDetail(false)} />
+      )}
       <div className="flex items-start gap-1.5">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-          <span className="leading-snug font-semibold">{k.name}</span>
+          {/* Name öffnet die Detail-Ansicht (bearbeiten + Kontakt loggen) */}
+          <button
+            type="button"
+            onClick={() => setDetail(true)}
+            title="Öffnen — bearbeiten & Kontakt loggen"
+            className="text-left leading-snug font-semibold hover:text-primary hover:underline"
+          >
+            {k.name}
+          </button>
           <span
             className={cn(
               "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
@@ -4499,14 +4793,24 @@ function KanbanKarte({ k, token }: { k: KontaktKarte; token: string }) {
       {k.todo && (
         <p className="mt-0.5 text-[11px] text-amber-700">To-do: {k.todo}</p>
       )}
-      <button
-        type="button"
-        onClick={() => setOffen((o) => !o)}
-        className="mt-1.5 flex w-full items-center justify-between border-t pt-1.5 text-[11px] font-medium text-primary hover:underline"
-      >
-        {offen ? "Verlauf ausblenden" : "Verlauf anzeigen"}
-        <span aria-hidden>{offen ? "▴" : "▾"}</span>
-      </button>
+      <div className="mt-1.5 flex items-center gap-2 border-t pt-1.5">
+        <button
+          type="button"
+          onClick={() => setDetail(true)}
+          className="flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
+        >
+          <Pencil className="size-3" />
+          Öffnen
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffen((o) => !o)}
+          className="ml-auto flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+        >
+          {offen ? "Verlauf ausblenden" : "Verlauf anzeigen"}
+          <span aria-hidden>{offen ? "▴" : "▾"}</span>
+        </button>
+      </div>
       {offen && <KontaktVerlauf k={k} token={token} />}
     </li>
   );
