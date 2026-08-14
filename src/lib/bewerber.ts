@@ -58,10 +58,17 @@ export function hubAusKampagne(
   hubs: { id: string; name: string }[],
 ): string | null {
   if (!campaign) return null;
-  const c = campaign.toLowerCase();
+  // Trennzeichen angleichen: Kampagnen nutzen Bindestriche
+  // ("Mitarbeiter-Alltagshilfe-Duisburg-…"), Hub-Namen Leerzeichen
+  // ("Alltagshilfe Duisburg"). Ohne Normalisierung greift der
+  // Längste-Treffer-Vergleich nie und der Lead landet beim falschen
+  // Standort ("Duisburg" statt "Alltagshilfe Duisburg").
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-zà-ÿ0-9]+/gi, " ").trim();
+  const c = ` ${norm(campaign)} `;
   const treffer = hubs
-    .filter((h) => c.includes(h.name.toLowerCase()))
-    .sort((a, b) => b.name.length - a.name.length);
+    .filter((h) => c.includes(` ${norm(h.name)} `) || c.includes(norm(h.name)))
+    .sort((a, b) => norm(b.name).length - norm(a.name).length);
   return treffer[0]?.id ?? null;
 }
 

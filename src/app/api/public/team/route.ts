@@ -531,7 +531,10 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     });
     if (cErr) return NextResponse.json({ error: "Loggen fehlgeschlagen." }, { status: 500 });
 
-    await admin
+    // Fehler hier NICHT verschlucken: Ohne naechster_besuch taucht der
+    // Kontakt nie wieder in der Anrufliste auf — der Anruf wäre geloggt,
+    // die Wiedervorlage aber still verloren.
+    const { error: tErr } = await admin
       .from("crm_targets")
       .update({
         letzter_besuch: today,
@@ -540,6 +543,15 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
         besuchs_notiz: logNote || null,
       })
       .eq("id", target.id);
+    if (tErr) {
+      return NextResponse.json(
+        {
+          error:
+            "Anruf wurde geloggt, aber die Wiedervorlage konnte nicht gesetzt werden — bitte Datum am Kontakt manuell nachtragen.",
+        },
+        { status: 500 },
+      );
+    }
 
     // KI-To-do aus der Notiz ("Flyer vorbeibringen") am Kontakt anlegen —
     // tolerant, falls Migration 0059 noch fehlt.
@@ -584,6 +596,21 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     if (!contactId || !targetId) {
       return NextResponse.json({ error: "Eintrag fehlt." }, { status: 400 });
     }
+    // Der Log-Eintrag MUSS zur angegebenen Institution gehören — sonst
+    // liesse sich über eine fremde contact_id die Notiz einer beliebigen
+    // anderen Institution überschreiben.
+    const { data: logEintrag } = await admin
+      .from("crm_contacts")
+      .select("id, target_id")
+      .eq("id", contactId)
+      .maybeSingle();
+    if (!logEintrag || logEintrag.target_id !== targetId) {
+      return NextResponse.json(
+        { error: "Eintrag gehört nicht zu diesem Kontakt." },
+        { status: 404 },
+      );
+    }
+
     const notiz = (body.notiz ?? "").trim().slice(0, 1000);
     const ap = (body.ansprechpartner ?? "").trim().slice(0, 200);
     const { error: uErr } = await admin
@@ -646,7 +673,7 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
     // Kontakt-Stand an der Institution mitziehen; optional Wiedervorlage.
     const wieder = (body.wiedervorlage ?? "").trim();
     const wiederOk = /^\d{4}-\d{2}-\d{2}$/.test(wieder);
-    await admin
+    const { error: tErr } = await admin
       .from("crm_targets")
       .update({
         letzter_besuch: heute,
@@ -655,6 +682,15 @@ bestätigen (Reiter „Patienten&rdquo;):</p>
         ...(wiederOk ? { naechster_besuch: wieder } : {}),
       })
       .eq("id", target.id);
+    if (tErr) {
+      return NextResponse.json(
+        {
+          error:
+            "Kontakt wurde geloggt, aber der Kontakt-Stand konnte nicht aktualisiert werden.",
+        },
+        { status: 500 },
+      );
+    }
     return NextResponse.json({
       ok: true,
       letzter_besuch: heute,
