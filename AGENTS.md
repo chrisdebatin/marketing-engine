@@ -41,6 +41,21 @@ No self-signup: create users in Supabase Auth, then promote to admin + assign hu
 - **CRM, Frontoffice & Call-Center.** Frontoffice (inbound leads) and call center (outbound calls + Recare) are **separate teams with separate token links**: `/f/[token]` = lead capture only, `/c/[token]` = CRM call list + Recare management (tokens in `app_settings`, helpers in [src/lib/frontoffice-token.ts](src/lib/frontoffice-token.ts)). One shared database for admins (`/ziele`), PDLs (`/h/[token]`) and both teams: `crm_targets` (institutions, with editable **`geo_tag`** auto-derived from Ort/Hub in [src/lib/geo-tags.ts](src/lib/geo-tags.ts)) + `crm_persons` (n contacts per institution) + `crm_contacts` (contact log; art `lead` = inbound lead, logged **without** touching follow-up dates). Inbound leads (`lead_calls`) are fuzzy-matched to institutions via `normName` in [src/lib/crm-log.ts](src/lib/crm-log.ts) and linked via `lead_calls.target_id`. CSV file import with column mapping lives in [crm-csv-import.tsx](src/components/crm-csv-import.tsx) (client parses via [src/lib/csv.ts](src/lib/csv.ts), server dedupes in `importCrmTargetsCsv`).
 - **UI.** shadcn/ui on **base-ui** (not Radix): use the `render` prop, **not** `asChild`. Route group `(app)` is the authenticated shell; `/login` and `/offline` sit outside it. [ActivityForm](src/components/activity-form.tsx) is shared by create and edit.
 
+## UI/UX Design System (binding for ALL UI work)
+
+**Primary visual reference: [docs/design/crm-ui-reference.png](docs/design/crm-ui-reference.png) — inspect it before any significant UI change.** It outranks generic contemporary design trends. Full ruleset (read before UI work): [docs/design/design-system.md](docs/design/design-system.md).
+
+- **Goal: extreme ease of use, glanceability, simplicity, intuitiveness.** Every screen must pass the **3-second test**: what page is this, what matters most, what are the primary actions?
+- **Aesthetic:** polished 2018–2020 productivity SaaS (classic Airtable/Asana), an **application, not a website**: white / very light cool-gray canvas, strong grid, white boxes (8–12px radius, thin gray border, subtle shadow), persistent left sidebar with icon+label and a strong colored active state.
+- **Color:** canvas mostly white; bold saturated accents (strong blue, emerald, purple, orange, coral, cyan, pink) reserved for KPIs, icons, primary buttons, active nav, statuses/tags, charts — with **consistent semantic meaning**. Never mostly-gray monochrome. (Chart internals additionally follow the dataviz skill — validated palettes win there.)
+- **Typography:** page titles 24–28 bold · section titles 16–18 semibold · KPI values 26–34 bold · UI text 14–15 · secondary 12–13. Important numbers big and obvious.
+- **Buttons look like buttons** (primary: solid color + white text; secondary: white + border), radius ~6–10px, no pill-everything. Prefer familiar patterns (tables, tabs, forms, modals, filters); essential actions stay visible — never hidden behind clever interactions.
+- **Priority order (exact):** ease of use > glanceability > clarity > intuitiveness > predictability > speed > consistency > accessibility > visual attractiveness > novelty. When pretty conflicts with clear, choose clear.
+- **Forbidden:** glassmorphism, dark futuristic UI, neon, mesh/excess gradients, floating decoration, excessive animation, giant radii, marketing typography, gray-on-gray low contrast, excessive whitespace, aesthetics-only bento, hidden controls, clarity-sacrificing minimalism.
+- **Simplicity ≠ minimalism:** dense information is fine when structured via boxes, alignment, hierarchy and semantic color.
+- **Consistency:** reuse shared components (`PageHeader`, cards, chips, tables, `ui/button`, `ui/input`, empty states) — extend them, don't restyle per screen.
+- **Functionality is sacred:** inspect a screen's behavior before redesigning it and preserve every interaction; apply the design system around the functionality, never instead of it.
+
 ## Not yet built
 
 CSV import for the `standorte` suggestion list (Admin) and the `/admin` area. Assistant answers in text only (no charts).

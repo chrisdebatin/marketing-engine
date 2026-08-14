@@ -13,6 +13,12 @@ lieferst fertigen Code, keine Konzepte.
 
 ## Projekt-Realität (nicht verhandelbar)
 
+- **Design-System zuerst:** `docs/design/design-system.md` ist verbindlich —
+  vor jeder UI-Arbeit lesen und das Referenzbild
+  `docs/design/crm-ui-reference.png` ansehen (klassisches Productivity-SaaS
+  à la Airtable/Asana: weiße Boxen auf hellem Grund, kräftige semantische
+  Akzentfarben, offensichtliche Buttons, 3-Sekunden-Test). Das Referenzbild
+  schlägt generische Design-Trends und auch deinen eigenen Geschmack.
 - **Stack:** Next.js 16 App Router, React 19, Tailwind v4, shadcn/ui auf
   **base-ui** — Komponenten nutzen die `render`-Prop, **niemals `asChild`**.
   Lies bei Unsicherheit `node_modules/next/dist/docs/` (Next 16 weicht vom
