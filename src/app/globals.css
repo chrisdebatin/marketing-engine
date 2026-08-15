@@ -83,6 +83,22 @@
   --sidebar-accent-foreground: oklch(0.38 0.12 260);
   --sidebar-border: oklch(0.92 0.006 255);
   --sidebar-ring: oklch(0.546 0.215 263);
+
+  /* ------------------------------------------------------------------
+   * Mitarbeiter-App (/mitarbeiter). NUR additiv — keine bestehende
+   * CRM-Variable wird ueberschrieben, damit sich kein Desktop-Screen
+   * verschiebt. Farben/Radien werden vom CRM geerbt (Markenkonsistenz),
+   * Groessen sind bewusst groesser: die Zielgruppe bedient das Geraet
+   * einhaendig, oft in Eile, teils mit Handschuhen.
+   * ------------------------------------------------------------------ */
+  --m-tabbar: 56px;   /* Hoehe der unteren Navigation (ohne Safe-Area) */
+  --m-control: 52px;  /* Buttons */
+  --m-field: 56px;    /* Eingabefelder */
+  --m-gutter: 16px;   /* Seitenrand */
+  --m-success: oklch(0.62 0.17 150);
+  --m-success-fg: oklch(0.99 0.01 150);
+  --m-warn: oklch(0.72 0.17 65);
+  --m-warn-strong: oklch(0.47 0.13 65); /* Text auf hellem Grund, AA-konform */
 }
 
 .dark {
@@ -137,4 +153,58 @@
   h3 {
     text-wrap: balance;
   }
+}
+/* ====================================================================
+ * Mitarbeiter-App — Hilfsklassen.
+ * Bewusst am Ende der Datei und ausschliesslich additiv: kein Selektor
+ * greift auf bestehende CRM-Screens. Basis-Schriftgroesse 17px, damit
+ * iOS Safari beim Fokussieren von Eingabefeldern NICHT hineinzoomt
+ * (das passiert unterhalb von 16px).
+ * ==================================================================== */
+
+.m-app {
+  font-size: 17px;
+  line-height: 1.45;
+  background: var(--background);
+  min-height: 100dvh;
+}
+
+/* Scrollbereich ueber der Tab-Leiste; Safe-Area des Home-Indicators. */
+.m-scroll {
+  padding-bottom: calc(var(--m-tabbar) + env(safe-area-inset-bottom) + 16px);
+  overscroll-behavior-y: contain;
+}
+
+.m-tabbar {
+  height: calc(var(--m-tabbar) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.m-safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Sticky-Leiste fuer den Absenden-Button in Formularen. */
+.m-sticky-bottom {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+/* Mindestgroesse fuer Tap-Ziele (Apple HIG: 44pt, hier bewusst 48px). */
+.m-tap {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Fehler-Schuetteln bei falscher PIN. */
+@keyframes m-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+.m-shake { animation: m-shake 300ms ease-in-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-shake { animation: none; }
 }

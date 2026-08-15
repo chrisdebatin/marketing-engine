@@ -56,6 +56,18 @@ No self-signup: create users in Supabase Auth, then promote to admin + assign hu
 - **Consistency:** reuse shared components (`PageHeader`, cards, chips, tables, `ui/button`, `ui/input`, empty states) — extend them, don't restyle per screen.
 - **Functionality is sacred:** inspect a screen's behavior before redesigning it and preserve every interaction; apply the design system around the functionality, never instead of it.
 
+## Mitarbeiter-App (`/mitarbeiter`) — eigene Regeln
+
+A second, **mobile-first** app for ~650 frontline staff lives in this repo: announcements + customer referrals + M&A referrals. Full runbook: **[docs/mitarbeiter-app.md](docs/mitarbeiter-app.md)** — read it before touching anything under `src/lib/employee/`, `src/app/(employee)/`, or `src/app/api/employee/`.
+
+- **Separate Postgres schema `employee_app`** (not `public`). One-time prerequisite: add it to Supabase → Settings → API → **Exposed schemas**, otherwise PostgREST answers `406 / PGRST106` **even for service-role**. Tables have RLS enabled with **zero policies** + revoked grants + `alter default privileges` — unlike `public`, which carries the stock `anon` grants that currently make CRM tables world-readable/writable.
+- **Auth is device-bound, not password-based.** Activation code → binds a device (32-byte secret, hashed) → the 6-digit PIN unlocks *only that device*. There is deliberately **no endpoint accepting (employee identifier + PIN)** — that is what makes a 6-digit PIN defensible. Recovery = new code from the hub leader; never build a self-service reset.
+- **The invariant:** `staff_id` comes **only** from `requireEmployee()` — never from body/query/header. All Zod schemas are `.strict()` and contain no identity fields. Routes use the service-role client (`BYPASSRLS`), so the DB enforces *nothing* — a single line reading `staff_id` from the request would be a full IDOR across all 650 employees.
+- **Never** create a view or `SECURITY DEFINER` function in `public` that reads `employee_app` — it would run with the owner's rights and bypass all three protection layers.
+- **Design:** deliberately NOT the desktop CRM aesthetic above. It inherits the color/radius tokens but uses its own mobile layer (`src/components/m/`, `.m-*` classes in `globals.css`): 17px base font (below 16px iOS auto-zooms), 48px tap targets, bottom tab bar, safe-area insets. Do not add the sidebar shell here.
+- **Online-only by design:** no Dexie, no service worker under `/mitarbeiter` (`public/sw.js` has an explicit bypass), no `next/image` — all three keep the future Capacitor wrapper simple.
+- `npm test` (node:test via tsx) covers crypto/PIN/date logic; `npm run test:security` is a curl suite that must be re-run **after every migration**.
+
 ## Not yet built
 
 CSV import for the `standorte` suggestion list (Admin) and the `/admin` area. Assistant answers in text only (no charts).

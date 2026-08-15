@@ -16,6 +16,9 @@ export function ServiceWorkerRegister() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") return;
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    // Die Mitarbeiter-App ist bewusst online-only und teilt sich den
+    // App-Shell-Cache des CRM nicht (siehe Bypass in public/sw.js).
+    if (window.location.pathname.startsWith("/mitarbeiter")) return;
 
     const onLoad = () => {
       navigator.serviceWorker.register("/sw.js").catch(() => {

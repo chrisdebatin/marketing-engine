@@ -30,6 +30,17 @@ self.addEventListener("fetch", (event) => {
   // Never cache API/auth calls – always hit the network.
   if (url.pathname.startsWith("/api") || url.pathname.startsWith("/auth")) return;
 
+  // Mitarbeiter-App: komplett am Service Worker vorbei (network-only).
+  // Sonst würde eine Offline-Navigation auf /mitarbeiter über den
+  // Navigations-Fallback unten die CRM-Shell ("/") ausliefern – also die
+  // falsche App. Die Mitarbeiter-App ist bewusst online-only.
+  if (
+    url.pathname === "/mitarbeiter" ||
+    url.pathname.startsWith("/mitarbeiter/")
+  ) {
+    return;
+  }
+
   // Navigations: network-first, fall back to cache, then /offline.
   if (request.mode === "navigate") {
     event.respondWith(

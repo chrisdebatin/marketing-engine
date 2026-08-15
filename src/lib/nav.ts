@@ -12,6 +12,7 @@ import {
   PhoneIncoming,
   Send,
   Settings,
+  Smartphone,
   Sparkles,
   Target,
   Truck,
@@ -59,6 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/recruiting", label: "Recruiting-Leads", Icon: UserPlus },
       { href: "/kommunikation", label: "Kommunikation", Icon: Send },
       { href: "/postfach", label: "Postfach", Icon: Inbox },
+      { href: "/mitarbeiter-app", label: "Mitarbeiter-App", Icon: Smartphone },
     ],
   },
   {

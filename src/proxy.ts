@@ -50,8 +50,15 @@ export const config = {
      * Alles außer:
      * - /api/public/* (öffentliche Endpunkte, tokenbasiert)
      * - /h/* und /l/* (öffentliche Share-Links, tokenbasiert)
+     * - /mitarbeiter/* und /api/employee/* (Mitarbeiter-App: eigene
+     *   Session-Cookies, eigene Auth über requireEmployee(); der
+     *   CRM-Session-Refresh hat dort nichts zu suchen)
      * - _next/static, _next/image, statische Assets (sw.js, manifest, icons, …)
+     *
+     * Die Ergänzung ist rein subtraktiv: sie nimmt nur Pfade aus dem Matcher
+     * heraus, die es vorher nicht gab. Bestehendes CRM-Verhalten bleibt
+     * unverändert.
      */
-    "/((?!api/public|h/|l/|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|json|txt|woff2?|map)$).*)",
+    "/((?!api/public|api/employee|mitarbeiter$|mitarbeiter/|h/|l/|_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|json|txt|woff2?|map)$).*)",
   ],
 };

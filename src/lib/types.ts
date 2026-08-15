@@ -1018,7 +1018,446 @@ export interface Database {
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
+  /**
+   * Mitarbeiter-App — eigenes Postgres-Schema, strikt getrennt vom CRM.
+   *
+   * Voraussetzung: "employee_app" muss im Supabase-Dashboard unter
+   * Settings -> API -> Exposed schemas eingetragen sein, sonst antwortet
+   * PostgREST mit PGRST106 (auch fuer den Service-Role-Client).
+   *
+   * Zugriff nur ueber createEmployeeClient() in src/lib/employee/db.ts.
+   * Wie im public-Block gilt: jede Tabelle braucht `Relationships: []`,
+   * sonst kollabiert der typisierte Client zu `never`. Embedded-Relation-
+   * Selects sind hier ohnehin unmoeglich (schemauebergreifend) — immer
+   * zwei einfache Queries + JS-Map.
+   */
+  employee_app: {
+    Tables: {
+      staff: {
+        Row: {
+          id: string;
+          hub_id: string | null;
+          vorname: string;
+          nachname: string;
+          personalnr: string | null;
+          rolle: EmployeeRolle;
+          status: EmployeeStatus;
+          profile_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          hub_id?: string | null;
+          vorname: string;
+          nachname: string;
+          personalnr?: string | null;
+          rolle?: EmployeeRolle;
+          status?: EmployeeStatus;
+          profile_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          hub_id?: string | null;
+          vorname?: string;
+          nachname?: string;
+          personalnr?: string | null;
+          rolle?: EmployeeRolle;
+          status?: EmployeeStatus;
+          profile_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      activation_codes: {
+        Row: {
+          id: string;
+          staff_id: string;
+          code_hash: string;
+          code_hint: string | null;
+          expires_at: string;
+          used_at: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          staff_id: string;
+          code_hash: string;
+          code_hint?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          staff_id?: string;
+          code_hash?: string;
+          code_hint?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      devices: {
+        Row: {
+          id: string;
+          staff_id: string;
+          secret_hash: string;
+          label: string | null;
+          pin_hash: string | null;
+          pin_set_at: string | null;
+          failed_count: number;
+          lock_count: number;
+          locked_until: string | null;
+          created_at: string;
+          last_seen_at: string;
+          revoked_at: string | null;
+          revoked_reason: string | null;
+        };
+        Insert: {
+          id?: string;
+          staff_id: string;
+          secret_hash: string;
+          label?: string | null;
+          pin_hash?: string | null;
+          pin_set_at?: string | null;
+          failed_count?: number;
+          lock_count?: number;
+          locked_until?: string | null;
+          created_at?: string;
+          last_seen_at?: string;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+        };
+        Update: {
+          id?: string;
+          staff_id?: string;
+          secret_hash?: string;
+          label?: string | null;
+          pin_hash?: string | null;
+          pin_set_at?: string | null;
+          failed_count?: number;
+          lock_count?: number;
+          locked_until?: string | null;
+          created_at?: string;
+          last_seen_at?: string;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+        };
+        Relationships: [];
+      };
+      sessions: {
+        Row: {
+          id: string;
+          staff_id: string;
+          device_id: string;
+          token_hash: string;
+          created_at: string;
+          last_seen_at: string;
+          expires_at: string;
+          revoked_at: string | null;
+          revoked_reason: string | null;
+        };
+        Insert: {
+          id?: string;
+          staff_id: string;
+          device_id: string;
+          token_hash: string;
+          created_at?: string;
+          last_seen_at?: string;
+          expires_at?: string;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+        };
+        Update: {
+          id?: string;
+          staff_id?: string;
+          device_id?: string;
+          token_hash?: string;
+          created_at?: string;
+          last_seen_at?: string;
+          expires_at?: string;
+          revoked_at?: string | null;
+          revoked_reason?: string | null;
+        };
+        Relationships: [];
+      };
+      auth_attempts: {
+        Row: {
+          id: number;
+          bucket: string;
+          kind: "pin" | "activation";
+          ok: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          bucket: string;
+          kind: "pin" | "activation";
+          ok: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          bucket?: string;
+          kind?: "pin" | "activation";
+          ok?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      announcements: {
+        Row: {
+          id: string;
+          titel: string;
+          body: string;
+          image_url: string | null;
+          status: AnnouncementStatus;
+          prioritaet: AnnouncementPrioritaet;
+          publish_at: string;
+          target_scope: AnnouncementTargetScope;
+          target_hub_ids: string[];
+          target_regions: string[];
+          target_rollen: string[];
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          titel: string;
+          body: string;
+          image_url?: string | null;
+          status?: AnnouncementStatus;
+          prioritaet?: AnnouncementPrioritaet;
+          publish_at?: string;
+          target_scope?: AnnouncementTargetScope;
+          target_hub_ids?: string[];
+          target_regions?: string[];
+          target_rollen?: string[];
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          titel?: string;
+          body?: string;
+          image_url?: string | null;
+          status?: AnnouncementStatus;
+          prioritaet?: AnnouncementPrioritaet;
+          publish_at?: string;
+          target_scope?: AnnouncementTargetScope;
+          target_hub_ids?: string[];
+          target_regions?: string[];
+          target_rollen?: string[];
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      announcement_reads: {
+        Row: { announcement_id: string; staff_id: string; read_at: string };
+        Insert: { announcement_id: string; staff_id: string; read_at?: string };
+        Update: { announcement_id?: string; staff_id?: string; read_at?: string };
+        Relationships: [];
+      };
+      customer_referrals: {
+        Row: {
+          id: string;
+          staff_id: string;
+          hub_id: string | null;
+          kunde_name: string;
+          telefon: string | null;
+          email: string | null;
+          ort: string | null;
+          beziehung: string | null;
+          notiz: string | null;
+          consent_at: string;
+          consent_version: string;
+          status: CustomerReferralStatus;
+          status_notiz: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          staff_id: string;
+          hub_id?: string | null;
+          kunde_name: string;
+          telefon?: string | null;
+          email?: string | null;
+          ort?: string | null;
+          beziehung?: string | null;
+          notiz?: string | null;
+          consent_at?: string;
+          consent_version?: string;
+          status?: CustomerReferralStatus;
+          status_notiz?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          staff_id?: string;
+          hub_id?: string | null;
+          kunde_name?: string;
+          telefon?: string | null;
+          email?: string | null;
+          ort?: string | null;
+          beziehung?: string | null;
+          notiz?: string | null;
+          consent_at?: string;
+          consent_version?: string;
+          status?: CustomerReferralStatus;
+          status_notiz?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      ma_referrals: {
+        Row: {
+          id: string;
+          staff_id: string;
+          hub_id: string | null;
+          firma_name: string;
+          inhaber_name: string | null;
+          telefon: string | null;
+          email: string | null;
+          ort: string | null;
+          beziehung: string | null;
+          notiz: string | null;
+          status: MaReferralStatus;
+          status_notiz: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          staff_id: string;
+          hub_id?: string | null;
+          firma_name: string;
+          inhaber_name?: string | null;
+          telefon?: string | null;
+          email?: string | null;
+          ort?: string | null;
+          beziehung?: string | null;
+          notiz?: string | null;
+          status?: MaReferralStatus;
+          status_notiz?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          staff_id?: string;
+          hub_id?: string | null;
+          firma_name?: string;
+          inhaber_name?: string | null;
+          telefon?: string | null;
+          email?: string | null;
+          ort?: string | null;
+          beziehung?: string | null;
+          notiz?: string | null;
+          status?: MaReferralStatus;
+          status_notiz?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      audit_events: {
+        Row: {
+          id: number;
+          staff_id: string | null;
+          art: string;
+          ziel_art: string | null;
+          ziel_id: string | null;
+          ip_hash: string | null;
+          meta: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          staff_id?: string | null;
+          art: string;
+          ziel_art?: string | null;
+          ziel_id?: string | null;
+          ip_hash?: string | null;
+          meta?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          staff_id?: string | null;
+          art?: string;
+          ziel_art?: string | null;
+          ziel_id?: string | null;
+          ip_hash?: string | null;
+          meta?: Record<string, unknown>;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
 }
+
+/* ---------------------------------------------------------------
+ * Mitarbeiter-App: Status-Unions.
+ * Bewusst TS-Unions statt Postgres-Enums — im gesamten Repo gibt es
+ * keinen `create type`; die Konvention ist `text` + `check`.
+ * --------------------------------------------------------------- */
+export type EmployeeRolle = "mitarbeiter" | "hubleiter" | "admin";
+export type EmployeeStatus =
+  | "eingeladen"
+  | "aktiv"
+  | "gesperrt"
+  | "ausgeschieden";
+export type AnnouncementStatus = "draft" | "published" | "archived";
+export type AnnouncementPrioritaet = "normal" | "wichtig";
+export type AnnouncementTargetScope = "all" | "hub" | "region" | "rolle";
+export type CustomerReferralStatus =
+  | "submitted"
+  | "contacted"
+  | "qualified"
+  | "converted"
+  | "rejected"
+  | "bonus_eligible"
+  | "bonus_paid";
+export type MaReferralStatus =
+  | "submitted"
+  | "reviewing"
+  | "contacted"
+  | "qualified"
+  | "negotiating"
+  | "acquired"
+  | "rejected"
+  | "bonus_eligible"
+  | "bonus_paid";
+
+// Convenience row aliases — Mitarbeiter-App
+type EmpTables = Database["employee_app"]["Tables"];
+export type Staff = EmpTables["staff"]["Row"];
+export type ActivationCode = EmpTables["activation_codes"]["Row"];
+export type EmployeeDevice = EmpTables["devices"]["Row"];
+export type EmployeeSession = EmpTables["sessions"]["Row"];
+export type Announcement = EmpTables["announcements"]["Row"];
+export type CustomerReferral = EmpTables["customer_referrals"]["Row"];
+export type MaReferral = EmpTables["ma_referrals"]["Row"];
 
 // Convenience row aliases
 export type Hub = Database["public"]["Tables"]["hubs"]["Row"];
