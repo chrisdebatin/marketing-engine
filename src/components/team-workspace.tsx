@@ -4,10 +4,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  Ban,
   CalendarClock,
   Check,
   ChevronDown,
   ClipboardList,
+  Copy,
   FileText,
   Hand,
   Headset,
@@ -1423,6 +1425,23 @@ export function TeamWorkspace({
                           )}
                           <LostReason
                             onSave={(grund) => setStatus(l, "verloren", grund)}
+                          />
+                          {/* Offensichtlich unbrauchbare Leads (Fake-Daten,
+                              Spam, Unsinns-Eintraege). Bewusst NICHT als
+                              normaler Verlustgrund: "verloren" heisst echter
+                              Interessent, den wir nicht gewonnen haben — ein
+                              Fake-Lead war nie einer und wuerde die
+                              Conversion-Rate verfaelschen. Der Text enthaelt
+                              "kein Neuinteressent", damit kategorieAusErgebnis
+                              (src/lib/callcenter.ts) ihn aus der
+                              Interessenten-Auswertung nimmt. Bei Agentur-Leads
+                              zusaetzlich mit Melde-Datum = Grundlage der
+                              Reklamation (Uebersicht im CRM-Admin). */}
+                          <UngueltigButton
+                            quelle={l.quelle}
+                            onSave={(grund) =>
+                              setStatus(l, "verloren", grund)
+                            }
                           />
                         </>
                       )}
@@ -3314,6 +3333,109 @@ function LeadNote({
           {busy ? "Speichere…" : "Notiz speichern"}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+          Abbrechen
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Ungültig" — für Leads, die offensichtlich unbrauchbar sind: Fake-Namen,
+ * Spam, Unsinns-Adressen, Test-Eintraege.
+ *
+ * Bewusst getrennt von "Verloren": Verloren heisst "echter Interessent, den
+ * wir nicht gewonnen haben" und gehoert in die Conversion-Rate. Ein Fake-Lead
+ * war nie ein Interessent — laeuft er als "verloren" mit, sieht die Quote
+ * schlechter aus als die Arbeit war.
+ *
+ * Der gespeicherte Text enthaelt deshalb "kein Neuinteressent"; genau darauf
+ * prueft kategorieAusErgebnis() in src/lib/callcenter.ts und nimmt den Lead
+ * aus der Interessenten-Auswertung. Bei Agentur-Leads wird zusaetzlich das
+ * Melde-Datum vermerkt — dieselbe Konvention wie bei "Nicht im
+ * Einzugsbereich", damit der Lead in den Agentur-Rueckweisungen auftaucht
+ * und nicht berechnet wird.
+ */
+function UngueltigButton({
+  quelle,
+  onSave,
+}: {
+  quelle: string;
+  onSave: (grund: string) => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  const istAgentur = quelle === "agentur";
+
+  function speichern(art: string) {
+    // "kein Neuinteressent" ist der Schluessel fuer die Auswertung.
+    const basis = `kein Neuinteressent — ungültig: ${art}`;
+    onSave(
+      istAgentur
+        ? `${basis} (gemeldet ${new Date().toLocaleDateString("de-DE")})`
+        : basis,
+    );
+  }
+
+  if (!confirm) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        className="text-muted-foreground hover:text-red-700"
+        title={
+          istAgentur
+            ? "Offensichtlich unbrauchbarer Lead (Fake-Daten, Spam). Zaehlt nicht als verlorener Interessent und wird der Agentur gemeldet."
+            : "Offensichtlich unbrauchbarer Lead (Fake-Daten, Spam). Zaehlt nicht als verlorener Interessent."
+        }
+        onClick={() => setConfirm(true)}
+      >
+        <Ban className="size-3.5" /> Ungültig
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        Warum ungültig?{" "}
+        <span className="font-normal">
+          Zählt nicht als verlorener Interessent
+          {istAgentur ? " und wird der Agentur gemeldet" : ""}.
+        </span>
+      </p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => speichern("Fake-/Spam-Daten")}
+        >
+          <Ban className="size-3.5" /> Fake / Spam
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => speichern("Test-/Doppel-Eintrag")}
+        >
+          <Copy className="size-3.5" /> Test / Doppelt
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => speichern("kein Anliegen erkennbar")}
+        >
+          <X className="size-3.5" /> Kein Anliegen
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="ml-auto text-muted-foreground"
+          onClick={() => setConfirm(false)}
+        >
           Abbrechen
         </Button>
       </div>
