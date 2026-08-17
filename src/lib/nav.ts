@@ -7,6 +7,7 @@ import {
   Rocket,
   Home,
   Inbox,
+  HelpCircle,
   Map,
   Megaphone,
   PhoneIncoming,
@@ -65,7 +66,10 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "System",
-    items: [{ href: "/assistant", label: "Assistant", Icon: Sparkles }],
+    items: [
+      { href: "/crm-hilfe", label: "CRM-Hilfe", Icon: HelpCircle },
+      { href: "/assistant", label: "Assistant", Icon: Sparkles },
+    ],
   },
 ];
 export const ADMIN_NAV_ITEM: NavItem = {
