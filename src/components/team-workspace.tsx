@@ -538,7 +538,16 @@ async function teamAction(
   const res = await fetch("/api/public/team", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-
+    // Ohne body kam beim Server ein leeres Objekt an -> action war "" und
+    // JEDE Aktion scheiterte mit "Unbekannte Aktion".
+    // token: leer auf /crm (dort greift die Admin-Session), gesetzt auf den
+    // persoenlichen Token-Seiten. "als" nur, wenn ein Name gewaehlt wurde —
+    // die API prueft ihn gegen die Team-Liste.
+    body: JSON.stringify({
+      ...payload,
+      token,
+      ...(name ? { als: name } : {}),
+    }),
   });
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(json.error ?? "Fehler beim Speichern.");
@@ -767,20 +776,36 @@ export function TeamWorkspace({
   const wiederAnzahl =
     futureDays.reduce((s, g) => s + g.targets.length, 0) + outboundLater.length;
 
+  /** Optimistisch: die Karte reagiert sofort, der Server bestaetigt danach.
+   *  Schlaegt der Aufruf fehl, wird der alte Zustand zurueckgerollt — sonst
+   *  zeigt die Oberflaeche etwas an, das nicht gespeichert wurde. */
   async function claim(l: InboundLead) {
     setError(null);
+    const vorher = l.bearbeiter;
+    setInbound((cur) =>
+      cur.map((x) => (x.id === l.id ? { ...x, bearbeiter: memberName } : x)),
+    );
     try {
       await teamAction(token, { action: "claim", kind: l.kind, id: l.id }, alsName);
-      setInbound((cur) =>
-        cur.map((x) => (x.id === l.id ? { ...x, bearbeiter: memberName } : x)),
-      );
     } catch (e) {
+      setInbound((cur) =>
+        cur.map((x) => (x.id === l.id ? { ...x, bearbeiter: vorher } : x)),
+      );
       setError(e instanceof Error ? e.message : "Fehler");
     }
   }
 
+  /** Statuswechsel ebenfalls optimistisch, inkl. Rollback bei Fehler. */
   async function setStatus(l: InboundLead, status: string, ergebnis?: string) {
     setError(null);
+    const vorher = { status: l.status, bearbeiter: l.bearbeiter, ergebnis: l.ergebnis };
+    setInbound((cur) =>
+      cur.map((x) =>
+        x.id === l.id
+          ? { ...x, status, bearbeiter: memberName, ...(ergebnis ? { ergebnis } : {}) }
+          : x,
+      ),
+    );
     try {
       await teamAction(token, {
         action: "lead-status",
@@ -789,14 +814,10 @@ export function TeamWorkspace({
         status,
         ...(ergebnis ? { ergebnis } : {}),
       }, alsName);
-      setInbound((cur) =>
-        cur.map((x) =>
-          x.id === l.id
-            ? { ...x, status, bearbeiter: memberName, ...(ergebnis ? { ergebnis } : {}) }
-            : x,
-        ),
-      );
     } catch (e) {
+      setInbound((cur) =>
+        cur.map((x) => (x.id === l.id ? { ...x, ...vorher } : x)),
+      );
       setError(e instanceof Error ? e.message : "Fehler");
     }
   }
@@ -863,27 +884,28 @@ export function TeamWorkspace({
           persönlichen Seiten ist der Name durch den Link festgelegt. */}
       {hatAuswahl && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-2.5 shadow-sm">
-          <span className="flex items-center gap-1.5 text-sm font-medium">
+          <label
+            htmlFor="bearbeiter-auswahl"
+            className="flex items-center gap-1.5 text-sm font-medium"
+          >
             <User className="size-4 text-primary" />
             Ich trage ein als:
-          </span>
-          <div className="flex flex-wrap gap-1">
+          </label>
+          {/* Natives select statt Chip-Leiste: ein Tap, die Liste waechst mit
+              team_members ohne die Seite zu sprengen, und auf dem Handy
+              erscheint das gewohnte Auswahlrad. */}
+          <select
+            id="bearbeiter-auswahl"
+            value={gewaehlterName}
+            onChange={(e) => setGewaehlterName(e.target.value)}
+            className="h-9 rounded-lg border bg-background px-3 text-sm font-medium text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
             {(bearbeiterOptionen ?? []).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setGewaehlterName(n)}
-                className={cn(
-                  "rounded-full px-3 py-1 text-sm font-medium transition-colors",
-                  gewaehlterName === n
-                    ? "bg-primary text-primary-foreground"
-                    : "border text-muted-foreground hover:text-foreground",
-                )}
-              >
+              <option key={n} value={n}>
                 {n}
-              </button>
+              </option>
             ))}
-          </div>
+          </select>
           <span className="text-xs text-muted-foreground">
             Jede Übernahme und jeder Statuswechsel wird unter diesem Namen
             gespeichert.
