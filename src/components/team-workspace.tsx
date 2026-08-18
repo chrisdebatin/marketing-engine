@@ -555,7 +555,7 @@ export function TeamWorkspace({
   /** "tabs" = eigener Umschalter (persönliche Seiten); "inbound"/"outbound"
    * = nur eine Ansicht, Umschalter kommt von außen (/crm-Board). */
   view?: "tabs" | "inbound" | "outbound" | "kontakte";
-  /** false = keine Inbound-Anruf-Box (Davina bekommt keine Inbound-Anrufe). */
+  /** false = keine Inbound-Anruf-Box (Devina bekommt keine Inbound-Anrufe). */
   inboundLog?: boolean;
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound" | "kontakte">("inbound");

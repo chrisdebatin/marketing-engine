@@ -44,7 +44,7 @@ export default function CrmHilfePage() {
             <Phone className="size-5" />
           </span>
           <span className="min-w-0">
-            <span className="block font-semibold">Handbuch Davina</span>
+            <span className="block font-semibold">Handbuch Devina</span>
             <span className="block text-sm text-muted-foreground">
               Recare-Anfragen und Outbound-Anrufe bei Kliniken &amp; Praxen
             </span>

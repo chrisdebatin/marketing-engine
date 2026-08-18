@@ -164,7 +164,7 @@ export function LeadBoard({
             Wer erfasst gerade? (Pflicht)
           </span>
           <div className="flex flex-wrap items-center gap-1.5">
-            {["Belinda", "Adelina", "Davina", "Chris"].map((n) => (
+            {["Belinda", "Adelina", "Devina", "Chris"].map((n) => (
               <button
                 key={n}
                 type="button"

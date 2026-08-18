@@ -99,7 +99,7 @@ export async function createLeadCall(input: {
   hub_id?: string;
   call_date?: string;
   notiz?: string;
-  /** Wer hat den Lead erfasst (Belinda/Adelina/Davina/Chris) — wird als Bearbeiter gespeichert. */
+  /** Wer hat den Lead erfasst (Belinda/Adelina/Devina/Chris) — wird als Bearbeiter gespeichert. */
   erfasser?: string;
 }): Promise<Result> {
   await requireSession();

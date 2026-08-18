@@ -116,7 +116,7 @@ export function CrmIntro() {
               </div>
               <Arrow />
               <TeamCard
-                name="Davina"
+                name="Devina"
                 role="Call-Center — Recare + Krankenhaus-Anrufe"
                 tone="violet"
               />
@@ -176,7 +176,7 @@ export function CrmIntro() {
                 <SourceChip icon={Building2} label="Krankenhäuser" />
                 <Arrow />
                 <span className="rounded-lg bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-800">
-                  Davina
+                  Devina
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -198,7 +198,7 @@ export function CrmIntro() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Die persönlichen Arbeitslisten von Belinda, Adelina und Davina laufen
+          Die persönlichen Arbeitslisten von Belinda, Adelina und Devina laufen
           über ihre eigenen Links (Admin → Team-Links). Diese Seite hier ist
           die Gesamtsicht für alle.
         </p>

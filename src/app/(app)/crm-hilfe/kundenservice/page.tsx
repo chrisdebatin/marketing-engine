@@ -253,7 +253,7 @@ export default function HandbuchKundenservicePage() {
         <Hinweis ton="gruen" icon={Info} titel="Recare-Anfragen laufen kürzer">
           Anfragen aus Kliniken kommen schon mit Patientendaten und haben nur 4
           Schritte: <strong>Eingegangen → PDL-Klärung → Übergeben →
-          Aufgenommen</strong>. Diese Anfragen bearbeitet normalerweise Davina.
+          Aufgenommen</strong>. Diese Anfragen bearbeitet normalerweise Devina.
         </Hinweis>
       </Kapitel>
 

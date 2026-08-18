@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * CRM & Leads: Team-Switch (Belinda & Adelina / Davina) über dem großen
+ * CRM & Leads: Team-Switch (Belinda & Adelina / Devina) über dem großen
  * Toggle "Anstehende Leads" vs. "Outbound-Anrufe" — jedes Team hat seine
  * eigene Lead-Inbox und seine eigene Anrufliste. Alles direkt bearbeitbar
  * (Admin-Session). Das volle Institutionen-CRM liegt auf /crm-admin.
@@ -111,7 +111,7 @@ export default async function CrmPage() {
           },
           {
             id: "callcenter",
-            label: "Davina",
+            label: "Devina",
             leadsBadge: openCount(ccInbound),
             outboundBadge: dueCount(ccOutbound),
             leads: workspace("callcenter", "inbound"),

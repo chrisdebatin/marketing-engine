@@ -26,7 +26,7 @@ export const metadata = {
 };
 
 /**
- * Handbuch für Davina (Recare-Anfragen + Outbound-Anrufe). Inhaltlich
+ * Handbuch für Devina (Recare-Anfragen + Outbound-Anrufe). Inhaltlich
  * deckungsgleich mit src/lib/crm-wissen.ts — ändert sich der Prozess,
  * beide nachziehen.
  */
@@ -44,7 +44,7 @@ export default function HandbuchCallcenterPage() {
       <PageHeader
         icon={Phone}
         eyebrow="Handbuch Call-Center"
-        title="Davina — Recare und Anrufe"
+        title="Devina — Recare und Anrufe"
         description="Du hast zwei Aufgaben: Anfragen von Kliniken (Recare) bearbeiten und Krankenhäuser, Praxen und Apotheken anrufen, damit die Pflegeunion bekannt wird und Zuweisungen kommen. Diese Seite kannst du ausdrucken."
       />
 
@@ -260,7 +260,7 @@ export default function HandbuchCallcenterPage() {
             den Kasten unten.
           </Schritt>
           <Schritt n={5} titel="Speichern">
-            Der Button unten heißt <strong>Speichern (als Davina)</strong>.
+            Der Button unten heißt <strong>Speichern (als Devina)</strong>.
           </Schritt>
         </Schritte>
 

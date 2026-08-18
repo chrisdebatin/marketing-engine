@@ -15,7 +15,7 @@ export interface CrmBoardTeam {
 }
 
 /**
- * /crm-Board: kleiner Team-Switch (Belinda & Adelina / Davina) ÜBER dem
+ * /crm-Board: kleiner Team-Switch (Belinda & Adelina / Devina) ÜBER dem
  * großen Toggle "Anstehende Leads" vs. "Outbound-Anrufe" — jedes Team hat
  * seine eigene Lead-Inbox und seine eigene Anrufliste.
  */

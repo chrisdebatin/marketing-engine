@@ -9,7 +9,7 @@ import { TeamWorkspace } from "@/components/team-workspace";
 export const dynamic = "force-dynamic";
 
 /**
- * Persönliche Team-Seite (Davina / Belinda / Adelina) — kein Login, ein
+ * Persönliche Team-Seite (Devina / Belinda / Adelina) — kein Login, ein
  * Link pro Person. Inbound-Leads nach Team-Routing (lib/team-leads) +
  * Outbound-Anrufliste mit Kategorie-Split (Praxen → Kundenservice,
  * Krankenhäuser → Call-Center, Rest gemeinsam).

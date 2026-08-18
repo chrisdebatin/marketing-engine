@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * PDL-Verzeichnis: alle Standorte mit Ansprechpartner, Telefon und E-Mail —
- * für Davina und das Kundenservice-Team, wenn sie einen Standort erreichen
+ * für Devina und das Kundenservice-Team, wenn sie einen Standort erreichen
  * müssen. Bewusst als Seite und nicht als PDF: PDLs wechseln, und eine
  * verteilte Liste ist am Tag nach dem Verschicken veraltet.
  */

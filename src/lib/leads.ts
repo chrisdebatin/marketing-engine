@@ -16,7 +16,7 @@ export const LEAD_QUELLEN = [
 ] as const;
 
 /**
- * Quellen, die das Call-Center (Davina) bearbeitet — nur Recare; alles
+ * Quellen, die das Call-Center (Devina) bearbeitet — nur Recare; alles
  * andere (Website, 0800, Meta, Agentur, B2B) liegt beim Kundenservice DE.
  */
 export const CALLCENTER_QUELLEN = new Set(["recare"]);

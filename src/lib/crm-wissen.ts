@@ -14,7 +14,7 @@ export const CRM_WISSEN = `
   Menschen, die sich bei uns melden (Meta-Anzeigen, Website, 0800-Anrufe,
   Lead-Agentur "Pflegehilfe Direkt"). Ziel: Interessent aufnehmen, Daten
   vervollständigen, an den passenden Standort (PDL) übergeben.
-- **Davina (Call-Center)**: bearbeitet Recare-Anfragen von Kliniken und
+- **Devina (Call-Center)**: bearbeitet Recare-Anfragen von Kliniken und
   macht OUTBOUND-Anrufe bei Krankenhäusern, Praxen, Apotheken, um die
   Pflegeunion bekannt zu machen und Zuweisungen zu bekommen.
 - Jede Person hat einen eigenen Link, kein Login und kein Passwort.
@@ -53,7 +53,7 @@ Aufgenommen. Sie kommen schon mit Patientendaten von der Klinik.
   ist das die Grundlage der wöchentlichen Reklamation — dafür zahlen wir
   nicht.
 
-## Outbound-Anrufe (Davina)
+## Outbound-Anrufe (Devina)
 - Der Reiter **Wiedervorlagen IST die Anrufliste**: oben "Heute dran",
   darunter die kommenden Tage. Von oben nach unten abtelefonieren.
 - Beim Loggen: "Erreicht?" ja/nein ist Pflicht. **Nicht erreicht** →
@@ -68,7 +68,7 @@ Aufgenommen. Sie kommen schon mit Patientendaten von der Klinik.
 - Auf jeder Anrufkarte steht, ob eine PDL dort schon Flyer oder eine
   CM-Box abgegeben hat. Das ist ein guter Gesprächseinstieg.
 
-## Recare (Davina)
+## Recare (Devina)
 - Anfragen von Kliniken kommen automatisch per Mail rein.
 - Auf der Karte steht ein Kasten "unsere Beziehung": ob wir dort schon
   waren, ob wir schon angerufen haben, wie viele Patienten von dort kamen.

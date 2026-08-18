@@ -8,7 +8,7 @@ import { normName } from "@/lib/crm-log";
  * Recare-Mail-Import (SERVER ONLY): liest das angebundene Outlook-Postfach,
  * erkennt (weitergeleitete) Recare-Anfragen, extrahiert die Falldaten per
  * Claude und legt sie als lead_calls (quelle 'recare', status offen) an —
- * sie erscheinen damit automatisch in Davinas Anfragen-Liste. Zusätzlich
+ * sie erscheinen damit automatisch in Devinas Anfragen-Liste. Zusätzlich
  * wird die Anfrage als Kontakt an der jeweiligen Klinik im CRM geloggt.
  * Idempotenz über gemerkte Mail-IDs in app_settings.
  */
