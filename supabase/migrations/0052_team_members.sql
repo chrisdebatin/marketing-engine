@@ -1,5 +1,5 @@
 -- 0052: CRM-Ausbau Stufe 1 — persönliche Team-Links + Claim/Status.
--- team_members: Davina (Call-Center Indien), Belinda + Adelina (Kundenservice
+-- team_members: Devina (Call-Center Indien), Belinda + Adeline (Kundenservice
 -- DE). Jede(r) bekommt einen persönlichen Token-Link (/t/<token>); alle
 -- Log-Einträge tragen den Namen ("wer ruft wann wen an").
 create table if not exists public.team_members (
@@ -16,8 +16,8 @@ insert into public.team_members (name, team)
 select v.name, v.team
 from (values
   ('Belinda', 'kundenservice'),
-  ('Adelina', 'kundenservice'),
-  ('Davina',  'callcenter')
+  ('Adeline', 'kundenservice'),
+  ('Devina',  'callcenter')
 ) as v(name, team)
 where not exists (select 1 from public.team_members m where m.name = v.name);
 

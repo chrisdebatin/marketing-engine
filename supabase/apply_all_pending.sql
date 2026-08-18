@@ -284,7 +284,7 @@ alter table public.meta_leads drop constraint if exists meta_leads_status_check;
 
 notify pgrst, 'reload schema';
 
--- ── 0052: Persönliche Team-Links (Davina/Belinda/Adelina) + Claim/Status ─
+-- ── 0052: Persönliche Team-Links (Devina/Belinda/Adeline) + Claim/Status ─
 create table if not exists public.team_members (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
@@ -299,8 +299,8 @@ insert into public.team_members (name, team)
 select v.name, v.team
 from (values
   ('Belinda', 'kundenservice'),
-  ('Adelina', 'kundenservice'),
-  ('Davina',  'callcenter')
+  ('Adeline', 'kundenservice'),
+  ('Devina',  'callcenter')
 ) as v(name, team)
 where not exists (select 1 from public.team_members m where m.name = v.name);
 
