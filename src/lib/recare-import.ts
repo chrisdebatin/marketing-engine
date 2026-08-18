@@ -620,6 +620,15 @@ export async function syncRecareMails(): Promise<RecareSyncResult> {
       }
     }
 
+    // Caseform ist ein konkurrierendes Vermittlungsportal. Solche Rundrufe
+    // landen zwar im selben Postfach, sind fuer uns aber keine bearbeitbaren
+    // Leads (keine Telefonnummer, keine Ruecklaufmoeglichkeit) — sie werden
+    // gar nicht erst angelegt.
+    if (/caseform/i.test(`${data.zusammenfassung} ${data.klinik}`)) {
+      skipped++;
+      continue;
+    }
+
     const notizTeile = [
       data.zusammenfassung,
       data.versorgung ? `Versorgung: ${data.versorgung}` : "",
