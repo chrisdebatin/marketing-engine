@@ -23,6 +23,7 @@ import {
   PhoneCall,
   PhoneOff,
   ThumbsDown,
+  Trash2,
   Search,
   Undo2,
   User,
@@ -800,6 +801,20 @@ export function TeamWorkspace({
     }
   }
 
+  /**
+   * Lead löschen: verschwindet sofort aus der Liste. Serverseitig nur ein
+   * Statuswechsel auf "geloescht" — die Zeile bleibt in der Datenbank.
+   */
+  async function deleteLead(l: InboundLead) {
+    setError(null);
+    try {
+      await teamAction(token, { action: "lead-delete", kind: l.kind, id: l.id }, alsName);
+      setInbound((cur) => cur.filter((x) => x.id !== l.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    }
+  }
+
   /** Übergabe an die PDL zurücknehmen (solange keine Bestätigung vorliegt). */
   async function unassignHub(l: InboundLead) {
     setError(null);
@@ -1240,25 +1255,28 @@ export function TeamWorkspace({
                     {l.status === "offen" && <UnansweredTimer since={l.datum} />}
                     {/* Seltene Aktionen im Kebab — hält die Aktionszeile
                         unten einzeilig. */}
-                    {canAct &&
-                      (l.quelle === "recare" || l.zugewiesen_hub_id || l.vorschlag_hub_id) &&
-                      !["aufgenommen", "verloren"].includes(l.status) && (
+                    {canAct && (
                         <LeadKebab>
-                          <PdlVersuchButtons lead={l} token={token} />
-                          {l.quelle === "recare" && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              title="Anfrage abgelehnt (z. B. Versorgung passt nicht, außerhalb des Einzugsbereichs). Der Lead verschwindet aus der Liste und steht unten unter „Abgelehnte Recare-Anfragen“."
-                              className="justify-start border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
-                              onClick={() =>
-                                setStatus(l, "verloren", "Pat. abgelehnt")
-                              }
-                            >
-                              <X className="size-3.5" /> Pat. abgelehnt
-                            </Button>
-                          )}
+                          {(l.zugewiesen_hub_id || l.vorschlag_hub_id) &&
+                            !["aufgenommen", "verloren"].includes(l.status) && (
+                              <PdlVersuchButtons lead={l} token={token} />
+                            )}
+                          {l.quelle === "recare" &&
+                            !["aufgenommen", "verloren"].includes(l.status) && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                title="Anfrage abgelehnt (z. B. Versorgung passt nicht, außerhalb des Einzugsbereichs). Der Lead verschwindet aus der Liste und steht unten unter „Abgelehnte Recare-Anfragen“."
+                                className="justify-start border-red-200 text-red-700 hover:bg-red-50 hover:text-red-700"
+                                onClick={() =>
+                                  setStatus(l, "verloren", "Pat. abgelehnt")
+                                }
+                              >
+                                <X className="size-3.5" /> Pat. abgelehnt
+                              </Button>
+                            )}
+                          <LeadLoeschen lead={l} onDelete={deleteLead} />
                         </LeadKebab>
                       )}
                   </div>
@@ -2634,6 +2652,79 @@ function KontakteView({
  * (PDL-Erreichbarkeit vermerken, Patient abgelehnt), damit die Aktionszeile
  * unten in EINER Reihe bleibt. Schließt bei Klick nach außen.
  */
+/**
+ * Lead löschen — für Altlasten aus der Aufbauphase, die nie bearbeitet
+ * wurden und die Liste zumüllen. Zwei Schritte, damit niemand versehentlich
+ * einen echten Interessenten entfernt. Gelöscht wird nur der Status
+ * ("geloescht"), die Zeile bleibt für die Auswertung erhalten.
+ */
+function LeadLoeschen({
+  lead,
+  onDelete,
+}: {
+  lead: InboundLead;
+  onDelete: (l: InboundLead) => Promise<void>;
+}) {
+  const [nachfrage, setNachfrage] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  if (!nachfrage) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        title="Lead endgültig aus allen Listen entfernen — für alte Anfragen, die nie bearbeitet wurden."
+        className="justify-start text-muted-foreground hover:bg-red-50 hover:text-red-700"
+        // Menü offen halten, bis die Rückfrage beantwortet ist.
+        onClick={(e) => {
+          e.stopPropagation();
+          setNachfrage(true);
+        }}
+      >
+        <Trash2 className="size-3.5" /> Lead löschen
+      </Button>
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50/60 p-2.5"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <p className="text-xs font-semibold text-red-900">Diesen Lead löschen?</p>
+      <p className="text-[11px] leading-snug text-red-800">
+        Er verschwindet aus allen Listen. Rückgängig machen kannst du das nur
+        über Chris.
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy}
+          className="bg-red-600 text-white hover:bg-red-700"
+          onClick={async () => {
+            setBusy(true);
+            await onDelete(lead);
+            setBusy(false);
+          }}
+        >
+          {busy ? "Lösche…" : "Ja, löschen"}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => setNachfrage(false)}
+        >
+          Abbrechen
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function LeadKebab({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

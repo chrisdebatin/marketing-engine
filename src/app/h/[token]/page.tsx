@@ -251,6 +251,7 @@ export default async function HubShareLinkPage({
       .from("lead_calls")
       .select("id, lead_name, telefon, email, quelle, quelle_detail, notiz, zugewiesen_at")
       .eq("zugewiesen_hub_id", hub.id)
+      .neq("status", "geloescht")
       .is("pdl_bestaetigt_at", null),
     admin
       .from("meta_leads")

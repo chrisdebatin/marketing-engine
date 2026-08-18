@@ -74,6 +74,8 @@ export async function buildTeamInbound(
       admin
         .from("lead_calls")
         .select("*")
+        // Gelöschte Leads (Altlasten) tauchen nirgends mehr auf.
+        .neq("status", "geloescht")
         .order("created_at", { ascending: false })
         .limit(200),
       // Meta-Kunden-Leads bearbeitet das Call-Center (siehe

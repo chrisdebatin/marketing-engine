@@ -148,6 +148,51 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // Lead löschen: Altlasten aus der Aufbauphase, die nie bearbeitet wurden,
+  // sollen nicht ewig in der Liste stehen. Bewusst KEIN echtes DELETE —
+  // status "geloescht" blendet den Lead überall aus, die Zeile bleibt aber
+  // für die Auswertung erhalten und lässt sich wiederherstellen.
+  if (action === "lead-delete") {
+    const id = (body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
+    const grund = (body.ergebnis ?? "").trim().slice(0, 300);
+    const { error } = await admin
+      .from(table)
+      .update({
+        status: "geloescht",
+        bearbeiter: member.name,
+        ergebnis: grund || "gelöscht (Altlast)",
+      })
+      .eq("id", id);
+    if (error) {
+      // Ältere DBs haben evtl. noch einen engen CHECK auf status.
+      const constraint = error.code === "23514";
+      return NextResponse.json(
+        {
+          error: constraint
+            ? "Status \"geloescht\" fehlt noch — bitte supabase/apply_all_pending.sql ausführen."
+            : "Löschen fehlgeschlagen.",
+        },
+        { status: 500 },
+      );
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // Gelöschten Lead wiederherstellen (Undo direkt nach dem Löschen).
+  if (action === "lead-restore") {
+    const id = (body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "Lead fehlt." }, { status: 400 });
+    const { error } = await admin
+      .from(table)
+      .update({ status: "offen", ergebnis: null })
+      .eq("id", id);
+    if (error) {
+      return NextResponse.json({ error: "Wiederherstellen fehlgeschlagen." }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // Inbound-Anruf direkt aus der Leads-Ansicht loggen → erscheint sofort als
   // offener Lead mit denselben Optionen wie alle anderen.
   if (action === "log-inbound") {

@@ -456,6 +456,13 @@ alter table public.bewerber disable row level security;
 
 notify pgrst, 'reload schema';
 
+-- 0063: Leads löschen (Altlasten aus der Aufbauphase). Kein echtes DELETE —
+-- Status "geloescht" blendet den Lead in allen Ansichten aus, die Zeile
+-- bleibt für die Auswertung erhalten. meta_leads kennt "geloescht" bereits.
+alter table public.lead_calls drop constraint if exists lead_calls_status_check;
+alter table public.lead_calls add constraint lead_calls_status_check
+  check (status in ('offen','kontaktiert','erstgespraech','aufgenommen','verloren','geloescht'));
+
 -- ── Selbst-Check: muss alles_da = true liefern ──────────────────────
 -- Steht hier false oder erscheint diese Zeile gar nicht, ist die Datei
 -- vorher mit einem Fehler abgebrochen.
@@ -470,6 +477,9 @@ select
           where table_name='lead_calls' and column_name='adresse') as lead_adresse,
   exists (select 1 from information_schema.columns
           where table_name='crm_targets' and column_name='kurzinfo') as target_kurzinfo,
+  (select count(*)=1 from pg_constraint
+     where conname='lead_calls_status_check'
+       and pg_get_constraintdef(oid) like '%geloescht%') as lead_loeschbar,
   (to_regclass('public.lead_todos')    is not null
    and to_regclass('public.pdl_versuche')  is not null
    and to_regclass('public.pdl_auftraege') is not null
@@ -480,4 +490,7 @@ select
                where table_name='lead_calls' and column_name='adresse')
    and exists (select 1 from information_schema.columns
                where table_name='crm_targets' and column_name='kurzinfo')
+   and (select count(*)=1 from pg_constraint
+          where conname='lead_calls_status_check'
+            and pg_get_constraintdef(oid) like '%geloescht%')
   ) as alles_da;
