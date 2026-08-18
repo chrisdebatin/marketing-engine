@@ -535,19 +535,23 @@ async function teamAction(
   als?: string,
 ) {
   const name = als ?? aktiverBearbeiter;
+  // Der Body wird bewusst VOR dem fetch gebaut und als eigene Variable
+  // uebergeben. Frueher stand JSON.stringify(...) direkt im Options-Objekt,
+  // umgeben von Kommentaren — dabei ist im Production-Bundle das body-Feld
+  // verlorengegangen, der Server bekam {} und JEDE Aktion scheiterte mit
+  // "Unbekannte Aktion". Diese Form ist gegen solche Ausfaelle robust.
+  // token: leer auf /crm (dort greift die Admin-Session), gesetzt auf den
+  // persoenlichen Token-Seiten. "als" nur, wenn ein Name gewaehlt wurde —
+  // die API prueft ihn gegen die Team-Liste.
+  const requestBody = JSON.stringify({
+    ...payload,
+    token,
+    ...(name ? { als: name } : {}),
+  });
   const res = await fetch("/api/public/team", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    // Ohne body kam beim Server ein leeres Objekt an -> action war "" und
-    // JEDE Aktion scheiterte mit "Unbekannte Aktion".
-    // token: leer auf /crm (dort greift die Admin-Session), gesetzt auf den
-    // persoenlichen Token-Seiten. "als" nur, wenn ein Name gewaehlt wurde —
-    // die API prueft ihn gegen die Team-Liste.
-    body: JSON.stringify({
-      ...payload,
-      token,
-      ...(name ? { als: name } : {}),
-    }),
+    body: requestBody,
   });
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(json.error ?? "Fehler beim Speichern.");
