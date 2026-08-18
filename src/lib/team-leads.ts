@@ -84,7 +84,7 @@ export async function buildTeamInbound(
             .order("created_time", { ascending: false })
             .limit(200)
         : Promise.resolve({ data: [] as never[] }),
-      admin.from("hubs").select("id, name, pdl_name, pdl_phone"),
+      admin.from("hubs").select("id, name, pdl_name, pdl_phone, pdl_email"),
     ]);
 
   const hubName = (id: string | null) =>
@@ -93,6 +93,8 @@ export async function buildTeamInbound(
     (hubRows ?? []).find((h) => h.id === id)?.pdl_name ?? null;
   const hubPdlPhone = (id: string | null) =>
     (hubRows ?? []).find((h) => h.id === id)?.pdl_phone ?? null;
+  const hubPdlEmail = (id: string | null) =>
+    (hubRows ?? []).find((h) => h.id === id)?.pdl_email ?? null;
 
   // Standort-Vorschlag: normalisierter Hub-Name im Lead-Text (Kampagne,
   // Klinik, Notiz) — "Kunden-BadOeynhausen-…" trifft "Bad Oeynhausen".
@@ -249,6 +251,7 @@ export async function buildTeamInbound(
       vorschlag_hub: hubName(vorschlagId),
       vorschlag_pdl: hubPdl(vorschlagId),
       vorschlag_pdl_phone: hubPdlPhone(vorschlagId),
+      vorschlag_pdl_email: hubPdlEmail(vorschlagId),
       direct_booking: isDirectBookingHub(
         hubName(c.zugewiesen_hub_id ?? null) ?? hubName(vorschlagId),
       ),
@@ -291,6 +294,7 @@ export async function buildTeamInbound(
         vorschlag_hub: hubName(suggestHub(m.campaign_name ?? "")),
         vorschlag_pdl: hubPdl(suggestHub(m.campaign_name ?? "")),
         vorschlag_pdl_phone: hubPdlPhone(suggestHub(m.campaign_name ?? "")),
+        vorschlag_pdl_email: hubPdlEmail(suggestHub(m.campaign_name ?? "")),
         direct_booking: isDirectBookingHub(
           hubName(m.zugewiesen_hub_id ?? null) ??
             hubName(suggestHub(m.campaign_name ?? "") ?? null),
@@ -354,7 +358,7 @@ export async function buildTeamOutbound(
       .from("crm_targets")
       .select("*")
       .not("kategorie", "in", "(meta_kunde,meta_mitarbeiter)"),
-    admin.from("hubs").select("id, name, pdl_name, pdl_phone"),
+    admin.from("hubs").select("id, name, pdl_name, pdl_phone, pdl_email"),
     // Offene KI-/manuelle To-dos an Kontakten — tolerant, falls 0059 fehlt.
     admin
       .from("lead_todos")

@@ -70,6 +70,7 @@ export interface InboundLead {
   vorschlag_hub: string | null;
   vorschlag_pdl: string | null;
   vorschlag_pdl_phone: string | null;
+  vorschlag_pdl_email: string | null;
   /** Klinik-Beziehung bei Recare-Leads: waren wir schon da, wer war Ansprechpartner, wie viele Patienten kamen bisher. */
   klinik_info: {
     name: string;
@@ -1311,6 +1312,16 @@ export function TeamWorkspace({
                         (keine Nummer hinterlegt — Admin → Hub)
                       </span>
                     )}
+                    {l.vorschlag_pdl_email && (
+                      <a
+                        href={`mailto:${l.vorschlag_pdl_email}`}
+                        className="flex items-center gap-1 font-medium text-primary hover:underline"
+                        title={`E-Mail an ${l.vorschlag_pdl}`}
+                      >
+                        <Mail className="size-3" />
+                        {l.vorschlag_pdl_email}
+                      </a>
+                    )}
                   </p>
                 )}
                 {/* Klinik-Beziehung (nur Recare): waren wir schon da, wer war
@@ -2002,6 +2013,7 @@ function InboundCallLog({
         vorschlag_hub: null,
         vorschlag_pdl: null,
         vorschlag_pdl_phone: null,
+        vorschlag_pdl_email: null,
         direct_booking: false,
         todos: [],
         klinik_info: null,
