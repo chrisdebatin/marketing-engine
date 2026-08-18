@@ -18,6 +18,7 @@ import {
   Target,
   Truck,
   UserPlus,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 /**
@@ -46,6 +47,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: "Standorte",
     items: [
       { href: "/hubs", label: "Hubs", Icon: Building2 },
+      { href: "/pdl-verzeichnis", label: "PDL-Verzeichnis", Icon: Users },
       { href: "/crm", label: "CRM & Leads", Icon: Target },
       { href: "/kapazitaet", label: "Kapazität", Icon: BedDouble },
       { href: "/themen", label: "Themen", Icon: BookOpen },

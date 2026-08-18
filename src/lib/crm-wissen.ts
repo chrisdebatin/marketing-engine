@@ -99,6 +99,34 @@ Aufgenommen. Sie kommen schon mit Patientendaten von der Klinik.
 - Recare-Mails, Website-Anfragen und Bewerbungen werden ebenfalls
   automatisch erkannt und einsortiert.
 
+## Über uns — was wir Anrufern sagen
+Die Pflegeunion ist ein ambulanter Pflegedienst mit 25 Standorten. Unser
+Argument gegenüber Kliniken und Kunden ist das breite Leistungsspektrum
+aus einer Hand: Alltagshilfe, Grund- und Behandlungspflege, Intensivpflege,
+dazu Physiotherapie, Ergotherapie, Logopädie und Pflegehilfsmittel.
+Dazu: kurzfristige Aufnahmen möglich, verlässliche Rückmeldung.
+Der vollständige Wortlaut steht im Gesprächsleitfaden in der Anrufliste
+(7 Schritte, zum Aufklappen).
+
+## Standorte und Ansprechpartner
+Alle Standorte mit PDL-Name, Telefonnummer und E-Mail stehen unter
+"PDL-Verzeichnis" in der Seitenleiste. Die Liste kommt direkt aus dem
+System und ist damit immer aktuell — es gibt bewusst keine verteilte
+Datei, die veralten könnte. Fehlt eine Nummer, kann sie unter "Hubs"
+ergänzt werden.
+
+## Welche Leistungsbereiche gibt es?
+Beim Erfassen eines Leads wird der Bereich gewählt:
+- **Alltagshilfe** — Hauswirtschaft, Betreuung, Entlastungsleistungen
+- **Ambulant** — Grund- und Behandlungspflege zuhause
+- **Intensiv** — Intensivpflege, Beatmung
+Ist nichts davon eindeutig, bleibt es bei "Pflege (allgemein)".
+
+## Kapazitäten der Standorte
+Die Standorte melden wöchentlich, wie viele Plätze frei sind (Seite
+"Kapazität"). Wichtig: Die Meldungen sind aktuell sehr lückenhaft — verlass
+dich nicht allein darauf. Im Zweifel bei der PDL anrufen und direkt fragen.
+
 ## Wo finde ich was?
 - **Anstehende Leads**: alles, was jetzt zu tun ist.
 - **Hängt bei PDL**: übergeben, wartet auf Rückmeldung des Standorts.

@@ -52,6 +52,23 @@ export default function CrmHilfePage() {
         </Link>
       </div>
 
+      {/* Nachschlagewerke, die sich aus echten Daten speisen */}
+      <Link
+        href="/pdl-verzeichnis"
+        className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+          <Users className="size-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-semibold">PDL-Verzeichnis</span>
+          <span className="block text-sm text-muted-foreground">
+            Alle Standorte mit Ansprechpartner, Telefon und E-Mail — immer
+            aktuell, direkt aus dem System
+          </span>
+        </span>
+      </Link>
+
       <CrmHilfe />
 
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
