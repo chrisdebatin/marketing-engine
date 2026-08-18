@@ -329,6 +329,7 @@ export default function HandbuchKundenservicePage() {
         >
           Du kannst nur auswählen zwischen{" "}
           <strong>Nicht erreicht</strong>, <strong>Doch kein Interesse</strong>,{" "}
+          <strong>Anderer Pflegedienst</strong>,{" "}
           <strong>Kontaktdaten fehlen / falsch</strong> oder einer eigenen
           Angabe im Freitext. Ohne Grund kein „Verloren“ — daraus entstehen
           unsere Auswertungen.

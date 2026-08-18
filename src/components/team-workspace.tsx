@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   Ban,
   CalendarClock,
+  Building2,
   Check,
   ChevronDown,
   ClipboardList,
@@ -626,6 +627,8 @@ export function TeamWorkspace({
   // "wieder" ist die Anrufliste (heute + kommende Tage in einer Ansicht).
   const [outTab, setOutTab] = useState<"wieder" | "erledigt">("wieder");
   const [inTab, setInTab] = useState<"offen" | "pdl" | "closed">("offen");
+  // Aktive Quellen-Einschraenkung der Lead-Liste (null = alle Quellen).
+  const [quelleFilter, setQuelleFilter] = useState<string | null>(null);
   const canAct = !monitor || editable;
 
   const router = useRouter();
@@ -697,7 +700,12 @@ export function TeamWorkspace({
   for (const l of openInbound) {
     sourceCounts.set(l.quelle, (sourceCounts.get(l.quelle) ?? 0) + 1);
   }
-  const shownInbound = openInbound;
+  // Quellen-Filter: Klick auf einen Zähler-Chip zeigt nur diese Quelle.
+  // Der Filter gilt für die Tages-Gruppen UND die Wiedervorlage, damit die
+  // Liste nicht doch wieder fremde Quellen einblendet.
+  const shownInbound = quelleFilter
+    ? openInbound.filter((l) => l.quelle === quelleFilter)
+    : openInbound;
   // Wiedervorlage: Leads mit fälligem To-do poppen ganz oben auf — egal wie
   // alt sie sind. Der Rest bleibt chronologisch in Tages-Gruppen.
   const heute = todayIso();
@@ -708,7 +716,8 @@ export function TeamWorkspace({
       hatFaelligesTodo(l) &&
       l.status !== "verloren" &&
       !istPending(l) &&
-      !istGeschlossen(l),
+      !istGeschlossen(l) &&
+      (!quelleFilter || l.quelle === quelleFilter),
   );
   const wvIds = new Set(wiedervorlage.map((l) => l.id));
   const dayGroups: { key: string; leads: InboundLead[] }[] = [];
@@ -1186,19 +1195,45 @@ export function TeamWorkspace({
           <>
           {/* Kopfzeile: Zähler je Quelle + Abgeschlossene-Toggle */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Chips sind Filter: Klick zeigt nur diese Quelle, erneuter
+                Klick hebt den Filter wieder auf. */}
             {[...sourceCounts.entries()]
               .sort((a, b) => b[1] - a[1])
-              .map(([q, n]) => (
-                <span
-                  key={q}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs font-semibold",
-                    QUELLE_TONE[q] ?? "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {n} × {leadQuelleLabel(q) || q}
-                </span>
-              ))}
+              .map(([q, n]) => {
+                const aktiv = quelleFilter === q;
+                return (
+                  <button
+                    key={q}
+                    type="button"
+                    aria-pressed={aktiv}
+                    title={
+                      aktiv
+                        ? "Filter aufheben — wieder alle Quellen zeigen"
+                        : `Nur ${leadQuelleLabel(q) || q} anzeigen`
+                    }
+                    onClick={() => setQuelleFilter(aktiv ? null : q)}
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs font-semibold transition-all",
+                      QUELLE_TONE[q] ?? "bg-muted text-muted-foreground",
+                      aktiv
+                        ? "ring-2 ring-primary ring-offset-1"
+                        : "opacity-100 hover:brightness-95",
+                      quelleFilter && !aktiv && "opacity-45",
+                    )}
+                  >
+                    {n} × {leadQuelleLabel(q) || q}
+                  </button>
+                );
+              })}
+            {quelleFilter && (
+              <button
+                type="button"
+                onClick={() => setQuelleFilter(null)}
+                className="flex items-center gap-1 rounded-full border bg-card px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3" /> Filter aufheben
+              </button>
+            )}
             <span className="ml-auto text-xs text-muted-foreground">
               neueste zuerst · aktualisiert sich automatisch
             </span>
@@ -1206,10 +1241,27 @@ export function TeamWorkspace({
           {shownInbound.length === 0 && (
             <div className="flex flex-col items-center gap-1 rounded-xl border border-dashed bg-card p-8 text-center shadow-sm">
               <Inbox className="size-5 text-muted-foreground/50" />
-              <p className="text-sm font-medium">Keine offenen Anfragen 🎉</p>
-              <p className="text-xs text-muted-foreground">
-                Neue Anfragen erscheinen hier automatisch oben.
-              </p>
+              {quelleFilter ? (
+                <>
+                  <p className="text-sm font-medium">
+                    Keine offenen Anfragen aus dieser Quelle
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setQuelleFilter(null)}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Filter aufheben und alle zeigen
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">Keine offenen Anfragen 🎉</p>
+                  <p className="text-xs text-muted-foreground">
+                    Neue Anfragen erscheinen hier automatisch oben.
+                  </p>
+                </>
+              )}
             </div>
           )}
           {dayGroups.map((g) => (
@@ -3707,6 +3759,15 @@ function LostReason({ onSave }: { onSave: (grund: string) => void }) {
           onClick={() => onSave("Doch kein Interesse")}
         >
           <X className="size-3.5" /> Doch kein Interesse
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          title="Der Interessent wird bereits von einem anderen Pflegedienst versorgt — echter Bedarf, aber an den Wettbewerb verloren."
+          onClick={() => onSave("Anderer Pflegedienst übernimmt")}
+        >
+          <Building2 className="size-3.5" /> Anderer Pflegedienst
         </Button>
         <Button
           type="button"

@@ -49,7 +49,8 @@ Aufgenommen. Sie kommen schon mit Patientendaten von der Klinik.
 - **Schritt versehentlich geklickt?** Rechts neben "Nächster Schritt"
   steht ein Zurück-Button ("zurück auf Offen", "Übergabe zurücknehmen").
 - **Verloren** braucht immer einen Grund: Nicht erreicht, Doch kein
-  Interesse, Kontaktdaten fehlen/falsch, oder Freitext.
+  Interesse, Anderer Pflegedienst übernimmt, Kontaktdaten fehlen/falsch,
+  oder Freitext.
 - **Nicht im Einzugsbereich** ist ein eigener Button. Bei Agentur-Leads
   ist das die Grundlage der wöchentlichen Reklamation — dafür zahlen wir
   nicht.

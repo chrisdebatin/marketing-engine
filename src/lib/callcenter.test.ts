@@ -29,6 +29,7 @@ const ECHTE_VERLUSTE = [
   "Nicht erreicht",
   "Doch kein Interesse",
   "Kontaktdaten fehlen / falsch",
+  "Anderer Pflegedienst übernimmt",
   "nicht im Einzugsbereich (gemeldet 17.08.2026)",
 ];
 
