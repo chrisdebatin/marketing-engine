@@ -9,7 +9,7 @@ import { TeamWorkspace } from "@/components/team-workspace";
 export const dynamic = "force-dynamic";
 
 /**
- * Persönliche Team-Seite (Devina / Belinda / Adelina) — kein Login, ein
+ * Persönliche Team-Seite (Devina / Belinda / Adeline) — kein Login, ein
  * Link pro Person. Inbound-Leads nach Team-Routing (lib/team-leads) +
  * Outbound-Anrufliste mit Kategorie-Split (Praxen → Kundenservice,
  * Krankenhäuser → Call-Center, Rest gemeinsam).
@@ -52,7 +52,7 @@ export default async function TeamMemberPage({
       buildTeamInbound(otherTeam),
       buildTeamOutbound(otherTeam),
       buildTeamAnrufe(team),
-      admin.from("hubs").select("id, name"),
+      admin.from("hubs").select("id, name, pdl_name, pdl_phone, pdl_email"),
     ]);
   // Kontakte-Verzeichnis: bei allen gleich — Leads + Institutionen beider
   // Teams (dedupliziert), damit man bei einem Anruf den letzten Status findet.
@@ -91,6 +91,12 @@ export default async function TeamMemberPage({
         kontakteInbound={kontakteInbound}
         kontakteOutbound={kontakteOutbound}
         hubs={(hubRows ?? []).map((h) => ({ id: h.id, name: h.name }))}
+        pdlListe={(hubRows ?? []).map((h) => ({
+          name: h.name,
+          pdl: h.pdl_name,
+          telefon: h.pdl_phone,
+          email: h.pdl_email,
+        }))}
       />
     </main>
   );

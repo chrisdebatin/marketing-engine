@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * CRM & Leads: Team-Switch (Belinda & Adelina / Devina) über dem großen
+ * CRM & Leads: Team-Switch (Belinda & Adeline / Devina) über dem großen
  * Toggle "Anstehende Leads" vs. "Outbound-Anrufe" — jedes Team hat seine
  * eigene Lead-Inbox und seine eigene Anrufliste. Alles direkt bearbeitbar
  * (Admin-Session). Das volle Institutionen-CRM liegt auf /crm-admin.
@@ -48,6 +48,16 @@ export default async function CrmPage() {
   });
   const editable = session.isAdmin;
   const editorName = session.profile?.name?.trim() || "Admin";
+  // Auswahl "Ich trage ein als": echte Team-Mitglieder + der eingeloggte
+  // Nutzer, damit Chris für Devina oder Belinda nachtragen kann.
+  const { data: teamRows } = await createAdminClient()
+    .from("team_members")
+    .select("name")
+    .eq("active", true)
+    .order("name");
+  const bearbeiterOptionen = [
+    ...new Set([editorName, ...(teamRows ?? []).map((t: { name: string }) => t.name)]),
+  ];
   const openCount = (l: { status: string }[]) =>
     l.filter((x) => ["offen", "kontaktiert", "erstgespraech"].includes(x.status)).length;
   const today = new Date().toISOString().slice(0, 10);
@@ -65,6 +75,7 @@ export default async function CrmPage() {
       inboundLog={team === "kundenservice"}
       token=""
       memberName={editorName}
+      bearbeiterOptionen={bearbeiterOptionen}
       inbound={team === "kundenservice" ? ksInbound : ccInbound}
       outbound={team === "kundenservice" ? ksOutbound : ccOutbound}
       anrufe={team === "kundenservice" ? ksAnrufe : ccAnrufe}
@@ -87,7 +98,7 @@ export default async function CrmPage() {
         teams={[
           {
             id: "kundenservice",
-            label: "Belinda & Adelina",
+            label: "Belinda & Adeline",
             leadsBadge: openCount(ksInbound),
             outboundBadge: dueCount(ksOutbound),
             leads: (

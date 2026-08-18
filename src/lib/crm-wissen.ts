@@ -10,7 +10,7 @@ export const CRM_WISSEN = `
 # Das CRM der Pflegeunion — Funktionsweise
 
 ## Zwei Teams, zwei Aufgaben
-- **Belinda & Adelina (Kundenservice)**: bearbeiten INBOUND-Leads —
+- **Belinda & Adeline (Kundenservice)**: bearbeiten INBOUND-Leads —
   Menschen, die sich bei uns melden (Meta-Anzeigen, Website, 0800-Anrufe,
   Lead-Agentur "Pflegehilfe Direkt"). Ziel: Interessent aufnehmen, Daten
   vervollständigen, an den passenden Standort (PDL) übergeben.

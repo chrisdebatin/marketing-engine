@@ -105,7 +105,7 @@ export function CrmIntro() {
               </div>
               <Arrow />
               <TeamCard
-                name="Belinda & Adelina"
+                name="Belinda & Adeline"
                 role="Kundenservice Deutschland — B2C bis zum Beratungsgespräch"
                 tone="sky"
               />
@@ -169,7 +169,7 @@ export function CrmIntro() {
                 <SourceChip icon={Stethoscope} label="Arztpraxen" />
                 <Arrow />
                 <span className="rounded-lg bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800">
-                  Belinda & Adelina
+                  Belinda & Adeline
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -198,7 +198,7 @@ export function CrmIntro() {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Die persönlichen Arbeitslisten von Belinda, Adelina und Devina laufen
+          Die persönlichen Arbeitslisten von Belinda, Adeline und Devina laufen
           über ihre eigenen Links (Admin → Team-Links). Diese Seite hier ist
           die Gesamtsicht für alle.
         </p>

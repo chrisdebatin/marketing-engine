@@ -26,7 +26,7 @@ export const metadata = {
 };
 
 /**
- * Handbuch für Belinda & Adelina (Inbound-Leads). Inhaltlich deckungsgleich
+ * Handbuch für Belinda & Adeline (Inbound-Leads). Inhaltlich deckungsgleich
  * mit src/lib/crm-wissen.ts — ändert sich der Prozess, beide nachziehen.
  */
 export default function HandbuchKundenservicePage() {
@@ -43,7 +43,7 @@ export default function HandbuchKundenservicePage() {
       <PageHeader
         icon={Users}
         eyebrow="Handbuch Kundenservice"
-        title="Belinda & Adelina — Anfragen bearbeiten"
+        title="Belinda & Adeline — Anfragen bearbeiten"
         description="Menschen melden sich bei uns: über Meta-Anzeigen, die Website, die 0800-Nummer oder die Lead-Agentur. Dein Job: annehmen, Daten vervollständigen, an den passenden Standort übergeben. Diese Seite kannst du ausdrucken."
       />
 

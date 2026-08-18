@@ -29,7 +29,7 @@ export default function CrmHilfePage() {
           </span>
           <span className="min-w-0">
             <span className="block font-semibold">
-              Handbuch Belinda &amp; Adelina
+              Handbuch Belinda &amp; Adeline
             </span>
             <span className="block text-sm text-muted-foreground">
               Inbound-Leads: annehmen, Daten aufnehmen, an die PDL übergeben

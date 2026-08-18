@@ -513,11 +513,30 @@ function timeOf(iso: string): string {
   return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
-async function teamAction(token: string, payload: Record<string, unknown>) {
+/**
+ * Im Namen wessen gerade gehandelt wird. Nur in der Admin-Ansicht (/crm)
+ * gesetzt, wo man die Person auswählt; auf den persönlichen Token-Seiten
+ * bleibt es null und der Name kommt aus dem Token. Bewusst modulweit statt
+ * als Prop: der Wert wird in 16 Kind-Komponenten gebraucht, und die API
+ * prüft ihn ohnehin gegen die Team-Liste.
+ */
+let aktiverBearbeiter: string | null = null;
+
+/**
+ * Aktion an die Team-API. Der gewählte Bearbeiter geht als `als` mit — die
+ * API akzeptiert ihn nur bei Admin-Session und nur, wenn der Name in der
+ * Team-Liste steht.
+ */
+async function teamAction(
+  token: string,
+  payload: Record<string, unknown>,
+  als?: string,
+) {
+  const name = als ?? aktiverBearbeiter;
   const res = await fetch("/api/public/team", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, ...payload }),
+
   });
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(json.error ?? "Fehler beim Speichern.");
@@ -526,10 +545,12 @@ async function teamAction(token: string, payload: Record<string, unknown>) {
 
 export function TeamWorkspace({
   token,
-  memberName,
+  memberName: memberNameProp,
   inbound: initialInbound,
   outbound: initialOutbound,
   hubs,
+  pdlListe,
+  bearbeiterOptionen,
   monitor = false,
   editable = false,
   view = "tabs",
@@ -543,6 +564,15 @@ export function TeamWorkspace({
   inbound: InboundLead[];
   outbound: OutboundTarget[];
   hubs: { id: string; name: string }[];
+  /** Auswählbare Bearbeiter (nur Admin-Ansicht /crm): Wer trägt gerade ein? */
+  bearbeiterOptionen?: string[];
+  /** Standorte mit Ansprechpartner — als Nachschlage-Liste auf der Seite. */
+  pdlListe?: {
+    name: string;
+    pdl: string | null;
+    telefon: string | null;
+    email: string | null;
+  }[];
   /** Gemeinsames Kontakte-Verzeichnis (beide Teams) — Fallback: eigene Daten. */
   kontakteInbound?: InboundLead[];
   kontakteOutbound?: OutboundTarget[];
@@ -560,6 +590,22 @@ export function TeamWorkspace({
 }) {
   const [tab, setTab] = useState<"inbound" | "outbound" | "kontakte">("inbound");
   const [inbound, setInbound] = useState(initialInbound);
+  // In der Admin-Ansicht (/crm) waehlbar, wer gerade eintraegt — auf den
+  // persoenlichen Token-Seiten gibt es keine Auswahl, dort gilt der Name
+  // aus dem Token. Alle Aktionen nutzen memberName, deshalb reicht dieser
+  // eine State, statt jeden einzelnen Aufruf anzufassen.
+  const [gewaehlterName, setGewaehlterName] = useState(memberNameProp);
+  const hatAuswahl = Boolean(bearbeiterOptionen && bearbeiterOptionen.length > 0);
+  const memberName = hatAuswahl ? gewaehlterName : memberNameProp;
+  // Nur mit Auswahl wird ein Name mitgeschickt; die API prüft ihn gegen die
+  // Team-Liste. Ohne Auswahl (Token-Seite) bleibt es beim Token-Namen.
+  const alsName = hatAuswahl ? gewaehlterName : undefined;
+  // Damit auch die Kind-Komponenten (Anruf-Formular, Recare-Ausgang …) unter
+  // dem gewählten Namen speichern. Im Effect statt im Render — eine
+  // Zuweisung während des Renders verstößt gegen react-hooks/purity.
+  useEffect(() => {
+    aktiverBearbeiter = alsName ?? null;
+  }, [alsName]);
   const [outbound, setOutbound] = useState(initialOutbound);
   const [error, setError] = useState<string | null>(null);
   // "wieder" ist die Anrufliste (heute + kommende Tage in einer Ansicht).
@@ -722,7 +768,7 @@ export function TeamWorkspace({
   async function claim(l: InboundLead) {
     setError(null);
     try {
-      await teamAction(token, { action: "claim", kind: l.kind, id: l.id });
+      await teamAction(token, { action: "claim", kind: l.kind, id: l.id }, alsName);
       setInbound((cur) =>
         cur.map((x) => (x.id === l.id ? { ...x, bearbeiter: memberName } : x)),
       );
@@ -740,7 +786,7 @@ export function TeamWorkspace({
         id: l.id,
         status,
         ...(ergebnis ? { ergebnis } : {}),
-      });
+      }, alsName);
       setInbound((cur) =>
         cur.map((x) =>
           x.id === l.id
@@ -757,7 +803,7 @@ export function TeamWorkspace({
   async function unassignHub(l: InboundLead) {
     setError(null);
     try {
-      await teamAction(token, { action: "unassign-hub", kind: l.kind, id: l.id });
+      await teamAction(token, { action: "unassign-hub", kind: l.kind, id: l.id }, alsName);
       setInbound((cur) =>
         cur.map((x) =>
           x.id === l.id
@@ -797,6 +843,37 @@ export function TeamWorkspace({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Wer trägt gerade ein? Nur in der Admin-Ansicht — auf den
+          persönlichen Seiten ist der Name durch den Link festgelegt. */}
+      {hatAuswahl && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-2.5 shadow-sm">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <User className="size-4 text-primary" />
+            Ich trage ein als:
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {(bearbeiterOptionen ?? []).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setGewaehlterName(n)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm font-medium transition-colors",
+                  gewaehlterName === n
+                    ? "bg-primary text-primary-foreground"
+                    : "border text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Jede Übernahme und jeder Statuswechsel wird unter diesem Namen
+            gespeichert.
+          </span>
+        </div>
+      )}
       {view === "tabs" && !monitor && (
       <div className="flex gap-1 rounded-xl border bg-card p-1 shadow-sm">
         <button
@@ -1833,6 +1910,12 @@ export function TeamWorkspace({
 
             <OutboundSidebar anrufe={anrufe} today={today} />
           </div>
+
+          {/* Standort-Nummern zum Nachschlagen — die Team-Seiten haben keine
+              Sidebar, ohne diese Liste käme man hier nicht an die Kontakte. */}
+          {pdlListe && pdlListe.length > 0 && (
+            <PdlKontaktliste eintraege={pdlListe} />
+          )}
 
           {/* Abschluss-Banner: direkt zum wichtigsten Anruf springen */}
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.05] p-4">
@@ -3877,6 +3960,99 @@ function RecareOutcome({
         <p className="basis-full text-xs text-destructive">{error}</p>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Nachschlage-Liste aller Standorte mit PDL-Kontakt, direkt auf der
+ * Team-Seite. Die Team-Seiten laufen ohne Sidebar — ohne diese Liste
+ * käme man von hier gar nicht an die Telefonnummern.
+ */
+function PdlKontaktliste({
+  eintraege,
+}: {
+  eintraege: {
+    name: string;
+    pdl: string | null;
+    telefon: string | null;
+    email: string | null;
+  }[];
+}) {
+  const [suche, setSuche] = useState("");
+  const q = suche.trim().toLowerCase();
+  const gefiltert = q
+    ? eintraege.filter((e) =>
+        [e.name, e.pdl, e.telefon].filter(Boolean).join(" ").toLowerCase().includes(q),
+      )
+    : eintraege;
+
+  return (
+    <details className="group rounded-xl border bg-card shadow-sm">
+      <summary className="flex cursor-pointer list-none items-center gap-2 p-4 select-none">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Users className="size-4.5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold">
+            Alle Standorte &amp; PDL-Nummern ({eintraege.length})
+          </span>
+          <span className="block text-xs text-muted-foreground">
+            Nummer antippen zum Anrufen — immer aktuell
+          </span>
+        </span>
+        <span className="ml-auto text-xs font-medium text-primary group-open:hidden">
+          aufklappen
+        </span>
+      </summary>
+      <div className="flex flex-col gap-3 border-t p-4">
+        <Input
+          value={suche}
+          onChange={(e) => setSuche(e.target.value)}
+          placeholder="Standort oder PDL-Name suchen…"
+          className="bg-background"
+        />
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {gefiltert.map((e) => (
+            <li key={e.name} className="rounded-lg border bg-background p-3 text-sm">
+              <p className="font-semibold">{e.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {e.pdl ? `PDL ${e.pdl}` : "keine PDL hinterlegt"}
+              </p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                {e.telefon ? (
+                  <a
+                    href={`tel:${e.telefon.replace(/\s/g, "")}`}
+                    className="flex items-center gap-1.5 font-medium text-primary hover:underline"
+                  >
+                    <Phone className="size-3.5" />
+                    {e.telefon}
+                  </a>
+                ) : (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Phone className="size-3.5" />
+                    keine Nummer hinterlegt
+                  </span>
+                )}
+                {e.email && (
+                  <a
+                    href={`mailto:${e.email}`}
+                    className="flex items-center gap-1.5 truncate text-xs text-primary hover:underline"
+                    title={e.email}
+                  >
+                    <Mail className="size-3.5 shrink-0" />
+                    <span className="truncate">{e.email}</span>
+                  </a>
+                )}
+              </p>
+            </li>
+          ))}
+        </ul>
+        {gefiltert.length === 0 && (
+          <p className="text-sm text-muted-foreground">Kein Standort gefunden.</p>
+        )}
+      </div>
+    </details>
   );
 }
 

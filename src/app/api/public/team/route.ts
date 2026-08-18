@@ -51,6 +51,10 @@ export async function POST(req: Request) {
     anruf_notiz?: string;
     /** Kontakt-Log-Eintrag (crm_contacts.id) beim Nachbearbeiten. */
     contact_id?: string;
+    /** Im Namen wessen gehandelt wird — NUR aus der Admin-Ansicht (/crm),
+     *  wo eine Person aus dem Team ausgewählt wird. Token-Nutzer können das
+     *  nicht setzen: dort gilt immer der Name aus dem Token. */
+    als?: string;
   };
   const token = (body.token ?? "").trim();
   const admin = createAdminClient();
@@ -74,7 +78,21 @@ export async function POST(req: Request) {
     if (!session?.isAdmin) {
       return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
     }
-    member = { name: session.profile?.name?.trim() || "Admin" };
+    // Admin-Ansicht: Es darf im Namen eines Team-Mitglieds gehandelt werden
+    // (Chris trägt für Devina nach). Nur bekannte Namen sind erlaubt —
+    // sonst könnte ein beliebiger String als Bearbeiter landen.
+    const gewaehlt = (body.als ?? "").trim();
+    if (gewaehlt) {
+      const { data: tm } = await admin
+        .from("team_members")
+        .select("name")
+        .eq("name", gewaehlt)
+        .eq("active", true)
+        .maybeSingle();
+      member = { name: tm?.name ?? (session.profile?.name?.trim() || "Admin") };
+    } else {
+      member = { name: session.profile?.name?.trim() || "Admin" };
+    }
   }
 
   const action = body.action ?? "";
