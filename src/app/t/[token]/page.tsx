@@ -1,5 +1,11 @@
 import { notFound } from "next/navigation";
-import { Headset, PhoneCall } from "lucide-react";
+import {
+  Headset,
+  HelpCircle,
+  MessageSquareQuote,
+  PhoneCall,
+  Users,
+} from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildTeamAnrufe, buildTeamInbound, buildTeamOutbound } from "@/lib/team-leads";
 import { syncRecareMails } from "@/lib/recare-import";
@@ -74,6 +80,38 @@ export default async function TeamMemberPage({
         title={`Hallo ${member.name}!`}
         description="Ihre persönliche Arbeitsliste — Leads übernehmen, Status setzen, Anrufe loggen. Jede Aktion wird unter Ihrem Namen gespeichert."
       />
+
+      {/* Nachschlagewerke: die /t-Seiten laufen ohne Sidebar, sonst kaeme
+          das Team gar nicht an Skripte und PDL-Verzeichnis heran. */}
+      <div className="grid gap-2 sm:grid-cols-3">
+        <a
+          href="/skripte"
+          className="flex items-center gap-2.5 rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+            <MessageSquareQuote className="size-4.5" />
+          </span>
+          <span className="text-sm font-semibold">Gesprächs-Skripte</span>
+        </a>
+        <a
+          href="/pdl-verzeichnis"
+          className="flex items-center gap-2.5 rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600">
+            <Users className="size-4.5" />
+          </span>
+          <span className="text-sm font-semibold">PDL-Verzeichnis</span>
+        </a>
+        <a
+          href="/crm-hilfe"
+          className="flex items-center gap-2.5 rounded-xl border bg-card p-3 shadow-sm transition-shadow hover:shadow-md"
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+            <HelpCircle className="size-4.5" />
+          </span>
+          <span className="text-sm font-semibold">Hilfe &amp; Handbuch</span>
+        </a>
+      </div>
 
       {recareHint && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">

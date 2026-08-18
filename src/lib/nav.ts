@@ -10,6 +10,7 @@ import {
   HelpCircle,
   Map,
   Megaphone,
+  MessageSquareQuote,
   PhoneIncoming,
   Send,
   Settings,
@@ -69,6 +70,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "System",
     items: [
+      { href: "/skripte", label: "Gesprächs-Skripte", Icon: MessageSquareQuote },
       { href: "/crm-hilfe", label: "CRM-Hilfe", Icon: HelpCircle },
       { href: "/assistant", label: "Assistant", Icon: Sparkles },
     ],

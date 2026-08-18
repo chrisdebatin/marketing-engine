@@ -109,6 +109,27 @@ Dazu: kurzfristige Aufnahmen möglich, verlässliche Rückmeldung.
 Der vollständige Wortlaut steht im Gesprächsleitfaden in der Anrufliste
 (7 Schritte, zum Aufklappen).
 
+WICHTIG: Ob Physiotherapie, Ergotherapie, Logopädie und Pflegehilfsmittel
+an einem bestimmten Standort verfügbar sind, ist im System NICHT hinterlegt
+— dort stehen nur die drei Bereiche Alltagshilfe, Ambulant und Intensiv.
+Diese Zusatzleistungen im Gespräch nur nennen, wenn sie für den Standort
+bestätigt sind; im Zweifel bei der PDL nachfragen.
+
+## Gesprächs-Skripte (Seite "Gesprächs-Skripte")
+Für jede Lead-Quelle gibt es ein eigenes Skript, weil die Zielgruppen einen
+anderen Ton brauchen. Jeder Satz lässt sich per Klick kopieren.
+- Krankenhäuser & Sozialdienst (Outbound): sachlich-professionell.
+  Ziel = E-Mail mit Leistungsprofil, Besuch der PDL oder Infomaterial.
+  Enthält zusätzlich eine 30-Sekunden-Kurzfassung.
+- Patienten-Leads (Meta und Lead-Agentur): warm und beruhigend. Die Person
+  hat selbst angefragt, also nicht verkaufen, sondern zuhören und führen.
+  Ziel = kostenloses, unverbindliches Erstgespräch. Der wichtigste Schritt
+  ist Nummer 2 (Bedarf verstehen): fragen, dann ausreden lassen.
+- Recare-Anfragen: kurz und verbindlich, die Klinik wartet auf eine
+  Antwort. Ziel = Aufnahme zusagen ODER zeitnah absagen. Auch die Absage
+  ist ein gutes Ergebnis, weil die Klinik weiterplanen kann.
+Zu jedem Skript stehen typische Einwände mit fertigen Antworten dabei.
+
 ## Standorte und Ansprechpartner
 Alle Standorte mit PDL-Name, Telefonnummer und E-Mail stehen unter
 "PDL-Verzeichnis" in der Seitenleiste. Die Liste kommt direkt aus dem

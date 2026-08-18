@@ -1,5 +1,11 @@
 import Link from "next/link";
-import { BookOpen, HelpCircle, Phone, Users } from "lucide-react";
+import {
+  BookOpen,
+  HelpCircle,
+  MessageSquareQuote,
+  Phone,
+  Users,
+} from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { CrmHilfe } from "@/components/crm-hilfe";
 
@@ -51,6 +57,22 @@ export default function CrmHilfePage() {
           </span>
         </Link>
       </div>
+
+      <Link
+        href="/skripte"
+        className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
+          <MessageSquareQuote className="size-5" />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-semibold">Gesprächs-Skripte</span>
+          <span className="block text-sm text-muted-foreground">
+            Leitfäden je Zielgruppe — Kliniken, Patienten-Leads und Recare —
+            zum Mitlesen im Telefonat
+          </span>
+        </span>
+      </Link>
 
       {/* Nachschlagewerke, die sich aus echten Daten speisen */}
       <Link
