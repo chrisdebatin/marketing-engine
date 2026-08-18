@@ -10,13 +10,14 @@ export const CRM_WISSEN = `
 # Das CRM der Pflegeunion — Funktionsweise
 
 ## Zwei Teams, zwei Aufgaben
-- **Belinda & Adeline (Kundenservice)**: bearbeiten INBOUND-Leads —
-  Menschen, die sich bei uns melden (Meta-Anzeigen, Website, 0800-Anrufe,
-  Lead-Agentur "Pflegehilfe Direkt"). Ziel: Interessent aufnehmen, Daten
-  vervollständigen, an den passenden Standort (PDL) übergeben.
-- **Devina (Call-Center)**: bearbeitet Recare-Anfragen von Kliniken und
-  macht OUTBOUND-Anrufe bei Krankenhäusern, Praxen, Apotheken, um die
-  Pflegeunion bekannt zu machen und Zuweisungen zu bekommen.
+- **Belinda & Adeline (Kundenservice)**: bearbeiten die Leads, die über
+  die Website, die 0800-Nummer, Google und Empfehlungen hereinkommen.
+  Ziel: Interessent aufnehmen, Daten vervollständigen, an den passenden
+  Standort (PDL) übergeben.
+- **Devina (Call-Center)**: bearbeitet Recare-Anfragen von Kliniken sowie
+  die Leads aus Meta-Anzeigen und von der Lead-Agentur "Pflegehilfe
+  Direkt". Zusätzlich macht sie OUTBOUND-Anrufe bei Krankenhäusern,
+  Praxen und Apotheken, um Zuweisungen zu bekommen.
 - Jede Person hat einen eigenen Link, kein Login und kein Passwort.
 - Die Kontakte-Übersicht ist bei allen gleich — dort findet man zu jeder
   Institution den letzten Stand.

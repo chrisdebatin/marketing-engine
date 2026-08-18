@@ -44,7 +44,7 @@ export default function HandbuchKundenservicePage() {
         icon={Users}
         eyebrow="Handbuch Kundenservice"
         title="Belinda & Adeline — Anfragen bearbeiten"
-        description="Menschen melden sich bei uns: über Meta-Anzeigen, die Website, die 0800-Nummer oder die Lead-Agentur. Dein Job: annehmen, Daten vervollständigen, an den passenden Standort übergeben. Diese Seite kannst du ausdrucken."
+        description="Menschen melden sich bei uns: über die Website, die 0800-Nummer, Google oder eine Empfehlung. Dein Job: annehmen, Daten vervollständigen, an den passenden Standort übergeben. (Meta- und Agentur-Leads bearbeitet Devina.) Diese Seite kannst du ausdrucken."
       />
 
       {/* ---------------------------------------------------------------- */}

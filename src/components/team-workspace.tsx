@@ -952,10 +952,20 @@ export function TeamWorkspace({
               />
             </div>
           )}
+          {/* Ohne Erfassungs-Formular (Call-Center) steht links das
+              PDL-Register — dort braucht man beim Abarbeiten der
+              Recare-Anfragen staendig die Standort-Nummern. */}
+          {!(canAct && inboundLog) && pdlListe && pdlListe.length > 0 && (
+            <div className="lg:sticky lg:top-4">
+              <PdlRegister eintraege={pdlListe} />
+            </div>
+          )}
           <div
             className={cn(
               "flex min-w-0 flex-col gap-2",
-              !(canAct && inboundLog) && "lg:col-span-2",
+              !(canAct && inboundLog) &&
+                !(pdlListe && pdlListe.length > 0) &&
+                "lg:col-span-2",
             )}
           >
           {/* Zustands-Reiter: Offen / Hängt bei PDL / Geschlossen */}
@@ -3975,6 +3985,93 @@ function RecareOutcome({
   );
 }
 
+
+
+/**
+ * PDL-Register in der schmalen linken Spalte der Recare-Ansicht. Beim
+ * Abarbeiten der Anfragen ruft man staendig Standorte an — die Nummer soll
+ * ohne Seitenwechsel danebenstehen. Kompakt gehalten (300px Spalte),
+ * scrollt bei vielen Standorten intern.
+ */
+function PdlRegister({
+  eintraege,
+}: {
+  eintraege: {
+    name: string;
+    pdl: string | null;
+    telefon: string | null;
+    email: string | null;
+  }[];
+}) {
+  const [suche, setSuche] = useState("");
+  const q = suche.trim().toLowerCase();
+  const gefiltert = q
+    ? eintraege.filter((e) =>
+        [e.name, e.pdl].filter(Boolean).join(" ").toLowerCase().includes(q),
+      )
+    : eintraege;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 shadow-sm">
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        <Users className="size-4 text-primary" />
+        PDL-Register
+      </p>
+      <p className="-mt-1 text-xs text-muted-foreground">
+        Nummer antippen zum Anrufen — {eintraege.length} Standorte.
+      </p>
+      <Input
+        value={suche}
+        onChange={(e) => setSuche(e.target.value)}
+        placeholder="Standort oder PDL suchen…"
+        className="h-9 bg-background"
+      />
+      <ul className="flex max-h-[32rem] flex-col divide-y overflow-y-auto">
+        {gefiltert.map((e) => (
+          <li key={e.name} className="py-2">
+            <p className="truncate text-sm font-medium" title={e.name}>
+              {e.name}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {e.pdl ? `PDL ${e.pdl}` : "keine PDL hinterlegt"}
+            </p>
+            <p className="mt-1 flex flex-col gap-0.5">
+              {e.telefon ? (
+                <a
+                  href={`tel:${e.telefon.replace(/\s/g, "")}`}
+                  className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  <Phone className="size-3 shrink-0" />
+                  {e.telefon}
+                </a>
+              ) : (
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Phone className="size-3 shrink-0" />
+                  keine Nummer
+                </span>
+              )}
+              {e.email && (
+                <a
+                  href={`mailto:${e.email}`}
+                  title={e.email}
+                  className="flex items-center gap-1.5 truncate text-xs text-primary hover:underline"
+                >
+                  <Mail className="size-3 shrink-0" />
+                  <span className="truncate">{e.email}</span>
+                </a>
+              )}
+            </p>
+          </li>
+        ))}
+        {gefiltert.length === 0 && (
+          <li className="py-2 text-xs text-muted-foreground">
+            Kein Standort gefunden.
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
 
 /**
  * Nachschlage-Liste aller Standorte mit PDL-Kontakt, direkt auf der

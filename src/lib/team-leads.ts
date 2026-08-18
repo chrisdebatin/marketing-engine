@@ -76,7 +76,9 @@ export async function buildTeamInbound(
         .select("*")
         .order("created_at", { ascending: false })
         .limit(200),
-      !isCallcenter
+      // Meta-Kunden-Leads bearbeitet das Call-Center (siehe
+      // CALLCENTER_QUELLEN) — der Kundenservice braucht sie nicht zu laden.
+      isCallcenter
         ? admin
             .from("meta_leads")
             .select("*")
@@ -259,7 +261,7 @@ export async function buildTeamInbound(
       klinik_info: klinikInfoFor(c),
     });
   }
-  if (!isCallcenter) {
+  if (isCallcenter) {
     for (const m of metaRows ?? []) {
       if (isRecruitingLead(m.campaign_name)) continue;
       inbound.push({

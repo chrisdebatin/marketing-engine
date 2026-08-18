@@ -45,7 +45,7 @@ export default function HandbuchCallcenterPage() {
         icon={Phone}
         eyebrow="Handbuch Call-Center"
         title="Devina — Recare und Anrufe"
-        description="Du hast zwei Aufgaben: Anfragen von Kliniken (Recare) bearbeiten und Krankenhäuser, Praxen und Apotheken anrufen, damit die Pflegeunion bekannt wird und Zuweisungen kommen. Diese Seite kannst du ausdrucken."
+        description="Du hast zwei Aufgaben: Anfragen bearbeiten — von Kliniken (Recare), aus Meta-Anzeigen und von der Lead-Agentur — und Krankenhäuser, Praxen und Apotheken anrufen, damit die Pflegeunion bekannt wird und Zuweisungen kommen. Diese Seite kannst du ausdrucken."
       />
 
       {/* ---------------------------------------------------------------- */}

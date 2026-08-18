@@ -33,7 +33,10 @@ export default async function CrmPage() {
       buildTeamAnrufe("callcenter"),
     ]);
   const { createAdminClient } = await import("@/lib/supabase/admin");
-  const { data: hubRows } = await createAdminClient().from("hubs").select("id, name");
+  const { data: hubRows } = await createAdminClient()
+    .from("hubs")
+    .select("id, name, pdl_name, pdl_phone, pdl_email")
+    .order("name");
   const hubs = (hubRows ?? []).map((h) => ({ id: h.id, name: h.name }));
   // Kontakte-Verzeichnis: bei beiden Teams identisch (alle Leads + alle
   // Institutionen, dedupliziert) — zum Nachschlagen bei Inbound-Anrufen.
@@ -76,6 +79,12 @@ export default async function CrmPage() {
       token=""
       memberName={editorName}
       bearbeiterOptionen={bearbeiterOptionen}
+      pdlListe={(hubRows ?? []).map((h) => ({
+        name: h.name,
+        pdl: h.pdl_name,
+        telefon: h.pdl_phone,
+        email: h.pdl_email,
+      }))}
       inbound={team === "kundenservice" ? ksInbound : ccInbound}
       outbound={team === "kundenservice" ? ksOutbound : ccOutbound}
       anrufe={team === "kundenservice" ? ksAnrufe : ccAnrufe}

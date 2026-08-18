@@ -16,10 +16,11 @@ export const LEAD_QUELLEN = [
 ] as const;
 
 /**
- * Quellen, die das Call-Center (Devina) bearbeitet — nur Recare; alles
- * andere (Website, 0800, Meta, Agentur, B2B) liegt beim Kundenservice DE.
+ * Quellen, die das Call-Center (Devina) bearbeitet: Recare-Anfragen der
+ * Kliniken sowie Meta- und Agentur-Leads. Beim Kundenservice DE bleiben
+ * Website, 0800-Anrufe, Google und Empfehlungen.
  */
-export const CALLCENTER_QUELLEN = new Set(["recare"]);
+export const CALLCENTER_QUELLEN = new Set(["recare", "agentur", "meta"]);
 
 /**
  * Standorte, an denen das DE-Team den Beratungstermin selbst bucht
