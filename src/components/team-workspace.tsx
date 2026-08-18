@@ -22,6 +22,7 @@ import {
   Phone,
   PhoneCall,
   PhoneOff,
+  ThumbsDown,
   Search,
   Undo2,
   User,
@@ -3696,6 +3697,20 @@ function AssignHub({
 }
 
 /**
+ * Gründe, aus denen wir eine Recare-Anfrage bewusst NICHT annehmen —
+ * obwohl wir könnten. Feste Auswahl statt Freitext, damit im CRM-Admin
+ * auszählbar ist, welche Anfragen sich für uns nicht rechnen.
+ */
+const RECARE_UNINTERESSANT_GRUENDE = [
+  "Behandlungsdauer zu kurz",
+  "Leistungen unattraktiv",
+  "Aufwand zu hoch",
+  "Fahrtweg zu weit",
+  "Vergütung zu niedrig",
+  "Versorgung passt nicht zu uns",
+] as const;
+
+/**
  * Recare-Ausgang: keine Kapazität / PDL nicht erreicht / Freitext.
  * ("Patient aufgenommen" bestätigt die PDL nach der Übergabe selbst.)
  */
@@ -3712,6 +3727,11 @@ function RecareOutcome({
 }) {
   const [freitextOpen, setFreitextOpen] = useState(false);
   const [freitext, setFreitext] = useState("");
+  // Eigene Auswahl für "Lead nicht interessant" — bewusst getrennt von
+  // "Keine Kapazität": hier könnten wir versorgen, wollen aber nicht.
+  const [uninteressantOpen, setUninteressantOpen] = useState(false);
+  const [grund, setGrund] = useState("");
+  const [grundNotiz, setGrundNotiz] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   void memberName;
@@ -3760,13 +3780,80 @@ function RecareOutcome({
       <Button
         type="button"
         size="sm"
+        variant="outline"
+        disabled={busy}
+        title="Wir könnten versorgen, wollen die Anfrage aber nicht annehmen (z. B. Aufwand lohnt nicht). Grund bitte angeben — daraus sehen wir, welche Recare-Anfragen sich für uns nicht rechnen."
+        className="border-amber-300 text-amber-800 hover:bg-amber-50 hover:text-amber-800"
+        onClick={() => {
+          setUninteressantOpen((s) => !s);
+          setFreitextOpen(false);
+        }}
+      >
+        <ThumbsDown className="size-3.5" /> Lead nicht interessant
+      </Button>
+      <Button
+        type="button"
+        size="sm"
         variant="ghost"
         disabled={busy}
         className="text-muted-foreground"
-        onClick={() => setFreitextOpen((s) => !s)}
+        onClick={() => {
+          setFreitextOpen((s) => !s);
+          setUninteressantOpen(false);
+        }}
       >
         Anderes…
       </Button>
+      {uninteressantOpen && (
+        <div className="flex basis-full flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50/50 p-3">
+          <p className="text-xs font-semibold text-amber-900">
+            Warum ist die Anfrage für uns nicht interessant?
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {RECARE_UNINTERESSANT_GRUENDE.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setGrund(grund === g ? "" : g)}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs font-medium",
+                  grund === g
+                    ? "border-amber-500 bg-amber-500 text-white"
+                    : "border-amber-300 bg-background text-amber-900 hover:bg-amber-100",
+                )}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+          <Input
+            value={grundNotiz}
+            onChange={(e) => setGrundNotiz(e.target.value)}
+            placeholder="Optional: Details ergänzen"
+            className="bg-background"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || (!grund && !grundNotiz.trim())}
+              onClick={() =>
+                set(
+                  `nicht interessant — ${[grund, grundNotiz.trim()].filter(Boolean).join(" · ")}`,
+                  "verloren",
+                )
+              }
+            >
+              {busy ? "Speichere…" : "Als nicht interessant schließen"}
+            </Button>
+            {!grund && !grundNotiz.trim() && (
+              <span className="text-[11px] text-amber-800">
+                Bitte einen Grund wählen oder eintragen.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       {freitextOpen && (
         <div className="flex basis-full flex-col gap-1.5">
           <Textarea

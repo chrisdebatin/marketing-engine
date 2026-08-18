@@ -188,6 +188,24 @@ export default async function CrmAdminPage() {
     .sort((a, b) => (b.eingang ?? "").localeCompare(a.eingang ?? ""));
   const recareAusserhalb = ausserhalb.filter((l) => l.quelle === "recare").length;
 
+  // Recare-Anfragen, die wir bewusst nicht angenommen haben ("Lead nicht
+  // interessant"). Zeigt, welche Anfragen sich für uns nicht rechnen —
+  // Grundlage, um mit Recare über die Zuweisungen zu sprechen.
+  const uninteressant = (callsRes.data ?? []).filter(
+    (l) => l.quelle === "recare" && /^nicht interessant/i.test(l.ergebnis ?? ""),
+  );
+  const uninteressantGruende = [
+    ...uninteressant
+      .reduce((acc, l) => {
+        // Format: "nicht interessant — <Grund> · <Freitext>"
+        const rest = (l.ergebnis ?? "").replace(/^nicht interessant\s*—\s*/i, "");
+        const grund = rest.split(" · ")[0].trim() || "ohne Angabe";
+        acc.set(grund, (acc.get(grund) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>())
+      .entries(),
+  ].sort((a, b) => b[1] - a[1]);
+
   // ── Kennzahlen "Kontakte heute" ──
   const targetKategorie = new Map(
     (targetsRes.data ?? []).map((t) => [t.id, t.kategorie ?? "sonstiges"]),
@@ -353,6 +371,31 @@ export default async function CrmAdminPage() {
 
       {sektion("6", "Agentur-Rückweisungen", "nicht im Einzugsbereich — Grundlage der wöchentlichen Reklamations-Mail")}
       <AgenturRueckweisungen rows={rueckweisungen} recareCount={recareAusserhalb} />
+
+      {uninteressant.length > 0 && (
+        <section className="rounded-xl border bg-card p-5 shadow-sm">
+          <h2 className="text-base font-semibold">
+            Recare-Anfragen, die wir nicht angenommen haben
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {uninteressant.length} Anfrage
+            {uninteressant.length === 1 ? "" : "n"} bewusst abgelehnt — wir
+            hätten versorgen können, wollten aber nicht. Grundlage für das
+            Gespräch mit Recare über die Zuweisungen.
+          </p>
+          <ul className="mt-3 flex flex-col gap-1.5">
+            {uninteressantGruende.map(([grund, n]) => (
+              <li
+                key={grund}
+                className="flex items-center justify-between gap-3 border-b pb-1.5 text-sm last:border-b-0"
+              >
+                <span>{grund}</span>
+                <span className="font-semibold tabular-nums">{n}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Kontakte werden in den Team-Ansichten (/crm → Kontakte) gepflegt —
           hier nur noch Stats. Import & Einstellungen bleiben eingeklappt
